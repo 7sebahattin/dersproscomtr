@@ -1,6 +1,6 @@
 <?php
 // users.php - TAM SÜRÜM v2.3 (Giriş Yap İkonu Geri Eklendi)
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 session_start();

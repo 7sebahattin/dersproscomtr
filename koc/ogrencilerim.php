@@ -2,7 +2,7 @@
 // koc/ogrencilerim.php - MODERN UI DESIGN REVISION
 // Design update: Senior UI/UX Standards
 
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 // Dosya yollarını ayarla

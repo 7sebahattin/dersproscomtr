@@ -1,4 +1,12 @@
 <?php
+// Sadece yetkili yönetici önbellek temizleyebilir
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+if (!isset($_SESSION['user_id']) || ($_SESSION['role'] !== 'admin' && $_SESSION['role'] !== 'superuser')) {
+    header("Location: index.php");
+    exit;
+}
 opcache_reset();
 ?>
 <!DOCTYPE html>

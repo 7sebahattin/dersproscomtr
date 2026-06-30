@@ -2,7 +2,7 @@
 // mufredat.php (moved from admin_mufredat.php)
 // Gelişmiş Filtreleme, Düzenleme, Görünürlük Yönetimi ve Şablon İndirme
 
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 session_start();
