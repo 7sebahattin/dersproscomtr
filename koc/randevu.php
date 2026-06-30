@@ -3,7 +3,7 @@
 // Build Timestamp: 2025-01-03 14:15:00
 // Fixes: Undefined variable $is_cancelled, HTML attributes breaking, Scope isolation
 
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 if (session_status() === PHP_SESSION_NONE) session_start();

@@ -1,7 +1,7 @@
 <?php
 // koc_paneli.php - HATASIZ SÜRÜM (Ders Filtreleme ve Kopyalama Düzeltildi)
 ob_start(); // Çıktı tamponlamayı başlat (JSON hatalarını önler)
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 require_once 'db.php';

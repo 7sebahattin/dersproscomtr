@@ -1,0 +1,29 @@
+# === Güvenlik ayarları (siteyi bozmadan, sadece koruma) ===
+
+# Klasör içeriğinin listelenmesini engelle (örn. /uploads/ listesi görünmesin)
+Options -Indexes
+
+# Hassas yapılandırma dosyalarına doğrudan web erişimini engelle.
+# Bu dosyalar sadece başka PHP dosyaları tarafından include edilir,
+# tarayıcıdan doğrudan çağrılmaları gerekmez.
+<FilesMatch "^(db|secrets|secrets\.example|push_config|mail_helper)\.php$">
+    Require all denied
+</FilesMatch>
+
+# Log, yedek, sql ve yapılandırma dosyalarına erişimi engelle
+<FilesMatch "(\.(sql|log|bak|ini|lock|yml|yaml)$|^error_log$)">
+    Require all denied
+</FilesMatch>
+
+# Büyük cron log dosyaları
+<Files "cron_log.txt">
+    Require all denied
+</Files>
+<Files "cron_output.txt">
+    Require all denied
+</Files>
+
+# Nokta ile başlayan gizli dosyalar (.git, .env, .user.ini vb.)
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
