@@ -272,7 +272,7 @@ if ($user_role == 'student') {
                             <td class="p-5 text-center"><?= $visible_badge ?></td>
                             <td class="p-5 text-center">
                                 <div class="flex justify-center items-center gap-2">
-                                    <a href="<?= $ex['file_path'] ?>" target="_blank" class="text-xs font-bold text-red-500 bg-red-50 px-3 py-1 rounded border border-red-100 hover:bg-red-100 transition flex items-center gap-1">PDF</a>
+                                    <a href="dosya.php?exam=<?= (int)$ex['id'] ?>" target="_blank" class="text-xs font-bold text-red-500 bg-red-50 px-3 py-1 rounded border border-red-100 hover:bg-red-100 transition flex items-center gap-1">PDF</a>
                                     <?php if($ex['is_online']): ?>
                                         <span class="text-[10px] text-green-600 font-bold bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center gap-1">Online</span>
                                     <?php endif; ?>
@@ -334,7 +334,7 @@ if ($user_role == 'student') {
 
                     <div class="mt-auto space-y-3">
                         
-                        <a href="<?= $ex['file_path'] ?>" target="_blank" class="flex items-center justify-center gap-2 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm hover:bg-slate-200 transition w-full">
+                        <a href="dosya.php?exam=<?= (int)$ex['id'] ?>" target="_blank" class="flex items-center justify-center gap-2 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm hover:bg-slate-200 transition w-full">
                             <span>⬇️</span> İndir
                         </a>
                         
