@@ -86,10 +86,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <div class="flex-grow flex overflow-hidden">
         
         <div class="w-2/3 bg-gray-800 h-full relative">
-            <object data="<?= $exam['file_path'] ?>" type="application/pdf" class="w-full h-full">
+            <object data="dosya.php?exam=<?= (int)$exam['id'] ?>" type="application/pdf" class="w-full h-full">
                 <div class="flex flex-col items-center justify-center h-full text-white">
                     <p class="mb-4">Tarayıcınız PDF'i görüntüleyemiyor.</p>
-                    <a href="<?= $exam['file_path'] ?>" target="_blank" class="bg-indigo-600 px-6 py-3 rounded-full font-bold hover:bg-indigo-700 transition">PDF'i İndir</a>
+                    <a href="dosya.php?exam=<?= (int)$exam['id'] ?>" target="_blank" class="bg-indigo-600 px-6 py-3 rounded-full font-bold hover:bg-indigo-700 transition">PDF'i İndir</a>
                 </div>
             </object>
         </div>

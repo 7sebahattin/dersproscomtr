@@ -27,3 +27,8 @@ Options -Indexes
 <FilesMatch "^\.">
     Require all denied
 </FilesMatch>
+
+# Sınav PDF'lerine DOĞRUDAN erişimi engelle (öğrenci kişisel verisi - KVKK).
+# Bu dosyalar yalnızca giriş yapmış kullanıcılara dosya.php üzerinden sunulur.
+RewriteEngine On
+RewriteRule ^uploads/exams/ - [F,L]
