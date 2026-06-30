@@ -1,0 +1,15 @@
+{
+  "name": "DersPROS Koçluk",
+  "short_name": "DersPROS",
+  "start_url": "/koc/takvim.php",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2907/2907253.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
