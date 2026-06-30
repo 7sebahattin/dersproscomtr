@@ -35,7 +35,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             } else {
                 // Oturumu başlat
                 if (session_status() === PHP_SESSION_NONE) session_start();
-                
+
+                // Güvenlik: Giriş başarılı olunca oturum kimliğini yenile
+                // (Session Fixation saldırısına karşı koruma)
+                session_regenerate_id(true);
+
                 // Session değişkenlerini ata
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['username'] = $user['username'];
