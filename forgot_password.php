@@ -6,6 +6,7 @@ require_once 'db.php';
 require 'PHPMailer/Exception.php';
 require 'PHPMailer/PHPMailer.php';
 require 'PHPMailer/SMTP.php';
+require_once __DIR__ . '/secrets.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -52,7 +53,7 @@ try {
                 $mail->Host       = 'mail.derspros.com.tr'; // Resimde 'Giden Sunucu' kısmında yazan adres
                 $mail->SMTPAuth   = true;
                 $mail->Username   = 'noreply@derspros.com.tr'; // Oluşturduğun mail adresi
-                $mail->Password   = '***REMOVED***';  // E-posta şifreni buraya yazmayı unutma!
+                $mail->Password   = SMTP_PASSWORD;
                 
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; // SSL kullanacağız
                 $mail->Port       = 587; // Resimde yazan SMTP Portu

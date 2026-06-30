@@ -11,6 +11,7 @@ include '../header.php';
 require_once __DIR__ . '/../PHPMailer/Exception.php';
 require_once __DIR__ . '/../PHPMailer/PHPMailer.php';
 require_once __DIR__ . '/../PHPMailer/SMTP.php';
+require_once __DIR__ . '/../secrets.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -37,7 +38,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $mail->Host       = 'mail.derspros.com.tr'; 
             $mail->SMTPAuth   = true;
             $mail->Username   = 'noreply@derspros.com.tr'; 
-            $mail->Password   = '***REMOVED***';                
+            $mail->Password   = SMTP_PASSWORD;
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; 
             $mail->Port       = 587;
             

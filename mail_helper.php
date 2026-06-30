@@ -5,6 +5,7 @@
 require_once 'PHPMailer/Exception.php';
 require_once 'PHPMailer/PHPMailer.php';
 require_once 'PHPMailer/SMTP.php';
+require_once __DIR__ . '/secrets.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -19,7 +20,7 @@ function send_mail_notification($toEmail, $toName, $subject, $bodyContent, $link
         $mail->Host       = 'mail.derspros.com.tr'; 
         $mail->SMTPAuth   = true;
         $mail->Username   = 'noreply@derspros.com.tr';
-        $mail->Password   = '***REMOVED***'; // <--- ŞİFRENİ BURAYA YAZMAYI UNUTMA!
+        $mail->Password   = SMTP_PASSWORD;
         
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = 587;

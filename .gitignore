@@ -1,0 +1,16 @@
+
+# Gizli bilgiler - asla repoya eklenmez
+secrets.php
+
+# Yedek kopya ve kullanıcı yüklemeleri repoda tutulmaz
+/yedek/
+/uploads/
+
+# Log ve geçici dosyalar
+cron_log.txt
+cron_output.txt
+error_log
+/admin/error_log
+/ajax/error_log
+/temp_pdfs/*
+!/temp_pdfs/.gitkeep
