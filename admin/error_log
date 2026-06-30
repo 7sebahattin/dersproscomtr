@@ -1,0 +1,2 @@
+[28-Mar-2026 04:16:10 Europe/Istanbul] PHP Warning:  Undefined array key "resolved_at" in /home/derspros/public_html/admin/feedback.php on line 190
+[28-Mar-2026 04:16:10 Europe/Istanbul] PHP Warning:  Undefined array key "admin_note" in /home/derspros/public_html/admin/feedback.php on line 208

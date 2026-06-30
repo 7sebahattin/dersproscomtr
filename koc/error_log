@@ -1,0 +1,102 @@
+[02-Feb-2026 16:53:51 Europe/Istanbul] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'a.app_date' in 'ORDER BY' in /home/derspros/public_html/koc/odemeler.php:55
+Stack trace:
+#0 /home/derspros/public_html/koc/odemeler.php(55): PDOStatement->execute()
+#1 {main}
+  thrown in /home/derspros/public_html/koc/odemeler.php on line 55
+[02-Feb-2026 16:54:58 Europe/Istanbul] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'a.app_date' in 'ORDER BY' in /home/derspros/public_html/koc/odemeler.php:55
+Stack trace:
+#0 /home/derspros/public_html/koc/odemeler.php(55): PDOStatement->execute()
+#1 {main}
+  thrown in /home/derspros/public_html/koc/odemeler.php on line 55
+[02-Feb-2026 16:55:08 Europe/Istanbul] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'a.app_date' in 'ORDER BY' in /home/derspros/public_html/koc/odemeler.php:55
+Stack trace:
+#0 /home/derspros/public_html/koc/odemeler.php(55): PDOStatement->execute()
+#1 {main}
+  thrown in /home/derspros/public_html/koc/odemeler.php on line 55
+[02-Feb-2026 16:56:52 Europe/Istanbul] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'a.app_date' in 'ORDER BY' in /home/derspros/public_html/koc/odemeler.php:57
+Stack trace:
+#0 /home/derspros/public_html/koc/odemeler.php(57): PDOStatement->execute()
+#1 {main}
+  thrown in /home/derspros/public_html/koc/odemeler.php on line 57
+[02-Feb-2026 16:57:02 Europe/Istanbul] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'a.app_date' in 'ORDER BY' in /home/derspros/public_html/koc/odemeler.php:57
+Stack trace:
+#0 /home/derspros/public_html/koc/odemeler.php(57): PDOStatement->execute()
+#1 {main}
+  thrown in /home/derspros/public_html/koc/odemeler.php on line 57
+[02-Feb-2026 17:08:42 Europe/Istanbul] PHP Warning:  Undefined variable $students in /home/derspros/public_html/koc/odemeler.php on line 98
+[02-Feb-2026 17:08:42 Europe/Istanbul] PHP Warning:  foreach() argument must be of type array|object, null given in /home/derspros/public_html/koc/odemeler.php on line 98
+[04-Feb-2026 23:54:53 Europe/Istanbul] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'created_at' in 'INSERT INTO'
+[04-Feb-2026 23:55:56 Europe/Istanbul] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'created_at' in 'INSERT INTO'
+[04-Feb-2026 23:59:33 Europe/Istanbul] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'created_at' in 'INSERT INTO'
+[05-Feb-2026 00:00:02 Europe/Istanbul] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'created_at' in 'INSERT INTO'
+[05-Feb-2026 00:00:55 Europe/Istanbul] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'created_at' in 'INSERT INTO'
+[05-Feb-2026 00:01:06 Europe/Istanbul] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'created_at' in 'INSERT INTO'
+[05-Feb-2026 00:02:01 Europe/Istanbul] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'created_at' in 'INSERT INTO'
+[05-Feb-2026 00:02:53 Europe/Istanbul] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'created_at' in 'INSERT INTO'
+[05-Feb-2026 00:15:29 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 963
+[05-Feb-2026 00:22:45 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 363
+[05-Feb-2026 00:23:46 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 363
+[05-Feb-2026 00:24:06 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 963
+[05-Feb-2026 00:33:01 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:34:06 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:34:10 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:34:18 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:34:23 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:34:28 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:34:32 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:34:41 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:35:10 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:35:21 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:35:25 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:35:28 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:35:33 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:35:37 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:35:53 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:36:05 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:36:10 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:38:46 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 366
+[05-Feb-2026 00:39:08 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 366
+[05-Feb-2026 00:39:22 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 366
+[05-Feb-2026 00:39:43 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:45:58 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 397
+[05-Feb-2026 00:47:10 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:47:17 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:49:45 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 467
+[05-Feb-2026 00:50:12 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 467
+[05-Feb-2026 00:50:25 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 467
+[05-Feb-2026 00:50:42 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:52:32 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 421
+[05-Feb-2026 00:52:39 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 421
+[05-Feb-2026 00:52:55 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 421
+[05-Feb-2026 00:53:07 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 421
+[05-Feb-2026 00:53:14 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 421
+[05-Feb-2026 00:53:44 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 421
+[05-Feb-2026 00:54:00 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 421
+[05-Feb-2026 00:54:19 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:55:22 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:55:28 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:55:36 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 00:55:51 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 529
+[05-Feb-2026 01:01:11 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 470
+[05-Feb-2026 01:01:23 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 470
+[05-Feb-2026 01:01:31 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 470
+[05-Feb-2026 01:01:37 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 470
+[05-Feb-2026 01:01:45 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 470
+[05-Feb-2026 01:02:10 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 470
+[05-Feb-2026 01:02:27 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 470
+[05-Feb-2026 01:02:43 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 470
+[05-Feb-2026 01:02:48 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 470
+[05-Feb-2026 01:03:26 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 963
+[05-Feb-2026 01:03:52 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 963
+[05-Feb-2026 01:08:21 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 995
+[05-Feb-2026 01:08:25 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 995
+[05-Feb-2026 01:08:27 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 995
+[05-Feb-2026 01:08:28 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 995
+[05-Feb-2026 01:08:30 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 995
+[05-Feb-2026 01:09:17 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 995
+[05-Feb-2026 01:22:12 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 278
+[05-Feb-2026 01:25:04 Europe/Istanbul] PHP Warning:  Undefined array key "last_name" in /home/derspros/public_html/koc/odemeler.php on line 278
+[27-Mar-2026 17:00:39 Europe/Istanbul] PHP Parse error:  syntax error, unexpected token "<" in /home/derspros/public_html/koc/ogrencilerim.php on line 277
+[27-Mar-2026 17:01:00 Europe/Istanbul] PHP Parse error:  syntax error, unexpected token "<" in /home/derspros/public_html/koc/ogrencilerim.php on line 277
+[28-Mar-2026 21:49:25 Europe/Istanbul] PHP Warning:  Undefined array key "role" in /home/derspros/public_html/koc/teacher_mufredat.php on line 13
+[28-Mar-2026 21:49:25 Europe/Istanbul] PHP Warning:  Undefined array key "role" in /home/derspros/public_html/koc/teacher_mufredat.php on line 13

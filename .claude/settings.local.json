@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(C:/xampp/php/php.exe -r \":*)",
+      "Bash(cmd /c \"C:\\\\xampp\\\\php\\\\php.exe -l \"\"C:\\\\xampp\\\\htdocs\\\\DersPros\\\\student\\\\bildirimler.php\"\"\")"
+    ]
+  }
+}

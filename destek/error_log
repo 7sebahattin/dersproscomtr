@@ -1,0 +1,44 @@
+[22-Jan-2026 18:33:09 Europe/Istanbul] PHP Warning:  include(header.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 8
+[22-Jan-2026 18:33:09 Europe/Istanbul] PHP Warning:  include(header.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 8
+[22-Jan-2026 18:33:09 Europe/Istanbul] PHP Warning:  include(): Failed opening 'header.php' for inclusion (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/derspros/public_html/destek/iletisim.php on line 8
+[22-Jan-2026 18:33:09 Europe/Istanbul] PHP Warning:  include(footer.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 217
+[22-Jan-2026 18:33:09 Europe/Istanbul] PHP Warning:  include(footer.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 217
+[22-Jan-2026 18:33:09 Europe/Istanbul] PHP Warning:  include(): Failed opening 'footer.php' for inclusion (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/derspros/public_html/destek/iletisim.php on line 217
+[22-Jan-2026 18:33:34 Europe/Istanbul] PHP Warning:  include(header.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 8
+[22-Jan-2026 18:33:34 Europe/Istanbul] PHP Warning:  include(header.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 8
+[22-Jan-2026 18:33:34 Europe/Istanbul] PHP Warning:  include(): Failed opening 'header.php' for inclusion (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/derspros/public_html/destek/iletisim.php on line 8
+[22-Jan-2026 18:33:34 Europe/Istanbul] PHP Warning:  include(footer.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 217
+[22-Jan-2026 18:33:34 Europe/Istanbul] PHP Warning:  include(footer.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 217
+[22-Jan-2026 18:33:34 Europe/Istanbul] PHP Warning:  include(): Failed opening 'footer.php' for inclusion (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/derspros/public_html/destek/iletisim.php on line 217
+[22-Jan-2026 18:33:47 Europe/Istanbul] PHP Warning:  include(header.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 8
+[22-Jan-2026 18:33:47 Europe/Istanbul] PHP Warning:  include(header.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 8
+[22-Jan-2026 18:33:47 Europe/Istanbul] PHP Warning:  include(): Failed opening 'header.php' for inclusion (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/derspros/public_html/destek/iletisim.php on line 8
+[22-Jan-2026 18:33:47 Europe/Istanbul] PHP Warning:  include(footer.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 217
+[22-Jan-2026 18:33:47 Europe/Istanbul] PHP Warning:  include(footer.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 217
+[22-Jan-2026 18:33:47 Europe/Istanbul] PHP Warning:  include(): Failed opening 'footer.php' for inclusion (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/derspros/public_html/destek/iletisim.php on line 217
+[22-Jan-2026 18:40:05 Europe/Istanbul] PHP Fatal error:  Uncaught Error: Call to undefined function mail() in /home/derspros/public_html/destek/iletisim.php:40
+Stack trace:
+#0 {main}
+  thrown in /home/derspros/public_html/destek/iletisim.php on line 40
+[22-Jan-2026 18:44:36 Europe/Istanbul] PHP Warning:  require(../PHPMailer/src/Exception.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 14
+[22-Jan-2026 18:44:36 Europe/Istanbul] PHP Warning:  require(../PHPMailer/src/Exception.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 14
+[22-Jan-2026 18:44:36 Europe/Istanbul] PHP Fatal error:  Uncaught Error: Failed opening required '../PHPMailer/src/Exception.php' (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/derspros/public_html/destek/iletisim.php:14
+Stack trace:
+#0 {main}
+  thrown in /home/derspros/public_html/destek/iletisim.php on line 14
+[22-Jan-2026 18:45:02 Europe/Istanbul] PHP Warning:  require(../PHPMailer/src/Exception.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 14
+[22-Jan-2026 18:45:02 Europe/Istanbul] PHP Warning:  require(../PHPMailer/src/Exception.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 14
+[22-Jan-2026 18:45:02 Europe/Istanbul] PHP Fatal error:  Uncaught Error: Failed opening required '../PHPMailer/src/Exception.php' (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/derspros/public_html/destek/iletisim.php:14
+Stack trace:
+#0 {main}
+  thrown in /home/derspros/public_html/destek/iletisim.php on line 14
+[22-Jan-2026 18:51:28 Europe/Istanbul] PHP Warning:  require_once(/home/derspros/public_html/destek/../PHPMailer/src/Exception.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 13
+[22-Jan-2026 18:51:28 Europe/Istanbul] PHP Fatal error:  Uncaught Error: Failed opening required '/home/derspros/public_html/destek/../PHPMailer/src/Exception.php' (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/derspros/public_html/destek/iletisim.php:13
+Stack trace:
+#0 {main}
+  thrown in /home/derspros/public_html/destek/iletisim.php on line 13
+[22-Jan-2026 18:51:40 Europe/Istanbul] PHP Warning:  require_once(/home/derspros/public_html/destek/../PHPMailer/src/Exception.php): Failed to open stream: No such file or directory in /home/derspros/public_html/destek/iletisim.php on line 13
+[22-Jan-2026 18:51:40 Europe/Istanbul] PHP Fatal error:  Uncaught Error: Failed opening required '/home/derspros/public_html/destek/../PHPMailer/src/Exception.php' (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/derspros/public_html/destek/iletisim.php:13
+Stack trace:
+#0 {main}
+  thrown in /home/derspros/public_html/destek/iletisim.php on line 13

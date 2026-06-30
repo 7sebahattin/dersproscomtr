@@ -1,0 +1,59 @@
+[23-Jan-2026 17:19:46 Europe/Istanbul] PHP Warning:  Undefined variable $message in /home/derspros/public_html/student/kocluk.php on line 172
+[23-Jan-2026 17:19:46 Europe/Istanbul] PHP Warning:  Undefined variable $student_level in /home/derspros/public_html/student/denemeler.php on line 73
+[23-Jan-2026 17:19:46 Europe/Istanbul] PHP Warning:  Undefined variable $student_level in /home/derspros/public_html/student/scripts.php on line 2
+[23-Jan-2026 17:45:31 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:45:31 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:46:25 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:46:25 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:50:55 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:50:55 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:51:02 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:51:02 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:51:11 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:51:11 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:51:39 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 17:51:39 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 18:15:50 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 18:15:50 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 18:26:59 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 18:26:59 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 18:30:32 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 18:30:32 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 18:30:48 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 18:30:48 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 18:43:49 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 18:43:49 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:13:02 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:13:02 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:14:09 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:14:09 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:27:45 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:27:45 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:34:04 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:34:04 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:34:23 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:34:23 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:34:24 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:34:24 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:37:25 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:37:25 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:38:40 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:38:40 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:39:02 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:39:02 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:39:10 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:39:10 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:39:41 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:39:41 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:41:01 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:41:01 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:41:11 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:41:11 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:49:36 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:49:36 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:50:58 Europe/Istanbul] PHP Warning:  Undefined variable $streakData in /home/derspros/public_html/student/modals.php on line 7
+[23-Jan-2026 19:50:58 Europe/Istanbul] PHP Warning:  Trying to access array offset on value of type null in /home/derspros/public_html/student/modals.php on line 7
+[23-Mar-2026 11:38:14 Europe/Istanbul] PHP Deprecated:  number_format(): Passing null to parameter #1 ($num) of type float is deprecated in /home/derspros/public_html/student/rapor.php on line 140
+[23-Mar-2026 11:38:14 Europe/Istanbul] PHP Deprecated:  number_format(): Passing null to parameter #1 ($num) of type float is deprecated in /home/derspros/public_html/student/rapor.php on line 155
+[23-Mar-2026 11:38:14 Europe/Istanbul] PHP Deprecated:  number_format(): Passing null to parameter #1 ($num) of type float is deprecated in /home/derspros/public_html/student/rapor.php on line 170
+[23-Mar-2026 11:38:14 Europe/Istanbul] PHP Deprecated:  number_format(): Passing null to parameter #1 ($num) of type float is deprecated in /home/derspros/public_html/student/rapor.php on line 188
