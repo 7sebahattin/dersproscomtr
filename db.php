@@ -9,9 +9,13 @@ define('BASE_URL', '');
 
 require_once __DIR__ . '/secrets.php';
 
-$host = 'localhost';
-$dbname = 'derspros_db';
-$username = 'derspros_sebo';
+// secrets.php içinde DB_HOST/DB_NAME/DB_USER tanımlanmazsa (canlı sunucudaki
+// mevcut secrets.php gibi) mevcut değerler kullanılır — geriye dönük uyumlu.
+// Test ortamı (staging), kendi secrets.php dosyasında bunları farklı
+// tanımlayarak ayrı bir veritabanına bağlanabilir.
+$host     = defined('DB_HOST') ? DB_HOST : 'localhost';
+$dbname   = defined('DB_NAME') ? DB_NAME : 'derspros_db';
+$username = defined('DB_USER') ? DB_USER : 'derspros_sebo';
 $password = DB_PASSWORD;
 
 try {

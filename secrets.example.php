@@ -11,3 +11,10 @@
 define('DB_PASSWORD', '');       // Veritabanı (MySQL) şifresi
 define('SMTP_PASSWORD', '');     // noreply@derspros.com.tr e-posta şifresi
 define('VAPID_PRIVATE_KEY', ''); // Push bildirim özel anahtarı
+
+// Aşağıdakiler İSTEĞE BAĞLIDIR. Tanımlanmazsa canlı sunucunun mevcut
+// değerleri (derspros_db / derspros_sebo) kullanılır. Test (staging) ortamı
+// kendi ayrı veritabanına bağlanmak için bunları tanımlar:
+// define('DB_HOST', 'localhost');
+// define('DB_NAME', 'derspros_test');
+// define('DB_USER', 'derspros_testuser');
