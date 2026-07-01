@@ -58,9 +58,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $hashed = password_hash($password, PASSWORD_DEFAULT);
 
+            // === GEÇİCİ: Admin onayı olmadan otomatik aktif kayıt ===
+            // Yeni üyeler doğrudan is_active=1 olur (öğrenci ve öğretmen dahil).
+            // Onay zorunluluğuna geri dönmek için aşağıdaki VALUES sonundaki 1 -> 0 yapılır.
             $stmt = $pdo->prepare("
                 INSERT INTO users (username, email, password, first_name, last_name, phone, role, school_level, parent_name, parent_phone, branch, bio, is_active, date_joined)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NOW())
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
             ");
 
             if ($stmt->execute([$username, $email, $hashed, $first_name, $last_name, $phone, $role, $school_level, $parent_name, $parent_phone, $branch, $bio])) {
@@ -80,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     " . ($parent_phone ? "<strong>Veli Tel:</strong> {$parent_phone}<br>" : "") . "
                     " . ($branch       ? "<strong>Branş:</strong> {$branch}<br>"          : "") . "
                     " . ($bio          ? "<strong>Biyografi:</strong> " . nl2br(htmlspecialchars($bio)) . "<br>" : "") . "
-                    <br>Hesap şu an <strong>pasif</strong> — onay için admin panelini kontrol edin.
+                    <br>Hesap otomatik olarak <strong>aktif</strong> edilmiştir (geçici dönem — onay zorunluluğu kapalı).
                 ";
 
                 try {
@@ -95,13 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 } catch (Exception $e) {}
 
-                if ($role === 'student') {
-                    $success = "Kaydınız alındı! Öğretmeninize <strong>{$username}</strong> kullanıcı adınızı ilettiğinizde hesabınız aktif edilecektir.";
-                } elseif ($role === 'teacher') {
-                    $success = "Başvurunuz alındı! Üyelik işlemleri için sizinle en kısa sürede iletişime geçilecektir.";
-                } else {
-                    $success = "Kaydınız alındı! Öğretmeninize <strong>{$username}</strong> kullanıcı adınızı ilettiğinizde üyeliğiniz aktif olacaktır.";
-                }
+                $success = "Kaydınız tamamlandı! Hesabınız aktif — <strong>{$username}</strong> kullanıcı adınız ve şifrenizle hemen giriş yapabilirsiniz.";
             } else {
                 $error = "Bir hata oluştu, lütfen tekrar deneyin.";
             }

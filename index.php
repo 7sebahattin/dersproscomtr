@@ -39,7 +39,11 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
     // Eğer kullanıcı ADMIN ise -> Her türlü girer.
     // Eğer kullanıcı NORMAL ise -> Süresi dolmamış ve Üyeliği tanımlı olmalı.
     
-    if (($_SESSION['role'] === 'admin') || (!$is_expired && !$no_membership)) {
+    // === GEÇİCİ: Üyelik-süresi (onay) zorunluluğu kaldırıldı ===
+    // Tarihi tanımlı olmayan (yeni, onaysız) üyeler de panele girebilir.
+    // Süresi DOLMUŞ ($is_expired) üyeler yine engellenir.
+    // Eski davranışa dönmek için koşula '&& !$no_membership' geri eklenir.
+    if (($_SESSION['role'] === 'admin') || !$is_expired) {
         
         // A. ÖĞRETMEN GİRİŞİ
         if ($_SESSION['role'] === 'teacher') {
