@@ -1,6 +1,6 @@
 /**
- * sw.js — DersPROS Service Worker (Web Push)
- * Kapsam: /derspros/
+ * sw.js — DersPROS Service Worker (Web Push + PWA)
+ * Kapsam: /
  */
 
 const CACHE_NAME = 'derspros-v1';
@@ -26,12 +26,12 @@ self.addEventListener('push', (event) => {
     const title   = data.title   || 'DersPROS';
     const options = {
         body:    data.body    || 'Yeni bir bildiriminiz var.',
-        icon:    data.icon    || '/derspros/assets/images/favicon.png',
-        badge:   data.badge   || '/derspros/assets/images/favicon.png',
+        icon:    data.icon    || '/assets/images/favicon.png',
+        badge:   data.badge   || '/assets/images/favicon.png',
         tag:     data.tag     || 'derspros-' + Date.now(),
         renotify: data.renotify || false,
         requireInteraction: data.requireInteraction || false,
-        data:    { url: data.url || '/derspros/' }
+        data:    { url: data.url || '/' }
     };
 
     event.waitUntil(
@@ -44,7 +44,7 @@ self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     const targetUrl = (event.notification.data && event.notification.data.url)
         ? event.notification.data.url
-        : '/derspros/';
+        : '/';
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
@@ -72,7 +72,7 @@ self.addEventListener('pushsubscriptionchange', (event) => {
                 : null
         }).then((newSubscription) => {
             // Yeni aboneliği backend'e gönder
-            return fetch('/derspros/ajax/push_subscribe.php', {
+            return fetch('/ajax/push_subscribe.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ subscription: newSubscription.toJSON(), action: 'resubscribe' })

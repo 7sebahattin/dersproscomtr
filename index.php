@@ -61,7 +61,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
 
         // D. ADMIN GİRİŞİ
         if ($_SESSION['role'] === 'admin') {
-            header("Location: /derspros/admin/");
+            header("Location: " . BASE_URL . "/admin/");
             exit;
         }
     }

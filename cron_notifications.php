@@ -135,7 +135,7 @@ function send_push(
     string  $today,
     string  $title,
     string  $body,
-    string  $url = '/derspros/'
+    string  $url = '/'
 ): void {
     global $webPush;
 
@@ -147,8 +147,8 @@ function send_push(
     $payload = json_encode([
         'title' => $title,
         'body'  => $body,
-        'icon'  => '/derspros/assets/images/favicon.png',
-        'badge' => '/derspros/assets/images/favicon.png',
+        'icon'  => '/assets/images/favicon.png',
+        'badge' => '/assets/images/favicon.png',
         'tag'   => $notifType,
         'url'   => $url,
     ], JSON_UNESCAPED_UNICODE);
@@ -369,7 +369,7 @@ foreach ($students as $student) {
             send_push($webPush, $pdo, $student, $notifType, $today,
                 "📌 Şimdi: {$subject}{$category}",
                 "{$subject}{$topic}" . ($amount > 0 ? " — {$amount} adet" : '') . " göreviniz var. Hadi başlayalım!",
-                '/derspros/kocluk.php'
+                '/kocluk.php'
             );
         }
     } catch (Throwable $e) {
