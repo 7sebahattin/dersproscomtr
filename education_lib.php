@@ -51,7 +51,21 @@ function education_ensure_schema(PDO $pdo): void
             REFERENCES education_subjects(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci");
 
-    // resource_id -> materials.id (eski tabloya FK KOYMUYORUZ; bağımsızlık korunuyor)
+    // Yeni bağımsız kaynak havuzu (kitap / deneme / pdf / video ...)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS education_resources (
+        id           INT AUTO_INCREMENT PRIMARY KEY,
+        title        VARCHAR(255) NOT NULL,
+        type         ENUM('kitap','deneme','pdf','video','diger') NOT NULL DEFAULT 'kitap',
+        description  TEXT NULL,
+        external_url VARCHAR(500) NULL,
+        created_by   INT NULL,
+        is_active    TINYINT(1) NOT NULL DEFAULT 1,
+        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_res_active (is_active),
+        KEY idx_res_title (title)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci");
+
+    // resource_id -> education_resources.id (silme temizliği kod tarafında yapılır)
     $pdo->exec("CREATE TABLE IF NOT EXISTS resource_topics (
         id          INT AUTO_INCREMENT PRIMARY KEY,
         resource_id INT NOT NULL,
@@ -169,4 +183,99 @@ function education_is_admin(): bool
 {
     return isset($_SESSION['user_id'])
         && in_array($_SESSION['role'] ?? '', ['admin', 'superuser'], true);
+}
+
+/** Kaynak oluşturabilir mi? (öğretmenler seçim/kaynak ekleyebilir, admin her şeyi) */
+function education_can_manage_resources(): bool
+{
+    return isset($_SESSION['user_id'])
+        && in_array($_SESSION['role'] ?? '', ['teacher', 'admin', 'superuser'], true);
+}
+
+/**
+ * Kaynakları filtreleyerek listeler. Tek sorgu (N+1 yok).
+ * Filtreler: category_id, subject_id, topic_id, topic_q (konu adı), q (kaynak adı), type
+ */
+function education_list_resources(PDO $pdo, array $f = [], int $limit = 200, int $offset = 0): array
+{
+    $where  = ["r.is_active = 1"];
+    $params = [];
+
+    if (!empty($f['q'])) { $where[] = "r.title LIKE ?"; $params[] = '%' . $f['q'] . '%'; }
+    if (!empty($f['type'])) { $where[] = "r.type = ?"; $params[] = $f['type']; }
+
+    // Konu tabanlı filtreler: EXISTS ile (kaynak başına tek satır korunur)
+    $topicConds = []; $topicParams = [];
+    if (!empty($f['topic_id']))    { $topicConds[] = "t.id = ?";          $topicParams[] = (int)$f['topic_id']; }
+    if (!empty($f['subject_id']))  { $topicConds[] = "t.subject_id = ?";  $topicParams[] = (int)$f['subject_id']; }
+    if (!empty($f['category_id'])) { $topicConds[] = "s.category_id = ?"; $topicParams[] = (int)$f['category_id']; }
+    if (!empty($f['topic_q']))     { $topicConds[] = "t.topic_name LIKE ?"; $topicParams[] = '%' . $f['topic_q'] . '%'; }
+
+    if ($topicConds) {
+        $where[] = "EXISTS (SELECT 1 FROM resource_topics rt
+                            JOIN education_topics t ON t.id = rt.topic_id
+                            JOIN education_subjects s ON s.id = t.subject_id
+                            WHERE rt.resource_id = r.id AND " . implode(' AND ', $topicConds) . ")";
+        $params = array_merge($params, $topicParams);
+    }
+
+    $sql = "SELECT r.*, COALESCE(tc.cnt, 0) AS topic_count, u.first_name, u.last_name
+            FROM education_resources r
+            LEFT JOIN (SELECT resource_id, COUNT(*) cnt FROM resource_topics GROUP BY resource_id) tc
+                   ON tc.resource_id = r.id
+            LEFT JOIN users u ON u.id = r.created_by
+            WHERE " . implode(' AND ', $where) . "
+            ORDER BY r.created_at DESC
+            LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    return $st->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** Kaynağın konu bağlantılarını topluca değiştirir (transaction). */
+function education_set_resource_topics(PDO $pdo, int $resourceId, array $topicIds): void
+{
+    $topicIds = array_values(array_unique(array_filter(array_map('intval', $topicIds), fn($v) => $v > 0)));
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare("DELETE FROM resource_topics WHERE resource_id = ?")->execute([$resourceId]);
+        if ($topicIds) {
+            $ins = $pdo->prepare("INSERT IGNORE INTO resource_topics (resource_id, topic_id) VALUES (?, ?)");
+            foreach ($topicIds as $tid) { $ins->execute([$resourceId, $tid]); }
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Tüm aktif müfredat ağacını tek seferde döndürür (kaynak formu accordion'u için).
+ * 3 sorgu toplam — N+1 yok. [category][subject] => topics
+ */
+function education_get_full_tree(PDO $pdo): array
+{
+    $cats  = education_get_categories($pdo, true);
+    $subs  = $pdo->query("SELECT id, category_id, lesson_name FROM education_subjects
+                          WHERE is_active = 1 ORDER BY display_order, lesson_name")->fetchAll(PDO::FETCH_ASSOC);
+    $tops  = $pdo->query("SELECT id, subject_id, topic_name FROM education_topics
+                          WHERE status = 1 ORDER BY display_order, topic_name")->fetchAll(PDO::FETCH_ASSOC);
+
+    $topicsBySubj = [];
+    foreach ($tops as $t) { $topicsBySubj[$t['subject_id']][] = $t; }
+
+    $subsByCat = [];
+    foreach ($subs as $s) {
+        $s['topics'] = $topicsBySubj[$s['id']] ?? [];
+        $subsByCat[$s['category_id']][] = $s;
+    }
+
+    $tree = [];
+    foreach ($cats as $c) {
+        $c['subjects'] = $subsByCat[$c['id']] ?? [];
+        $tree[] = $c;
+    }
+    return $tree;
 }

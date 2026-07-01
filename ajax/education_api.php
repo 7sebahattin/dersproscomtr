@@ -54,6 +54,22 @@ try {
             echo json_encode(['ok' => true, 'page' => $page, 'per_page' => $perPage, 'data' => $rows], JSON_UNESCAPED_UNICODE);
             break;
 
+        case 'resources':
+            // Filtreler: category_id, subject_id, topic_id, topic_q (konu adı), q (kaynak adı), type
+            $f = [
+                'category_id' => (int)($_GET['category_id'] ?? 0),
+                'subject_id'  => (int)($_GET['subject_id'] ?? 0),
+                'topic_id'    => (int)($_GET['topic_id'] ?? 0),
+                'topic_q'     => trim($_GET['topic_q'] ?? ''),
+                'q'           => trim($_GET['q'] ?? ''),
+                'type'        => trim($_GET['type'] ?? ''),
+            ];
+            $page    = max(1, (int)($_GET['page'] ?? 1));
+            $perPage = min(200, max(10, (int)($_GET['per_page'] ?? 50)));
+            $rows = education_list_resources($pdo, $f, $perPage, ($page - 1) * $perPage);
+            echo json_encode(['ok' => true, 'page' => $page, 'per_page' => $perPage, 'data' => $rows], JSON_UNESCAPED_UNICODE);
+            break;
+
         case 'resource_topics':
             $resId = (int)($_GET['resource_id'] ?? 0);
             if ($resId <= 0) { http_response_code(400); echo json_encode(['ok' => false, 'error' => 'resource_id gerekli.']); break; }
@@ -62,7 +78,7 @@ try {
 
         default:
             http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => 'Geçersiz action. Geçerli: categories, subjects, topics, resource_topics']);
+            echo json_encode(['ok' => false, 'error' => 'Geçersiz action. Geçerli: categories, subjects, topics, resources, resource_topics']);
     }
 } catch (Throwable $e) {
     http_response_code(500);
