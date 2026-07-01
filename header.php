@@ -24,21 +24,26 @@ if (isset($_SESSION['user_id'])) {
         $_SESSION['pseudo_cron_last'] = time();
         $cronFile = __DIR__ . '/cron_notifications.php';
         if (file_exists($cronFile)) {
-            // Arka planda çalıştır, sayfa yüklemesini bloklama
-            if (function_exists('fastcgi_finish_request')) {
-                // FastCGI: response'u bitir, sonra cron çalıştır
-                register_shutdown_function(function() use ($cronFile) {
+            // Sayfa yüklemesini bloklamadan, çıktıyı SAYFAYA SIZDIRMADAN arka planda çalıştır.
+            register_shutdown_function(function() use ($cronFile) {
+                // Yanıtı kullanıcıya kapat (FastCGI veya LiteSpeed)
+                if (function_exists('fastcgi_finish_request')) {
                     fastcgi_finish_request();
-                    define('CRON_RUN', true);
+                } elseif (function_exists('litespeed_finish_request')) {
+                    litespeed_finish_request();
+                }
+                if (!defined('CRON_RUN')) define('CRON_RUN', true);
+                // $pdo bağlantısını cron'a aktar (shutdown kapsamında global'den al)
+                global $pdo;
+                // Cron'un log çıktısı sayfaya düşmesin diye tampona al ve at
+                ob_start();
+                try {
                     include $cronFile;
-                });
-            } else {
-                // Standart: output buffer ile arka plan simülasyonu
-                register_shutdown_function(function() use ($cronFile) {
-                    define('CRON_RUN', true);
-                    @include $cronFile;
-                });
-            }
+                } catch (Throwable $e) {
+                    // Sessizce yut — arka plan görevi sayfayı etkilemesin
+                }
+                ob_end_clean();
+            });
         }
     }
 }
