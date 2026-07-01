@@ -45,6 +45,11 @@
             <span class="font-bold text-sm tracking-wide">Müfredat & Konu</span>
         </a>
 
+        <a href="education.php" class="flex items-center px-4 py-3 rounded-xl transition-all duration-200 group <?php echo $cur == 'education.php' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'hover:bg-white/5 hover:text-white'; ?>">
+            <span class="mr-3 text-xl">🗂️</span>
+            <span class="font-bold text-sm tracking-wide">Müfredat Yönetimi <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-full ml-1">YENİ</span></span>
+        </a>
+
         <a href="materyal.php" class="flex items-center px-4 py-3 rounded-xl transition-all duration-200 group <?php echo $cur == 'materyal.php' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'hover:bg-white/5 hover:text-white'; ?>">
             <span class="mr-3 text-xl">📂</span>
             <span class="font-bold text-sm tracking-wide">Kaynaklar</span>
