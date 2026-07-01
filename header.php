@@ -137,14 +137,14 @@ try {
     <link rel="icon" type="image/png" href="<?php echo $B; ?>/assets/images/favicon.png">
 
     <!-- PWA: Ana ekrana ekleme / uygulama hissi -->
-    <link rel="manifest" href="<?php echo $B; ?>/manifest.json">
+    <link rel="manifest" href="<?php echo $B; ?>/manifest.json?v=2">
     <meta name="theme-color" content="#4f46e5">
     <meta name="mobile-web-app-capable" content="yes">
     <!-- iOS için ayrı destek (Android manifest'i kullanmaz) -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="DersPROS">
-    <link rel="apple-touch-icon" href="<?php echo $B; ?>/assets/images/apple-touch-icon.png">
+    <link rel="apple-touch-icon" href="<?php echo $B; ?>/assets/images/apple-touch-icon.png?v=2">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
