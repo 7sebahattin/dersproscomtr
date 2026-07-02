@@ -106,16 +106,8 @@ function mine_badge(array $row, int $uid): string {
 function u2(int $cat=0,int $subj=0): string { $p=[]; if($cat)$p['cat']=$cat; if($subj)$p['subj']=$subj; return 'mufredat_v2.php'.($p?('?'.http_build_query($p)):''); }
 $B = defined('BASE_URL') ? BASE_URL : '';
 ?>
-<!DOCTYPE html>
-<html lang="tr"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Müfredatım — DersPROS</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>body{font-family:'Poppins',sans-serif}</style>
-</head>
-<body class="bg-slate-100 min-h-screen p-4 lg:p-8">
-<div class="max-w-7xl mx-auto">
+<?php require_once __DIR__ . '/../header.php'; ?>
+<div class="max-w-7xl mx-auto p-4 lg:p-8">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
             <h1 class="text-2xl font-bold text-slate-800">📚 Müfredatım</h1>
@@ -208,4 +200,4 @@ $B = defined('BASE_URL') ? BASE_URL : '';
     </div>
     <p class="text-[11px] text-slate-400 mt-6">🔒 Genel (admin onaylı) içerik herkese açıktır ve yalnızca admin değiştirebilir. ★ ile işaretli öğeler size aittir; dilediğiniz gibi düzenleyip silebilirsiniz.</p>
 </div>
-</body></html>
+<?php require_once __DIR__ . '/../footer.php'; ?>

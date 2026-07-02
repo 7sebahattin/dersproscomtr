@@ -128,18 +128,8 @@ $filterSubjects = $filters['category_id'] ? education_get_subjects($pdo, $filter
 
 $pageTitle = "Kaynak Havuzu";
 ?>
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaynak Havuzu — DersPROS</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>body{font-family:'Poppins',sans-serif}</style>
-</head>
-<body class="bg-slate-100 min-h-screen p-4 lg:p-8">
-<div class="max-w-6xl mx-auto">
+<?php require_once __DIR__ . '/header.php'; ?>
+<div class="max-w-6xl mx-auto p-4 lg:p-8">
 
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
@@ -415,5 +405,4 @@ $pageTitle = "Kaynak Havuzu";
 <?php endif; ?>
 
 </div>
-</body>
-</html>
+<?php require_once __DIR__ . '/footer.php'; ?>
