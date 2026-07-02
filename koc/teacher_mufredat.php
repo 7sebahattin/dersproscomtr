@@ -1,6 +1,10 @@
 <?php
-// teacher_mufredat.php
-// Türkçe Karakter Destekli, Şablon İndirmeli ve Düzenleme Özellikli
+// teacher_mufredat.php — EMEKLİYE AYRILDI (Müfredat v2)
+// Öğretmen "Eski Müfredat" sayfası yeni sistemle değiştirildi; yeni sayfaya yönlendirir.
+// (Aşağıdaki eski kod korunuyor; gerekirse bu satırlar kaldırılarak geri dönülebilir.)
+if (session_status() === PHP_SESSION_NONE) session_start();
+header("Location: mufredat_v2.php");
+exit;
 
 ini_set('display_errors', 0);
 error_reporting(E_ALL);

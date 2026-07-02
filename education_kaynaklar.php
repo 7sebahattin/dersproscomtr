@@ -102,6 +102,10 @@ if ($editId > 0) {
     }
 }
 
+// Havuz kapsamı sekmesi: mine (Benim) / global (Genel-Onaylı) / all (admin: hepsi)
+$scope = in_array($_GET['scope'] ?? '', ['mine','global','all'], true) ? $_GET['scope'] : 'mine';
+if ($scope === 'all' && !$isAdmin) $scope = 'mine';
+
 // Liste filtreleri
 $filters = [
     'q'           => trim($_GET['q'] ?? ''),
@@ -109,6 +113,9 @@ $filters = [
     'category_id' => (int)($_GET['fcat'] ?? 0),
     'subject_id'  => (int)($_GET['fsubj'] ?? 0),
     'type'        => in_array($_GET['ftype'] ?? '', array_keys($typeLabels)) ? $_GET['ftype'] : '',
+    'scope'       => $scope === 'all' ? '' : $scope,
+    'viewer_id'   => $uid,
+    'is_admin'    => $isAdmin,
 ];
 $resources = $showForm ? [] : education_list_resources($pdo, $filters);
 
@@ -303,7 +310,16 @@ $pageTitle = "Kaynak Havuzu";
 
 <?php else: ?>
     <!-- ═══════════ KAYNAK LİSTESİ ═══════════ -->
+    <!-- Kapsam sekmeleri: Benim Havuzum ↔ Genel (Onaylı) -->
+    <div class="flex gap-2 mb-4">
+        <a href="?scope=mine" class="px-4 py-2 rounded-xl text-sm font-bold border <?= $scope==='mine' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' ?>">👤 Benim Havuzum</a>
+        <a href="?scope=global" class="px-4 py-2 rounded-xl text-sm font-bold border <?= $scope==='global' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' ?>">🌍 Genel Havuz (Onaylı)</a>
+        <?php if ($isAdmin): ?>
+        <a href="?scope=all" class="px-4 py-2 rounded-xl text-sm font-bold border <?= $scope==='all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' ?>">🗂️ Tümü (Admin)</a>
+        <?php endif; ?>
+    </div>
     <form method="get" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-5 grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+        <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
         <div class="col-span-2 md:col-span-1">
             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Kaynak Adı</label>
             <input name="q" value="<?= htmlspecialchars($filters['q']) ?>" placeholder="Ara..."

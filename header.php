@@ -220,7 +220,7 @@ try {
                                     <a href="<?php echo $B; ?>/koc/ogrencilerim.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">👥 Öğrencilerim</a>
                                     <a href="<?php echo $B; ?>/koc/bildirim_ayarlari.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🔔 Bildirim Ayarları</a>
                                     <a href="<?php echo $B; ?>/koc/odemeler.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">💰 Ödeme Yönetimi</a>
-                                    <a href="<?php echo $B; ?>/koc/teacher_mufredat.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">📝 Müfredat Yükle</a>
+                                    <a href="<?php echo $B; ?>/koc/mufredat_v2.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">📝 Müfredat Yükle</a>
                                     <button type="button" onclick="openFeedbackModal()" class="w-full text-left block px-3 py-2 rounded-lg hover:bg-orange-50 text-orange-600 font-medium text-xs transition-colors">🐛 Hata Bildir</button>
                                     <div class="h-px bg-slate-100 my-1"></div>
                                 <?php endif; ?>
@@ -361,7 +361,7 @@ try {
                 <a href="<?php echo $B; ?>/koc/odemeler.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
                     <span class="text-lg">💰</span> Ödeme Yönetimi
                 </a>
-                <a href="<?php echo $B; ?>/koc/teacher_mufredat.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
+                <a href="<?php echo $B; ?>/koc/mufredat_v2.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
                     <span class="text-lg">📝</span> Müfredat Yükle
                 </a>
                 <button type="button" onclick="closeMobileMenu(); setTimeout(openFeedbackModal,200)" class="w-full flex items-center gap-3 p-3 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-600 font-medium text-sm transition-colors">

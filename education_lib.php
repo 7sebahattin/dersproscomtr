@@ -262,6 +262,15 @@ function education_list_resources(PDO $pdo, array $f = [], int $limit = 200, int
     if (!empty($f['q'])) { $where[] = "r.title LIKE ?"; $params[] = '%' . $f['q'] . '%'; }
     if (!empty($f['type'])) { $where[] = "r.type = ?"; $params[] = $f['type']; }
 
+    // Havuz kapsamı: 'mine' = yalnız kendi, 'global' = onaylı(kilitli), aksi = kendi + global
+    if (!empty($f['scope']) && $f['scope'] === 'mine' && !empty($f['viewer_id'])) {
+        $where[] = "r.created_by = ?"; $params[] = (int)$f['viewer_id'];
+    } elseif (!empty($f['scope']) && $f['scope'] === 'global') {
+        $where[] = "r.is_locked = 1";
+    } elseif (!empty($f['viewer_id']) && empty($f['is_admin'])) {
+        $where[] = "(r.created_by = ? OR r.is_locked = 1)"; $params[] = (int)$f['viewer_id'];
+    }
+
     // Konu tabanlı filtreler: EXISTS ile (kaynak başına tek satır korunur)
     $topicConds = []; $topicParams = [];
     if (!empty($f['topic_id']))    { $topicConds[] = "t.id = ?";          $topicParams[] = (int)$f['topic_id']; }
