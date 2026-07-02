@@ -17,7 +17,8 @@ $headerPath = file_exists($BASE . '/header.php') ? ($BASE . '/header.php') : ($B
 $footerPath = file_exists($BASE . '/footer.php') ? ($BASE . '/footer.php') : ($BASE . '/../footer.php');
 
 require_once $dbPath;
-include $headerPath;
+// NOT: header.php (HTML çıktısı) artık POST işlemeden SONRA dahil ediliyor.
+// Böylece Post/Redirect/Get (PRG) deseni için header('Location') kullanılabilir.
 
 /* --- HELPER FUNCTIONS --- */
 function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
@@ -49,7 +50,7 @@ function pickCol(array $cols, array $candidates){
 
 /* --- AUTH CHECK --- */
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? null) !== 'teacher') {
-    echo "<script>window.location.href='/index.php';</script>"; 
+    header('Location: ../index.php');
     exit;
 }
 $teacher_id = (int)$_SESSION['user_id'];
@@ -58,7 +59,7 @@ $teacher_id = (int)$_SESSION['user_id'];
 if (empty($_SESSION['csrf_token'])) $_SESSION['csrf_token'] = bin2hex(random_bytes(16));
 $csrf = $_SESSION['csrf_token'];
 
-$message = "";
+$flash = null; // PRG/toast: ['t'=>tip,'m'=>metin]
 
 /* --- DYNAMIC SCHEMA MAPPING --- */
 $colsApps = getColumns($pdo, 'appointments');
@@ -77,6 +78,7 @@ $APP_GROUP    = pickCol($colsApps, ['group_id','recurring_group_id']);
 
 $needApps = [$APP_ID,$APP_TEACHER,$APP_STUDENT,$APP_DATE,$APP_TIME,$APP_DUR];
 if (in_array(null, $needApps, true)) {
+    include $headerPath;
     echo "<div class='max-w-3xl mx-auto p-6'>
             <div class='bg-red-50 text-red-700 border border-red-100 p-5 rounded-3xl font-black'>
               ⛔ appointments tablosunda zorunlu kolon(lar) eksik.
@@ -100,6 +102,22 @@ $REQ_ROLE       = pickCol($colsReq, ['requester_role','role']);
 $REQ_TRESP      = pickCol($colsReq, ['teacher_response','response','teacher_note']);
 $REQ_DECIDED_AT = pickCol($colsReq, ['decided_at','resolved_at','updated_at']);
 $REQ_CREATED_AT = pickCol($colsReq, ['created_at','request_date','created']);
+
+/* --- ÖDEME KÖPRÜSÜ İÇİN ŞEMA HAZIRLIĞI (idempotent, additive; hiçbir şey bozulmaz) ---
+   randevu -> ödeme bağı: randevu günü gelip iptal edilmezse ileride otomatik
+   payments kaydı üretilecek. Şimdilik yalnızca kolonlar garanti ediliyor. */
+try {
+    if (!in_array('price', $colsApps, true)) {
+        $pdo->exec("ALTER TABLE appointments ADD COLUMN price DECIMAL(10,2) NULL DEFAULT NULL");
+        $colsApps[] = 'price';
+    }
+    $colsPay = getColumns($pdo, 'payments');
+    if ($colsPay && !in_array('appointment_id', $colsPay, true)) {
+        $pdo->exec("ALTER TABLE payments ADD COLUMN appointment_id INT NULL DEFAULT NULL");
+        $pdo->exec("ALTER TABLE payments ADD KEY idx_pay_appt (appointment_id)");
+    }
+} catch (Throwable $e) { /* yetki yoksa sayfa eski haliyle çalışmaya devam eder */ }
+$APP_PRICE = pickCol($colsApps, ['price']);
 
 function app_status_expr($APP_STATUS, $APP_ISCANCEL){
     if ($APP_STATUS) return "COALESCE(a.`$APP_STATUS`, 'active')";
@@ -143,7 +161,7 @@ function has_conflict(PDO $pdo, int $teacher_id, string $date, string $new_start
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $post_csrf = $_POST['csrf_token'] ?? '';
     if (!hash_equals($csrf, $post_csrf)) {
-        $message = "<div class='bg-red-50 text-red-700 p-4 rounded-2xl mb-4 font-black border border-red-100'>⚠️ CSRF doğrulaması başarısız.</div>";
+        $flash = ['t'=>'error','m'=>'⚠️ CSRF doğrulaması başarısız.'];
     } else {
 
         // (A) Approve / Reject request
@@ -152,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $resp_text = trim((string)($_POST['teacher_response'] ?? ''));
 
             if (!$REQ_ID || !$REQ_APP_ID || !$REQ_STATUS || !$REQ_TYPE) {
-                $message = "<div class='bg-red-50 text-red-700 p-4 rounded-2xl mb-4 font-black border border-red-100'>⚠️ appointment_requests kolonları eksik.</div>";
+                $flash = ['t'=>'error','m'=>'⚠️ appointment_requests kolonları eksik.'];
             } else {
                 $sql = "
                     SELECT
@@ -182,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $row = $rq->fetch(PDO::FETCH_ASSOC);
 
                 if (!$row) {
-                    $message = "<div class='bg-red-50 text-red-700 p-4 rounded-2xl mb-4 font-black border border-red-100'>⛔ Talep bulunamadı.</div>";
+                    $flash = ['t'=>'error','m'=>'⛔ Talep bulunamadı.'];
                 } else {
                     $type = (string)($row['req_type'] ?? '');
                     $isApprove = isset($_POST['approve_request']);
@@ -196,7 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $pdo->prepare("UPDATE appointments SET `$APP_ISCANCEL`=1 WHERE `$APP_ID`=? AND `$APP_TEACHER`=?")->execute([(int)$row['appointment_id'], $teacher_id]);
                             }
                             $newStatus = 'approved';
-                            $message = "<div class='bg-green-50 text-green-700 p-4 rounded-2xl mb-4 font-black border border-green-100'>✅ Talep onaylandı (Randevu İptal).</div>";
+                            $flash = ['t'=>'success','m'=>'✅ Talep onaylandı (Randevu İptal).'];
                         } elseif ($type === 'reschedule') {
                             $new_date = !empty($row['proposed_date']) ? (string)$row['proposed_date'] : (string)$row['appointment_date'];
                             $new_time = !empty($row['proposed_time']) ? normalize_time($row['proposed_time']) : (string)$row['appointment_time'];
@@ -207,16 +225,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                             if (has_conflict($pdo, $teacher_id, $new_date, $check_start, $check_end, (int)$row['appointment_id'],
                                 $APP_TEACHER, $APP_DATE, $APP_TIME, $APP_DUR, $APP_STATUS, $APP_ISCANCEL, $APP_ID)) {
-                                $message = "<div class='bg-red-50 text-red-700 p-4 rounded-2xl mb-4 font-black border border-red-100'>⚠️ Çakışma var.</div>";
+                                $flash = ['t'=>'error','m'=>'⚠️ Çakışma var.'];
                                 $newStatus = null;
                             } else {
                                 $pdo->prepare("UPDATE appointments SET `$APP_DATE`=?, `$APP_TIME`=?, `$APP_DUR`=? WHERE `$APP_ID`=? AND `$APP_TEACHER`=?")
                                     ->execute([$new_date, $new_time, $new_dur, (int)$row['appointment_id'], $teacher_id]);
                                 $newStatus = 'approved';
-                                $message = "<div class='bg-green-50 text-green-700 p-4 rounded-2xl mb-4 font-black border border-green-100'>✅ Değişiklik onaylandı.</div>";
+                                $flash = ['t'=>'success','m'=>'✅ Değişiklik onaylandı.'];
                             }
                         } else {
-                            $message = "<div class='bg-red-50 text-red-700 p-4 rounded-2xl mb-4 font-black border border-red-100'>⚠️ Bilinmeyen talep tipi.</div>";
+                            $flash = ['t'=>'error','m'=>'⚠️ Bilinmeyen talep tipi.'];
                         }
 
                         if ($newStatus) {
@@ -235,7 +253,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($REQ_DECIDED_AT) { $fields[]="`$REQ_DECIDED_AT`=NOW()"; }
                         $vals[] = $req_id;
                         $pdo->prepare("UPDATE appointment_requests SET ".implode(',', $fields)." WHERE `$REQ_ID`=?")->execute($vals);
-                        $message = "<div class='bg-amber-50 text-amber-800 p-4 rounded-2xl mb-4 font-black border border-amber-100'>🚫 Talep reddedildi.</div>";
+                        $flash = ['t'=>'warning','m'=>'🚫 Talep reddedildi.'];
                     }
                 }
             }
@@ -249,7 +267,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($APP_ISCANCEL) {
                 $pdo->prepare("UPDATE appointments SET `$APP_ISCANCEL`=1 WHERE `$APP_ID`=? AND `$APP_TEACHER`=?")->execute([$app_id, $teacher_id]);
             }
-            $message = "<div class='bg-yellow-50 text-yellow-700 p-4 rounded-2xl mb-4 font-black border border-yellow-100'>🚫 Randevu iptal edildi.</div>";
+            $flash = ['t'=>'warning','m'=>'🚫 Randevu iptal edildi.'];
         }
 
         // (C) Add Appointment
@@ -262,13 +280,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $recurring = isset($_POST['is_recurring']);
 
             if ($student_id <= 0 || !$date || !$time || $duration < 5) {
-                $message = "<div class='bg-red-50 text-red-700 p-4 rounded-2xl mb-4 font-black border border-red-100'>⚠️ Eksik bilgi.</div>";
+                $flash = ['t'=>'error','m'=>'⚠️ Eksik bilgi.'];
             } else {
                 $check_start = $time;
                 $check_end = date('H:i:s', strtotime("$time +$duration minutes"));
 
                 if (has_conflict($pdo, $teacher_id, $date, $check_start, $check_end, null, $APP_TEACHER, $APP_DATE, $APP_TIME, $APP_DUR, $APP_STATUS, $APP_ISCANCEL, $APP_ID)) {
-                    $message = "<div class='bg-red-50 text-red-700 p-4 rounded-2xl mb-4 font-black border border-red-100'>⚠️ Çakışma var!</div>";
+                    $flash = ['t'=>'error','m'=>'⚠️ Çakışma var!'];
                 } else {
                     $repeat_count = ($recurring && $APP_RECUR) ? 4 : 1;
                     $group_id = ($recurring && $APP_GROUP) ? uniqid('grp_') : null;
@@ -290,7 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     for ($i = 0; $i < $repeat_count; $i++) {
                         $target_date = date('Y-m-d', strtotime("$date +$i weeks"));
                         if (has_conflict($pdo, $teacher_id, $target_date, $check_start, $check_end, null, $APP_TEACHER, $APP_DATE, $APP_TIME, $APP_DUR, $APP_STATUS, $APP_ISCANCEL, $APP_ID)) {
-                            $message = "<div class='bg-red-50 text-red-700 p-4 rounded-2xl mb-4 font-black border border-red-100'>⚠️ Tekrarlı randevu çakıştı ($target_date).</div>";
+                            $flash = ['t'=>'error','m'=>'⚠️ Tekrarlı randevu çakıştı ($target_date).'];
                             $okAll = false; 
                             break;
                         }
@@ -298,7 +316,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $valsIter[2] = $target_date;
                         $insert->execute($valsIter);
                     }
-                    if ($okAll && $message === '') $message = "<div class='bg-green-50 text-green-700 p-4 rounded-2xl mb-4 font-black border border-green-100'>✅ Randevu oluşturuldu.</div>";
+                    if ($okAll && $flash === null) $flash = ['t'=>'success','m'=>'Randevu oluşturuldu.'];
                 }
             }
         }
@@ -313,13 +331,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $p_note = trim((string)($_POST['private_note'] ?? ''));
 
             if ($app_id <= 0 || $student_id <= 0 || !$date || !$time || $duration < 5) {
-                $message = "<div class='bg-red-50 text-red-700 p-4 rounded-2xl mb-4 font-black border border-red-100'>⚠️ Eksik bilgi.</div>";
+                $flash = ['t'=>'error','m'=>'⚠️ Eksik bilgi.'];
             } else {
                 $check_start = $time;
                 $check_end = date('H:i:s', strtotime("$time +$duration minutes"));
 
                 if (has_conflict($pdo, $teacher_id, $date, $check_start, $check_end, $app_id, $APP_TEACHER, $APP_DATE, $APP_TIME, $APP_DUR, $APP_STATUS, $APP_ISCANCEL, $APP_ID)) {
-                    $message = "<div class='bg-red-50 text-red-700 p-4 rounded-2xl mb-4 font-black border border-red-100'>⚠️ Çakışma var.</div>";
+                    $flash = ['t'=>'error','m'=>'⚠️ Çakışma var.'];
                 } else {
                     $fields = []; $vals = [];
                     $fields[] = "`$APP_STUDENT`=?"; $vals[] = $student_id;
@@ -333,12 +351,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $sqlUp = "UPDATE appointments SET ".implode(',', $fields)." WHERE `$APP_ID`=? AND `$APP_TEACHER`=?";
                     $pdo->prepare($sqlUp)->execute($vals);
-                    $message = "<div class='bg-blue-50 text-blue-700 p-4 rounded-2xl mb-4 font-black border border-blue-100'>✏️ Randevu güncellendi.</div>";
+                    $flash = ['t'=>'info','m'=>'✏️ Randevu güncellendi.'];
                 }
             }
         }
     }
+
+    /* --- POST/REDIRECT/GET: çift gönderimi (F5) önler, sonucu toast olarak taşır --- */
+    if ($flash !== null) { $_SESSION['flash'] = $flash; }
+    $redirect_to = $_SERVER['REQUEST_URI'] ?: (($_SERVER['PHP_SELF'] ?? 'randevu.php'));
+    header('Location: ' . $redirect_to);
+    exit;
 }
+
+/* --- GET: bir önceki işlemin flash mesajını al (PRG) --- */
+if (!empty($_SESSION['flash'])) { $flash = $_SESSION['flash']; unset($_SESSION['flash']); }
 
 /* --- LOAD DATA --- */
 $students = $pdo->prepare("
@@ -480,102 +507,110 @@ if ($REQ_ID && $REQ_APP_ID && $REQ_STATUS) {
     $pending_requests = $rq->fetchAll(PDO::FETCH_ASSOC);
 }
 $week_badge = ($week_start === date('Y-m-d')) ? "BU HAFTA" : "SEÇİLİ 7 GÜN";
+
+/* HTML çıktısı buradan başlıyor — header artık burada dahil ediliyor (PRG için gerekliydi) */
+include $headerPath;
 ?>
 <style>
+:root{
+  --atla-primary:#223488; --atla-primary-600:#314595; --atla-primary-050:#eef1fb;
+  --atla-accent:#ec9731;  --atla-accent-600:#d68625;  --atla-accent-050:#fdf3e7;
+  --success:#059669; --success-050:#ecfdf5;
+  --warning:#d97706; --warning-050:#fffbeb;
+  --error:#dc2626;   --error-050:#fef2f2;
+}
 .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(100,116,139,.25); border-radius: 999px; border: 3px solid rgba(255,255,255,.6); }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.no-scrollbar::-webkit-scrollbar{display:none} .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+/* Toast */
+#toastWrap{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;width:min(92vw,420px)}
+.toast{display:flex;align-items:center;gap:.6rem;padding:.85rem 1rem;border-radius:14px;font-weight:600;font-size:.875rem;box-shadow:0 10px 25px -5px rgba(0,0,0,.2);border:1px solid;animation:toastIn .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes toastIn{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+.toast.success{background:var(--success-050);color:var(--success);border-color:#a7f3d0}
+.toast.error{background:var(--error-050);color:var(--error);border-color:#fecaca}
+.toast.warning{background:var(--warning-050);color:var(--warning);border-color:#fde68a}
+.toast.info{background:var(--atla-primary-050);color:var(--atla-primary);border-color:#c7d2fe}
+/* Hafta günü hücresi yoğunluk noktası */
+.wk-day{scroll-snap-align:center}
 </style>
+
+<div id="toastWrap" aria-live="polite" aria-atomic="true"></div>
 
 <div class="min-h-screen bg-slate-50 font-['Poppins'] pb-24">
   <div class="max-w-7xl mx-auto p-4 md:p-6">
 
-    <div class="rounded-[2rem] p-6 md:p-7 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-900 text-white shadow-2xl shadow-slate-900/10 border border-white/10 mb-6">
-      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-        <div>
-          <h1 class="text-2xl md:text-3xl font-black tracking-tight">Randevu Yönetimi</h1>
-          <p class="text-white/70 text-xs md:text-sm font-semibold mt-1">
-            7 günlük plan • <span class="font-black"><?php echo h(date('d.m.Y', strtotime($week_start)) . ' - ' . date('d.m.Y', strtotime($week_end))); ?></span>
-          </p>
+    <!-- ════ KATMAN 1: KOMUTA ŞERİDİ (ATLA lacivert) ════ -->
+    <div class="rounded-3xl p-5 md:p-6 mb-5 text-white shadow-lg" style="background:linear-gradient(135deg,var(--atla-primary),var(--atla-primary-600))">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="min-w-0">
+          <h1 class="text-xl md:text-2xl font-extrabold tracking-tight">Randevu Yönetimi</h1>
+          <p class="text-white/70 text-xs md:text-sm font-semibold mt-0.5">Haftalık plan · <?php echo h(date('d.m.Y', strtotime($week_start)) . ' – ' . date('d.m.Y', strtotime($week_end))); ?></p>
         </div>
-
-        <div class="w-full lg:w-auto">
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <a href="?date=<?php echo h($prev_week); ?>"
-               class="w-full bg-white/10 hover:bg-white/15 text-white px-4 py-3 rounded-2xl font-extrabold shadow-sm transition flex items-center justify-center gap-2 border border-white/10">
-              <span>⏪</span><span class="text-sm">Önceki</span>
-            </a>
-            <a href="?date=<?php echo h(date('Y-m-d')); ?>"
-               class="w-full bg-white/10 hover:bg-white/15 text-white px-4 py-3 rounded-2xl font-extrabold shadow-sm transition flex items-center justify-center gap-2 border border-white/10">
-              <span>🧭</span><span class="text-sm">Bugün</span>
-            </a>
-            <a href="?date=<?php echo h($next_week); ?>"
-               class="w-full bg-white/10 hover:bg-white/15 text-white px-4 py-3 rounded-2xl font-extrabold shadow-sm transition flex items-center justify-center gap-2 border border-white/10">
-              <span>⏩</span><span class="text-sm">Sonraki</span>
-            </a>
-            <button onclick="openAddModal()"
-                    class="w-full col-span-2 sm:col-span-1 bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-3 rounded-2xl font-extrabold shadow-lg shadow-indigo-500/30 transition flex items-center justify-center gap-2">
-              <span class="text-xl">＋</span><span class="hidden sm:inline">Yeni</span><span class="sm:hidden">Ekle</span>
-            </button>
+        <div class="flex items-center gap-2 shrink-0">
+          <a href="?date=<?php echo h($prev_week); ?>" aria-label="Önceki hafta"
+             class="w-11 h-11 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition text-lg font-black">‹</a>
+          <div class="text-center px-3 min-w-[7rem]">
+            <span class="block text-[11px] font-extrabold uppercase tracking-wide"><?php echo h($week_badge); ?></span>
+            <span class="block text-[11px] text-white/70 font-semibold"><?php echo h(date('d M', strtotime($week_start))); ?> – <?php echo h(date('d M', strtotime($week_end))); ?></span>
           </div>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-        <div class="bg-white/10 border border-white/10 rounded-2xl p-4">
-          <p class="text-white/70 text-[10px] font-bold uppercase tracking-wider">Toplam</p>
-          <p class="text-xl font-black mt-1"><?php echo (int)$week_stats['total']; ?></p>
-        </div>
-        <div class="bg-white/10 border border-white/10 rounded-2xl p-4">
-          <p class="text-white/70 text-[10px] font-bold uppercase tracking-wider">Aktif</p>
-          <p class="text-xl font-black mt-1"><?php echo (int)$week_stats['active']; ?></p>
-        </div>
-        <div class="bg-white/10 border border-white/10 rounded-2xl p-4">
-          <p class="text-white/70 text-[10px] font-bold uppercase tracking-wider">İptal</p>
-          <p class="text-xl font-black mt-1"><?php echo (int)$week_stats['cancelled']; ?></p>
-        </div>
-        <div class="bg-white/10 border border-white/10 rounded-2xl p-4">
-          <p class="text-white/70 text-[10px] font-bold uppercase tracking-wider">Süre</p>
-          <p class="text-xl font-black mt-1"><?php echo (int)$week_stats['minutes']; ?> <span class="text-sm font-bold text-white/70">dk</span></p>
+          <a href="?date=<?php echo h($next_week); ?>" aria-label="Sonraki hafta"
+             class="w-11 h-11 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition text-lg font-black">›</a>
+          <a href="?date=<?php echo h(date('Y-m-d')); ?>"
+             class="h-11 px-4 flex items-center rounded-xl bg-white text-[color:var(--atla-primary)] font-extrabold text-sm hover:bg-white/90 transition shadow-sm">Bugün</a>
         </div>
       </div>
     </div>
 
-    <?php echo $message; ?>
+    <!-- ════ KATMAN 2: AKILLI İSTATİSTİK KARTLARI ════ -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <?php
+        $statCards = [
+          ['Toplam','📅', (int)$week_stats['total'],     'var(--atla-primary)', ''],
+          ['Aktif','✅',  (int)$week_stats['active'],     'var(--success)',      ''],
+          ['İptal','✕',   (int)$week_stats['cancelled'],  'var(--error)',        ''],
+          ['Süre','⏱',   (int)$week_stats['minutes'],    'var(--atla-accent)',  'dk'],
+        ];
+        foreach($statCards as $sc): [$lbl,$ic,$val,$col,$suf]=$sc; ?>
+        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400"><?php echo h($lbl); ?></span>
+            <span aria-hidden="true"><?php echo $ic; ?></span>
+          </div>
+          <div class="text-2xl font-extrabold mt-1 count-up" data-target="<?php echo (int)$val; ?>" style="color:<?php echo $col; ?>">0<?php if($suf): ?><span class="text-sm font-bold text-slate-400"> <?php echo h($suf); ?></span><?php endif; ?></div>
+        </div>
+      <?php endforeach; ?>
+    </div>
+
+    <!-- ════ KATMAN 3: HAFTA ŞERİDİ (yatay kaydırmalı · yoğunluk noktalı) ════ -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 mb-6">
+      <div class="flex gap-2 overflow-x-auto no-scrollbar" style="scroll-snap-type:x mandatory">
+        <?php foreach ($week_days as $dt):
+          $curr = $dt->format('Y-m-d');
+          $is_today = ($curr === date('Y-m-d'));
+          $dens = $daily_counts_total[$curr] ?? 0;
+          $day_name = mb_substr($gunlerTR[$dt->format('l')], 0, 3, 'UTF-8');
+          $dotCol = $dens===0 ? '#cbd5e1' : ($dens<=2 ? 'var(--success)' : 'var(--atla-accent)');
+        ?>
+          <button type="button" onclick="scrollToDay('<?php echo h($curr); ?>')"
+            class="wk-day shrink-0 flex-1 min-w-[3.4rem] h-[4.6rem] rounded-xl flex flex-col items-center justify-center gap-1 border transition"
+            style="<?php echo $is_today ? 'background:var(--atla-primary);color:#fff;border-color:var(--atla-primary)' : 'background:#fff;border-color:var(--border,#e2e8f0);color:#334155'; ?>"
+            aria-label="<?php echo h($gunlerTR[$dt->format('l')].' '.$dt->format('d').', '.$dens.' randevu'); ?>">
+            <span class="text-[10px] font-extrabold uppercase opacity-80"><?php echo h($day_name); ?></span>
+            <span class="text-base font-extrabold"><?php echo h($dt->format('d')); ?></span>
+            <span class="flex gap-0.5">
+              <?php for($k=0;$k<3;$k++): ?>
+                <span style="width:5px;height:5px;border-radius:999px;background:<?php echo $k<$dens ? ($is_today?'#fff':$dotCol) : ($is_today?'rgba(255,255,255,.3)':'#e2e8f0'); ?>"></span>
+              <?php endfor; ?>
+            </span>
+          </button>
+        <?php endforeach; ?>
+      </div>
+    </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      
-      <div class="space-y-6">
-        <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-          <div class="flex justify-between items-center mb-5">
-            <a href="?date=<?php echo h($prev_week); ?>" class="p-2 bg-slate-50 rounded-xl hover:bg-indigo-50 text-slate-600 transition shadow-sm border border-slate-100">⏪</a>
-            <div class="text-center">
-              <span class="block text-sm font-black text-slate-800 tracking-tight"><?php echo h(date('d.m.Y', strtotime($week_start)) . ' - ' . date('d.m.Y', strtotime($week_end))); ?></span>
-              <span class="text-[10px] text-indigo-600 font-black uppercase bg-indigo-50 px-2 py-0.5 rounded-md mt-1 inline-block border border-indigo-100"><?php echo h($week_badge); ?></span>
-            </div>
-            <a href="?date=<?php echo h($next_week); ?>" class="p-2 bg-slate-50 rounded-xl hover:bg-indigo-50 text-slate-600 transition shadow-sm border border-slate-100">⏩</a>
-          </div>
 
-          <div class="grid grid-cols-7 gap-2 text-center">
-            <?php foreach ($week_days as $dt):
-              $curr = $dt->format('Y-m-d');
-              $is_today = ($curr === date('Y-m-d'));
-              $count_total = $daily_counts_total[$curr] ?? 0;
-              $day_name = mb_substr($gunlerTR[$dt->format('l')], 0, 3, 'UTF-8');
-              $base = "relative p-2 rounded-2xl transition cursor-pointer flex flex-col items-center justify-center h-16 border";
-              $cls = $is_today ? "bg-indigo-600 text-white shadow-lg ring-4 ring-indigo-100 border-indigo-200"
-                               : "bg-white hover:bg-slate-50 text-slate-700 border-slate-100";
-            ?>
-              <div class="<?php echo $base.' '.$cls; ?>" onclick="scrollToDay('<?php echo h($curr); ?>')">
-                <span class="text-[9px] font-black uppercase opacity-80 mb-1"><?php echo h($day_name); ?></span>
-                <span class="text-sm font-black"><?php echo h($dt->format('d')); ?></span>
-                <?php if($count_total>0): ?>
-                  <span class="absolute bottom-2 w-1.5 h-1.5 rounded-full <?php echo $is_today?'bg-white':'bg-indigo-500'; ?>"></span>
-                <?php endif; ?>
-              </div>
-            <?php endforeach; ?>
-          </div>
-        </div>
+      <div class="space-y-6">
 
         <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 max-h-[420px] overflow-y-auto custom-scrollbar">
           <h3 class="font-black text-slate-800 mb-4 flex items-center justify-between">
@@ -806,6 +841,12 @@ $week_badge = ($week_start === date('Y-m-d')) ? "BU HAFTA" : "SEÇİLİ 7 GÜN";
   </div>
 </div>
 
+<!-- ════ FAB — birincil eylem (sağ alt sabit) ════ -->
+<button type="button" onclick="openAddModal()" aria-label="Yeni randevu oluştur"
+  class="fixed right-5 bottom-5 md:right-8 md:bottom-8 w-14 h-14 rounded-full text-white text-3xl leading-none flex items-center justify-center z-[90] transition active:scale-95"
+  style="background:var(--atla-primary);box-shadow:0 10px 20px -3px rgba(34,52,136,.45)"
+  onmouseover="this.style.background='var(--atla-primary-600)'" onmouseout="this.style.background='var(--atla-primary)'">＋</button>
+
 <div id="historyModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 hidden">
   <div class="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden relative max-h-[80vh] flex flex-col">
     <div class="bg-slate-900 p-5 flex justify-between items-center text-white flex-shrink-0">
@@ -931,6 +972,39 @@ $week_badge = ($week_start === date('Y-m-d')) ? "BU HAFTA" : "SEÇİLİ 7 GÜN";
 
 <script>
 const appsByStudent = <?php echo json_encode($apps_by_student, JSON_UNESCAPED_UNICODE); ?>;
+
+/* ── Toast (PRG flash) ── */
+function showToast(type, text, timeout){
+  const wrap = document.getElementById('toastWrap');
+  if(!wrap) return;
+  const icons = {success:'✅', error:'⛔', warning:'⚠️', info:'💬'};
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type||'info');
+  t.setAttribute('role','status');
+  t.innerHTML = '<span aria-hidden="true">'+(icons[type]||'💬')+'</span><span style="flex:1">'+text+'</span>';
+  wrap.appendChild(t);
+  setTimeout(()=>{ t.style.transition='opacity .3s,transform .3s'; t.style.opacity='0'; t.style.transform='translateY(-10px)'; setTimeout(()=>t.remove(),300); }, timeout||4000);
+}
+<?php if (!empty($flash)): ?>
+showToast(<?php echo json_encode($flash['t']); ?>, <?php echo json_encode($flash['m']); ?>);
+<?php endif; ?>
+
+/* ── İstatistik sayaç animasyonu (count-up) ── */
+function runCountUp(){
+  document.querySelectorAll('.count-up').forEach(el=>{
+    const target = parseInt(el.getAttribute('data-target'),10) || 0;
+    if(target === 0){ el.firstChild.nodeValue = '0'; return; }
+    const dur = 700, t0 = performance.now();
+    function step(now){
+      const p = Math.min((now - t0)/dur, 1);
+      const val = Math.round(target * (1 - Math.pow(1-p,3))); // easeOutCubic
+      el.firstChild.nodeValue = String(val);
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+window.addEventListener('DOMContentLoaded', runCountUp);
 
 function scrollToDay(dateStr){
   const el = document.getElementById('day-' + dateStr);
