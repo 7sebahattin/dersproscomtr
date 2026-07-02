@@ -210,10 +210,13 @@ function owner_badge(array $row, array $ownerNames): string {
                 if (!$ownerFilter) $tp['owner'] = 1; // kapalıysa aç; açıksa parametresiz (kapat)
                 $toggleUrl = 'education.php' . ($tp ? ('?' . http_build_query($tp)) : '');
             ?>
-            <a href="<?= $toggleUrl ?>"
-               class="text-xs font-bold px-4 py-2.5 rounded-xl border <?= $ownerFilter ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50' ?>">
-                ★ Öğretmen Ekledikleri (<?= (int)$teacherCounts['subj'] ?> ders / <?= (int)$teacherCounts['top'] ?> konu) <?= $ownerFilter ? '✕' : '' ?>
-            </a>
+            <div class="flex gap-2">
+                <a href="education_migrate.php" class="text-xs font-bold px-4 py-2.5 rounded-xl border bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50">🔄 Eski Veri Göçü</a>
+                <a href="<?= $toggleUrl ?>"
+                   class="text-xs font-bold px-4 py-2.5 rounded-xl border <?= $ownerFilter ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50' ?>">
+                    ★ Öğretmen Ekledikleri (<?= (int)$teacherCounts['subj'] ?> ders / <?= (int)$teacherCounts['top'] ?> konu) <?= $ownerFilter ? '✕' : '' ?>
+                </a>
+            </div>
         </div>
 
         <?php if ($message): ?>
