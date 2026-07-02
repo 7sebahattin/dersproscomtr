@@ -82,12 +82,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = "👁️ Durum değiştirildi.";
             }
         }
+        if (isset($_POST['toggle_lock'])) {
+            // Kilitle/Onayla: içerik global olur ve silinemez. Admin kilidi geri açabilir.
+            $type = $_POST['type']; $id = (int)$_POST['id'];
+            $map = ['category' => 'education_categories', 'subject' => 'education_subjects', 'topic' => 'education_topics'];
+            if (isset($map[$type]) && $id > 0) {
+                $pdo->prepare("UPDATE {$map[$type]} SET is_locked = 1 - is_locked WHERE id = ?")->execute([$id]);
+                $message = "🔐 Kilit durumu değiştirildi.";
+            }
+        }
         if (isset($_POST['delete_item'])) {
             $type = $_POST['type']; $id = (int)$_POST['id'];
             $map = ['category' => 'education_categories', 'subject' => 'education_subjects', 'topic' => 'education_topics'];
             if (isset($map[$type]) && $id > 0) {
-                $pdo->prepare("DELETE FROM {$map[$type]} WHERE id = ?")->execute([$id]);
-                $message = "🗑️ Silindi (bağlı alt kayıtlar da temizlendi).";
+                $chk = $pdo->prepare("SELECT is_locked FROM {$map[$type]} WHERE id = ?");
+                $chk->execute([$id]);
+                if ((int)$chk->fetchColumn() === 1) {
+                    $message = "🔒 Kilitli içerik silinemez. Önce kilidi açın.";
+                } else {
+                    $pdo->prepare("DELETE FROM {$map[$type]} WHERE id = ?")->execute([$id]);
+                    $message = "🗑️ Silindi (bağlı alt kayıtlar da temizlendi).";
+                }
             }
         }
     } catch (Throwable $e) {
@@ -96,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── Görünüm verisi ──────────────────────────────────────────────────────────
+$ownerFilter = isset($_GET['owner']) && $_GET['owner'] == '1'; // sadece öğretmen ekledikleri
 $categories = education_get_categories($pdo, false);
 $curCat  = (int)($_GET['cat'] ?? ($categories[0]['id'] ?? 0));
 $subjects = $curCat ? education_get_subjects($pdo, $curCat, false) : [];
@@ -103,6 +119,29 @@ $curSubj = (int)($_GET['subj'] ?? 0);
 if ($curSubj && !in_array($curSubj, array_column($subjects, 'id'))) $curSubj = 0;
 $search  = trim($_GET['q'] ?? '');
 $topics  = $curSubj ? education_get_topics($pdo, $curSubj, false, $search, 1000, 0) : [];
+
+if ($ownerFilter) {
+    $subjects = array_values(array_filter($subjects, fn($s) => !empty($s['created_by'])));
+    $topics   = array_values(array_filter($topics,   fn($t) => !empty($t['created_by'])));
+}
+
+// Sahip (öğretmen) adları — tek sorguda (N+1 yok)
+$ownerIds = array_filter(array_unique(array_merge(
+    array_column($categories, 'created_by'),
+    array_column($subjects, 'created_by'),
+    array_column($topics, 'created_by')
+)));
+$ownerNames = [];
+if ($ownerIds) {
+    $in = implode(',', array_map('intval', $ownerIds));
+    foreach ($pdo->query("SELECT id, CONCAT(first_name,' ',last_name) n FROM users WHERE id IN ($in)") as $r) {
+        $ownerNames[$r['id']] = $r['n'];
+    }
+}
+// Öğretmen katkısı özeti
+$teacherCounts = $pdo->query("SELECT
+    (SELECT COUNT(*) FROM education_subjects WHERE created_by IS NOT NULL) subj,
+    (SELECT COUNT(*) FROM education_topics WHERE created_by IS NOT NULL) top")->fetch(PDO::FETCH_ASSOC);
 
 // Sayılar (rozetler için, tek sorguda — N+1 yok)
 $subjCounts = $pdo->query("SELECT category_id, COUNT(*) c FROM education_subjects GROUP BY category_id")->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -114,11 +153,27 @@ $curSubjName = '';
 foreach ($subjects as $s) if ($s['id'] == $curSubj) $curSubjName = $s['lesson_name'];
 
 function url_self(int $cat = 0, int $subj = 0, string $q = ''): string {
+    global $ownerFilter;
     $p = [];
     if ($cat)  $p['cat'] = $cat;
     if ($subj) $p['subj'] = $subj;
     if ($q !== '') $p['q'] = $q;
+    if (!empty($ownerFilter)) $p['owner'] = 1;
     return 'education.php' . ($p ? ('?' . http_build_query($p)) : '');
+}
+
+/** Satır rozetleri: 🔒 kilitli / ★ öğretmen içeriği (sahip adı) */
+function owner_badge(array $row, array $ownerNames): string {
+    $html = '';
+    if ((int)($row['is_locked'] ?? 0) === 1) {
+        $html .= '<span title="Kilitli — silinemez" class="text-[10px]">🔒</span>';
+    }
+    $cb = (int)($row['created_by'] ?? 0);
+    if ($cb) {
+        $nm = htmlspecialchars($ownerNames[$cb] ?? ('#' . $cb));
+        $html .= '<span title="Öğretmen içeriği: ' . $nm . '" class="text-[9px] font-bold bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5">★ ' . $nm . '</span>';
+    }
+    return $html;
 }
 ?>
 <!DOCTYPE html>
@@ -142,11 +197,23 @@ function url_self(int $cat = 0, int $subj = 0, string $q = ''): string {
 
 <main class="flex-1 p-6 lg:p-8 overflow-x-hidden">
     <div class="max-w-7xl mx-auto">
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div>
                 <h1 class="text-2xl font-bold text-slate-800">📚 Müfredat Yönetimi</h1>
-                <p class="text-sm text-slate-500 mt-1">Yeni bağımsız müfredat sistemi — kategoriler, dersler ve konular. Sürükleyerek sıralayın.</p>
+                <p class="text-sm text-slate-500 mt-1">Kategoriler, dersler ve konular. Sürükleyerek sıralayın. 🔒 = kilitli (global, silinemez), ★ = öğretmen içeriği.</p>
             </div>
+            <?php
+                $tp = [];
+                if ($curCat)  $tp['cat'] = $curCat;
+                if ($curSubj) $tp['subj'] = $curSubj;
+                if ($search !== '') $tp['q'] = $search;
+                if (!$ownerFilter) $tp['owner'] = 1; // kapalıysa aç; açıksa parametresiz (kapat)
+                $toggleUrl = 'education.php' . ($tp ? ('?' . http_build_query($tp)) : '');
+            ?>
+            <a href="<?= $toggleUrl ?>"
+               class="text-xs font-bold px-4 py-2.5 rounded-xl border <?= $ownerFilter ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50' ?>">
+                ★ Öğretmen Ekledikleri (<?= (int)$teacherCounts['subj'] ?> ders / <?= (int)$teacherCounts['top'] ?> konu) <?= $ownerFilter ? '✕' : '' ?>
+            </a>
         </div>
 
         <?php if ($message): ?>
@@ -165,11 +232,15 @@ function url_self(int $cat = 0, int $subj = 0, string $q = ''): string {
                         <a href="<?= url_self((int)$c['id']) ?>" class="flex-1 text-sm font-semibold <?= $c['is_active'] ? 'text-slate-700' : 'text-slate-400 line-through' ?>">
                             <?= htmlspecialchars($c['name']) ?>
                         </a>
+                        <?= owner_badge($c, $ownerNames) ?>
                         <span class="text-[10px] bg-slate-100 text-slate-500 rounded-full px-2 py-0.5"><?= (int)($subjCounts[$c['id']] ?? 0) ?></span>
                         <form method="post" class="hidden group-hover:flex items-center gap-1">
                             <input type="hidden" name="type" value="category"><input type="hidden" name="id" value="<?= $c['id'] ?>">
+                            <button name="toggle_lock" title="<?= $c['is_locked'] ? 'Kilidi Aç' : 'Kilitle/Onayla (global + silinemez)' ?>" class="text-slate-400 hover:text-indigo-500 text-xs"><?= $c['is_locked'] ? '🔓' : '🔒' ?></button>
                             <button name="toggle_item" title="Aktif/Pasif" class="text-slate-400 hover:text-amber-500 text-xs">👁️</button>
+                            <?php if (!$c['is_locked']): ?>
                             <button name="delete_item" onclick="return confirm('Kategori ve TÜM alt ders/konuları silinecek. Emin misiniz?')" title="Sil" class="text-slate-400 hover:text-red-500 text-xs">🗑️</button>
+                            <?php endif; ?>
                         </form>
                     </li>
                     <?php endforeach; ?>
@@ -195,11 +266,15 @@ function url_self(int $cat = 0, int $subj = 0, string $q = ''): string {
                         <a href="<?= url_self($curCat, (int)$s['id']) ?>" class="flex-1 text-sm font-medium <?= $s['is_active'] ? 'text-slate-700' : 'text-slate-400 line-through' ?>">
                             <?= htmlspecialchars($s['lesson_name']) ?>
                         </a>
+                        <?= owner_badge($s, $ownerNames) ?>
                         <span class="text-[10px] bg-slate-100 text-slate-500 rounded-full px-2 py-0.5"><?= (int)($topicCounts[$s['id']] ?? 0) ?> konu</span>
                         <form method="post" class="hidden group-hover:flex items-center gap-1">
                             <input type="hidden" name="type" value="subject"><input type="hidden" name="id" value="<?= $s['id'] ?>">
+                            <button name="toggle_lock" title="<?= $s['is_locked'] ? 'Kilidi Aç' : 'Kilitle/Onayla (global + silinemez)' ?>" class="text-slate-400 hover:text-indigo-500 text-xs"><?= $s['is_locked'] ? '🔓' : '🔒' ?></button>
                             <button name="toggle_item" title="Aktif/Pasif" class="text-slate-400 hover:text-amber-500 text-xs">👁️</button>
+                            <?php if (!$s['is_locked']): ?>
                             <button name="delete_item" onclick="return confirm('Ders ve TÜM konuları silinecek. Emin misiniz?')" title="Sil" class="text-slate-400 hover:text-red-500 text-xs">🗑️</button>
+                            <?php endif; ?>
                         </form>
                     </li>
                     <?php endforeach; ?>
@@ -236,10 +311,14 @@ function url_self(int $cat = 0, int $subj = 0, string $q = ''): string {
                     <li data-id="<?= $t['id'] ?>" class="group flex items-center gap-2 rounded-lg px-2 py-1.5 border border-transparent hover:bg-slate-50 hover:border-slate-100">
                         <?php if ($search === ''): ?><span class="drag-handle text-slate-300 group-hover:text-slate-400 select-none text-sm">⠿</span><?php endif; ?>
                         <span class="flex-1 text-sm <?= $t['status'] ? 'text-slate-700' : 'text-slate-400 line-through' ?>"><?= htmlspecialchars($t['topic_name']) ?></span>
+                        <?= owner_badge($t, $ownerNames) ?>
                         <form method="post" class="hidden group-hover:flex items-center gap-1">
                             <input type="hidden" name="type" value="topic"><input type="hidden" name="id" value="<?= $t['id'] ?>">
+                            <button name="toggle_lock" title="<?= $t['is_locked'] ? 'Kilidi Aç' : 'Kilitle/Onayla (global + silinemez)' ?>" class="text-slate-400 hover:text-indigo-500 text-xs"><?= $t['is_locked'] ? '🔓' : '🔒' ?></button>
                             <button name="toggle_item" title="Aktif/Pasif" class="text-slate-400 hover:text-amber-500 text-xs">👁️</button>
+                            <?php if (!$t['is_locked']): ?>
                             <button name="delete_item" onclick="return confirm('Konu silinecek. Emin misiniz?')" title="Sil" class="text-slate-400 hover:text-red-500 text-xs">🗑️</button>
+                            <?php endif; ?>
                         </form>
                     </li>
                     <?php endforeach; ?>

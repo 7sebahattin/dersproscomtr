@@ -82,6 +82,52 @@ function education_ensure_schema(PDO $pdo): void
     if ($count === 0) {
         education_run_seed($pdo);
     }
+
+    // ── Faz: iki katmanlı sahiplik + kilit kolonları (idempotent yükseltme) ──
+    // created_by NULL = admin/seed içeriği. is_locked=1 = global + silinemez.
+    foreach (['education_categories', 'education_subjects', 'education_topics', 'education_resources'] as $t) {
+        $cols = $pdo->query("SHOW COLUMNS FROM $t")->fetchAll(PDO::FETCH_COLUMN);
+        $justAdded = false;
+        if (!in_array('created_by', $cols)) {
+            $pdo->exec("ALTER TABLE $t ADD COLUMN created_by INT NULL DEFAULT NULL");
+            $justAdded = true;
+        }
+        if (!in_array('is_locked', $cols)) {
+            $pdo->exec("ALTER TABLE $t ADD COLUMN is_locked TINYINT(1) NOT NULL DEFAULT 0");
+            $justAdded = true;
+        }
+        if ($justAdded) {
+            // Mevcut (seed/admin) satırlar: sahipsizler kilitli-global kabul edilir
+            $pdo->exec("UPDATE $t SET is_locked = 1 WHERE created_by IS NULL");
+        }
+    }
+}
+
+/**
+ * Görünürlük koşulu: admin her şeyi görür; öğretmen yalnızca
+ * kilitli/global içerik + admin(seed) içeriği + KENDİ ekledikleri.
+ * Dönen: [whereSql, params]
+ */
+function education_visibility_where(string $alias, ?int $uid, bool $isAdmin): array
+{
+    if ($isAdmin || $uid === null) return ['1=1', []];
+    return ["($alias.is_locked = 1 OR $alias.created_by IS NULL OR $alias.created_by = ?)", [$uid]];
+}
+
+/** Kayıt silinebilir mi? Kilitliyse HİÇ KİMSE silemez (admin önce kilidi açmalı). */
+function education_can_delete(array $row, int $uid, bool $isAdmin): bool
+{
+    if ((int)($row['is_locked'] ?? 0) === 1) return false;
+    if ($isAdmin) return true;
+    return (int)($row['created_by'] ?? 0) === $uid;
+}
+
+/** Kayıt düzenlenebilir mi? Kilitli içeriği yalnızca admin düzenler. */
+function education_can_edit_item(array $row, int $uid, bool $isAdmin): bool
+{
+    if ((int)($row['is_locked'] ?? 0) === 1) return $isAdmin;
+    if ($isAdmin) return true;
+    return (int)($row['created_by'] ?? 0) === $uid;
 }
 
 /** Seed verisini yükler (yalnızca ilk kurulumda çağrılır). */
@@ -121,40 +167,52 @@ function education_run_seed(PDO $pdo): void
     }
 }
 
-/** Aktif kategorileri sıralı döndürür. */
-function education_get_categories(PDO $pdo, bool $onlyActive = true): array
+/**
+ * Aktif kategorileri sıralı döndürür.
+ * $scopeUid verilirse (ve $scopeIsAdmin=false) öğretmen görünürlük kuralı uygulanır.
+ */
+function education_get_categories(PDO $pdo, bool $onlyActive = true,
+                                  ?int $scopeUid = null, bool $scopeIsAdmin = true): array
 {
-    $where = $onlyActive ? "WHERE is_active = 1" : "";
-    return $pdo->query("SELECT id, name, display_order, is_active
-                        FROM education_categories $where
-                        ORDER BY display_order, name")->fetchAll(PDO::FETCH_ASSOC);
+    [$vis, $params] = education_visibility_where('c', $scopeUid, $scopeIsAdmin);
+    $sql = "SELECT c.id, c.name, c.display_order, c.is_active, c.created_by, c.is_locked
+            FROM education_categories c WHERE $vis" .
+           ($onlyActive ? " AND c.is_active = 1" : "") .
+           " ORDER BY c.display_order, c.name";
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    return $st->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/** Bir kategorinin derslerini sıralı döndürür. */
-function education_get_subjects(PDO $pdo, int $categoryId, bool $onlyActive = true): array
+/** Bir kategorinin derslerini sıralı döndürür (görünürlük kapsamı destekli). */
+function education_get_subjects(PDO $pdo, int $categoryId, bool $onlyActive = true,
+                                ?int $scopeUid = null, bool $scopeIsAdmin = true): array
 {
-    $sql = "SELECT id, category_id, lesson_name, display_order, is_active
-            FROM education_subjects WHERE category_id = ?" .
-           ($onlyActive ? " AND is_active = 1" : "") .
-           " ORDER BY display_order, lesson_name";
+    [$vis, $vparams] = education_visibility_where('s', $scopeUid, $scopeIsAdmin);
+    $sql = "SELECT s.id, s.category_id, s.lesson_name, s.display_order, s.is_active, s.created_by, s.is_locked
+            FROM education_subjects s WHERE s.category_id = ? AND $vis" .
+           ($onlyActive ? " AND s.is_active = 1" : "") .
+           " ORDER BY s.display_order, s.lesson_name";
     $st = $pdo->prepare($sql);
-    $st->execute([$categoryId]);
+    $st->execute(array_merge([$categoryId], $vparams));
     return $st->fetchAll(PDO::FETCH_ASSOC);
 }
 
 /**
- * Bir dersin konularını döndürür (arama + sayfalama destekli).
+ * Bir dersin konularını döndürür (arama + sayfalama + görünürlük kapsamı).
  * N+1 önlemek için tek sorgu; konu sayısı yüksek dersler için LIMIT/OFFSET.
  */
 function education_get_topics(PDO $pdo, int $subjectId, bool $onlyActive = true,
-                              string $search = '', int $limit = 500, int $offset = 0): array
+                              string $search = '', int $limit = 500, int $offset = 0,
+                              ?int $scopeUid = null, bool $scopeIsAdmin = true): array
 {
-    $sql = "SELECT id, subject_id, topic_name, display_order, status
-            FROM education_topics WHERE subject_id = ?";
-    $params = [$subjectId];
-    if ($onlyActive)   { $sql .= " AND status = 1"; }
-    if ($search !== '') { $sql .= " AND topic_name LIKE ?"; $params[] = '%' . $search . '%'; }
-    $sql .= " ORDER BY display_order, topic_name LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+    [$vis, $vparams] = education_visibility_where('t', $scopeUid, $scopeIsAdmin);
+    $sql = "SELECT t.id, t.subject_id, t.topic_name, t.display_order, t.status, t.created_by, t.is_locked
+            FROM education_topics t WHERE t.subject_id = ? AND $vis";
+    $params = array_merge([$subjectId], $vparams);
+    if ($onlyActive)   { $sql .= " AND t.status = 1"; }
+    if ($search !== '') { $sql .= " AND t.topic_name LIKE ?"; $params[] = '%' . $search . '%'; }
+    $sql .= " ORDER BY t.display_order, t.topic_name LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
     $st = $pdo->prepare($sql);
     $st->execute($params);
     return $st->fetchAll(PDO::FETCH_ASSOC);
@@ -254,14 +312,25 @@ function education_set_resource_topics(PDO $pdo, int $resourceId, array $topicId
 /**
  * Tüm aktif müfredat ağacını tek seferde döndürür (kaynak formu accordion'u için).
  * 3 sorgu toplam — N+1 yok. [category][subject] => topics
+ * Kapsam verilirse öğretmen yalnızca kendi + kilitli/global içeriği görür.
  */
-function education_get_full_tree(PDO $pdo): array
+function education_get_full_tree(PDO $pdo, ?int $scopeUid = null, bool $scopeIsAdmin = true): array
 {
-    $cats  = education_get_categories($pdo, true);
-    $subs  = $pdo->query("SELECT id, category_id, lesson_name FROM education_subjects
-                          WHERE is_active = 1 ORDER BY display_order, lesson_name")->fetchAll(PDO::FETCH_ASSOC);
-    $tops  = $pdo->query("SELECT id, subject_id, topic_name FROM education_topics
-                          WHERE status = 1 ORDER BY display_order, topic_name")->fetchAll(PDO::FETCH_ASSOC);
+    $cats = education_get_categories($pdo, true, $scopeUid, $scopeIsAdmin);
+
+    [$visS, $pS] = education_visibility_where('s', $scopeUid, $scopeIsAdmin);
+    $stS = $pdo->prepare("SELECT s.id, s.category_id, s.lesson_name, s.created_by, s.is_locked
+                          FROM education_subjects s WHERE s.is_active = 1 AND $visS
+                          ORDER BY s.display_order, s.lesson_name");
+    $stS->execute($pS);
+    $subs = $stS->fetchAll(PDO::FETCH_ASSOC);
+
+    [$visT, $pT] = education_visibility_where('t', $scopeUid, $scopeIsAdmin);
+    $stT = $pdo->prepare("SELECT t.id, t.subject_id, t.topic_name, t.created_by, t.is_locked
+                          FROM education_topics t WHERE t.status = 1 AND $visT
+                          ORDER BY t.display_order, t.topic_name");
+    $stT->execute($pT);
+    $tops = $stT->fetchAll(PDO::FETCH_ASSOC);
 
     $topicsBySubj = [];
     foreach ($tops as $t) { $topicsBySubj[$t['subject_id']][] = $t; }

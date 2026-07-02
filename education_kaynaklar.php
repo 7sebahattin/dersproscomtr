@@ -18,8 +18,15 @@ $message = '';
 
 $typeLabels = ['kitap' => '📕 Kitap', 'deneme' => '📝 Deneme', 'pdf' => '📄 PDF', 'video' => '🎬 Video', 'diger' => '📦 Diğer'];
 
-/** Kaynağı düzenleme yetkisi: sahibi veya admin */
+/** Kaynağı düzenleme yetkisi: sahibi veya admin. Kilitliyse yalnızca admin. */
 function can_edit_resource(array $r, int $uid, bool $isAdmin): bool {
+    if ((int)($r['is_locked'] ?? 0) === 1) return $isAdmin;
+    return $isAdmin || (int)($r['created_by'] ?? 0) === $uid;
+}
+
+/** Kaynağı silme yetkisi: kilitliyse HİÇ KİMSE (admin önce kilidi açmalı). */
+function can_delete_resource(array $r, int $uid, bool $isAdmin): bool {
+    if ((int)($r['is_locked'] ?? 0) === 1) return false;
     return $isAdmin || (int)($r['created_by'] ?? 0) === $uid;
 }
 
@@ -61,11 +68,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int)$_POST['resource_id'];
             $st = $pdo->prepare("SELECT * FROM education_resources WHERE id = ?");
             $st->execute([$id]); $existing = $st->fetch();
-            if ($existing && can_edit_resource($existing, $uid, $isAdmin)) {
+            if ($existing && can_delete_resource($existing, $uid, $isAdmin)) {
                 $pdo->prepare("DELETE FROM resource_topics WHERE resource_id = ?")->execute([$id]);
                 $pdo->prepare("DELETE FROM education_resources WHERE id = ?")->execute([$id]);
                 $message = "🗑️ Kaynak silindi.";
+            } elseif ($existing && (int)$existing['is_locked'] === 1) {
+                $message = "🔒 Kilitli (onaylı) kaynak silinemez.";
             }
+        }
+        if (isset($_POST['toggle_resource_lock']) && $isAdmin) {
+            $id = (int)$_POST['resource_id'];
+            $pdo->prepare("UPDATE education_resources SET is_locked = 1 - is_locked WHERE id = ?")->execute([$id]);
+            $message = "🔐 Kaynak kilit durumu değiştirildi.";
         }
     } catch (Throwable $e) {
         $message = "❌ İşlem sırasında hata oluştu.";
@@ -352,8 +366,19 @@ $pageTitle = "Kaynak Havuzu";
                     <?php if (!empty($r['external_url'])): ?>
                         <a href="<?= htmlspecialchars($r['external_url']) ?>" target="_blank" rel="noopener" class="text-[11px] font-bold text-blue-500 hover:underline">Bağlantı ↗</a>
                     <?php endif; ?>
+                    <?php if ((int)($r['is_locked'] ?? 0) === 1): ?>
+                        <span title="Onaylı/global — silinemez" class="text-[11px]">🔒</span>
+                    <?php endif; ?>
+                    <?php if ($isAdmin): ?>
+                        <form method="post" class="inline">
+                            <input type="hidden" name="resource_id" value="<?= $r['id'] ?>">
+                            <button name="toggle_resource_lock" title="<?= ($r['is_locked'] ?? 0) ? 'Kilidi Aç' : 'Kilitle/Onayla' ?>" class="text-[11px] font-bold text-indigo-400 hover:underline"><?= ($r['is_locked'] ?? 0) ? 'Kilidi Aç' : 'Onayla' ?></button>
+                        </form>
+                    <?php endif; ?>
                     <?php if (can_edit_resource($r, $uid, $isAdmin)): ?>
                         <a href="?edit=<?= $r['id'] ?>" class="text-[11px] font-bold text-indigo-500 hover:underline">Düzenle</a>
+                    <?php endif; ?>
+                    <?php if (can_delete_resource($r, $uid, $isAdmin)): ?>
                         <form method="post" class="inline" onsubmit="return confirm('Kaynak ve konu bağlantıları silinecek. Emin misiniz?')">
                             <input type="hidden" name="resource_id" value="<?= $r['id'] ?>">
                             <button name="delete_resource" class="text-[11px] font-bold text-red-400 hover:underline">Sil</button>

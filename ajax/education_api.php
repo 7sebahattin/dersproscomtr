@@ -29,18 +29,22 @@ if (!isset($_SESSION['user_id'])) {
 try {
     education_ensure_schema($pdo);
 
+    // Görünürlük kapsamı: admin her şeyi, öğretmen kendi + kilitli/global içeriği görür
+    $scopeUid     = (int)$_SESSION['user_id'];
+    $scopeIsAdmin = education_is_admin();
+
     $action = $_GET['action'] ?? '';
 
     switch ($action) {
 
         case 'categories':
-            echo json_encode(['ok' => true, 'data' => education_get_categories($pdo)], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => true, 'data' => education_get_categories($pdo, true, $scopeUid, $scopeIsAdmin)], JSON_UNESCAPED_UNICODE);
             break;
 
         case 'subjects':
             $catId = (int)($_GET['category_id'] ?? 0);
             if ($catId <= 0) { http_response_code(400); echo json_encode(['ok' => false, 'error' => 'category_id gerekli.']); break; }
-            echo json_encode(['ok' => true, 'data' => education_get_subjects($pdo, $catId)], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => true, 'data' => education_get_subjects($pdo, $catId, true, $scopeUid, $scopeIsAdmin)], JSON_UNESCAPED_UNICODE);
             break;
 
         case 'topics':
@@ -50,8 +54,13 @@ try {
             $page    = max(1, (int)($_GET['page'] ?? 1));
             $perPage = min(500, max(10, (int)($_GET['per_page'] ?? 100)));
             $offset  = ($page - 1) * $perPage;
-            $rows = education_get_topics($pdo, $subjId, true, $q, $perPage, $offset);
+            $rows = education_get_topics($pdo, $subjId, true, $q, $perPage, $offset, $scopeUid, $scopeIsAdmin);
             echo json_encode(['ok' => true, 'page' => $page, 'per_page' => $perPage, 'data' => $rows], JSON_UNESCAPED_UNICODE);
+            break;
+
+        case 'tree':
+            // Tam müfredat ağacı (öğretmen görev/müfredat ekranları için) — kapsamlı
+            echo json_encode(['ok' => true, 'data' => education_get_full_tree($pdo, $scopeUid, $scopeIsAdmin)], JSON_UNESCAPED_UNICODE);
             break;
 
         case 'resources':
