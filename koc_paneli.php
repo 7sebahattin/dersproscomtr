@@ -199,14 +199,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
 
     // Görev İşlemleri
     if (isset($_POST['save_schedule']) && $sid) {
-        $date = $_POST['date']; $amt = $_POST['amount']; $act = $_POST['action_type']; 
-        $st = $_POST['status']; $tid = !empty($_POST['topic'])?$_POST['topic']:null; 
-        $csub = $_POST['custom_subject']; $ctop = $_POST['custom_topic']; $tn = $_POST['time_note']; 
+        $date = $_POST['date']; $amt = $_POST['amount']; $act = $_POST['action_type'];
+        $st = $_POST['status']; $tid = !empty($_POST['topic'])?$_POST['topic']:null;
+        $csub = $_POST['custom_subject'] ?? ''; $ctop = $_POST['custom_topic'] ?? ''; $tn = $_POST['time_note'];
+        $eduTid = !empty($_POST['edu_topic_id']) ? (int)$_POST['edu_topic_id'] : null; // YENİ müfredat konusu
         $id = $_POST['schedule_id'];
-        if ($id) { 
-            $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, topic_id=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $tid, $csub, $ctop, $tn, $id]); 
-        } else { 
-            $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $csub, $ctop, $tn]); 
+        // edu_topic_id kolonu yoksa oluştur (yeni müfredat konu bağı için — idempotent)
+        $hasEduCol = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'edu_topic_id'")->rowCount() > 0;
+        if (!$hasEduCol) {
+            try {
+                $pdo->exec("ALTER TABLE schedule_items ADD COLUMN edu_topic_id INT NULL DEFAULT NULL");
+                $pdo->exec("ALTER TABLE schedule_items ADD KEY idx_si_edu_topic (edu_topic_id)");
+                $hasEduCol = true;
+            } catch (Throwable $e) { $hasEduCol = false; }
+        }
+        if ($id) {
+            if ($hasEduCol) {
+                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, topic_id=?, edu_topic_id=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $tid, $eduTid, $csub, $ctop, $tn, $id]);
+            } else {
+                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, topic_id=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $tid, $csub, $ctop, $tn, $id]);
+            }
+        } else {
+            if ($hasEduCol) {
+                $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, edu_topic_id, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $eduTid, $csub, $ctop, $tn]);
+            } else {
+                $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $csub, $ctop, $tn]);
+            }
         }
         $should_redirect = true;
     }

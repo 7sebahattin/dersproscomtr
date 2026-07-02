@@ -296,12 +296,9 @@
         document.getElementById('scheduleIdV3').value = "";
         document.getElementById('modalDateV3').value = date;
         document.getElementById('deleteBtnV3').classList.add('hidden');
-        document.getElementById('btn-systemV3').click();
-        
-        document.getElementById('topicSelectV3').value = "";
-        document.getElementById('customTopicText').innerText = "Önce ders seçiniz";
-        document.getElementById('customTopicText').classList.add('text-slate-500');
-        
+
+        if (typeof window.eduTaskReset === 'function') window.eduTaskReset();
+
         updateQuickButtons('soru');
         openModal('addModalV3');
     }
@@ -318,47 +315,13 @@
         let selectedType = 'soru';
         for(let r of radios) { if(r.value == item.action_type) { r.checked = true; selectedType = item.action_type; } }
         updateQuickButtons(selectedType);
-        
+
         const unitLabel = document.getElementById('amountUnitLabel');
         if(unitLabel) unitLabel.textContent = (item.action_type === 'konu') ? 'Dakika' : 'Adet';
 
-        if (item.custom_subject || item.custom_topic) {
-            document.getElementById('btn-manualV3').click();
-            document.getElementById('customSubjectV3').value = item.custom_subject;
-            document.getElementById('customTopicV3').value = item.custom_topic;
-        } else {
-            document.getElementById('btn-systemV3').click();
-            if(category) {
-                document.getElementById('fieldSelect').value = category;
-                const ss = document.getElementById('subjectSelectV3');
-                ss.innerHTML = '<option value="">Ders Seç...</option>';
-                allSubjects.filter(s => s.category == category).forEach(s => {
-                    const opt = document.createElement('option');
-                    opt.value = s.id; opt.innerText = s.name; ss.appendChild(opt);
-                });
-                ss.value = item.subject_id;
-                
-                if(item.subject_id) {
-                    const ajaxPath = 'ajax/';
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const studentIdParam = urlParams.get('student_id') || <?php echo $sid ?? 0; ?>;
-                    fetch(`${ajaxPath}get_topics.php?subject_id=${item.subject_id}&student_id=${studentIdParam}`)
-                    .then(r=>r.json()).then(data => {
-                        const listContainer = document.getElementById('customTopicList');
-                        listContainer.innerHTML = '';
-                        data.forEach(t => {
-                             const div = document.createElement('div');
-                             div.className = "flex justify-between items-center p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50";
-                             div.onclick = function() { selectTopic(t.id, t.name); };
-                             div.innerHTML = `<span class="text-sm font-semibold">${t.name}</span>`;
-                             listContainer.appendChild(div);
-                        });
-                        const selected = data.find(t => t.id == item.topic_id);
-                        if(selected) selectTopic(selected.id, selected.name);
-                    });
-                }
-            }
-        }
+        // Yeni iki katmanlı seçiciyi görev verisiyle önyükle
+        if (typeof window.eduTaskPrefill === 'function') window.eduTaskPrefill(item);
+
         document.getElementById('deleteBtnV3').classList.remove('hidden');
         openModal('addModalV3');
     }
