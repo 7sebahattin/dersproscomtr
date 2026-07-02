@@ -5,7 +5,17 @@ ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 require_once 'db.php';
+require_once 'education_lib.php';
 include 'header.php';
+
+// Yeni müfredat sistemi şeması + schedule_items.edu_topic_id garanti (idempotent)
+try {
+    education_ensure_schema($pdo);
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'edu_topic_id'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN edu_topic_id INT NULL DEFAULT NULL");
+        $pdo->exec("ALTER TABLE schedule_items ADD KEY idx_si_edu_topic (edu_topic_id)");
+    }
+} catch (Throwable $e) { /* yeni sistem yoksa eski akış çalışmaya devam eder */ }
 
 // 1. GÜVENLİK
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'teacher') {
@@ -278,10 +288,14 @@ if ($sid) {
 
     // PROGRAM VERİLERİ (Sıralama Düzeltildi)
     $sc = $pdo->prepare("
-        SELECT si.*, t.name as topic_name, t.subject_id as subject_id, s.name as subject_name, s.category as subject_category 
-        FROM schedule_items si 
-        LEFT JOIN coaching_topics t ON si.topic_id = t.id 
-        LEFT JOIN coaching_subjects s ON t.subject_id = s.id 
+        SELECT si.*, t.name as topic_name, t.subject_id as subject_id, s.name as subject_name, s.category as subject_category,
+               et.topic_name AS edu_topic_name, es.lesson_name AS edu_subject_name, ec.name AS edu_category_name
+        FROM schedule_items si
+        LEFT JOIN coaching_topics t ON si.topic_id = t.id
+        LEFT JOIN coaching_subjects s ON t.subject_id = s.id
+        LEFT JOIN education_topics    et ON si.edu_topic_id = et.id
+        LEFT JOIN education_subjects  es ON et.subject_id = es.id
+        LEFT JOIN education_categories ec ON es.category_id = ec.id
         WHERE si.student_id = ? AND si.date BETWEEN ? AND ?
         ORDER BY si.date ASC, si.item_order ASC, si.id ASC
     ");
