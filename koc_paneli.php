@@ -15,6 +15,10 @@ try {
         $pdo->exec("ALTER TABLE schedule_items ADD COLUMN edu_topic_id INT NULL DEFAULT NULL");
         $pdo->exec("ALTER TABLE schedule_items ADD KEY idx_si_edu_topic (edu_topic_id)");
     }
+    // Kaynaktan seçilen görevlerde kaynak adını kartta göstermek için (additive, silinmez)
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'resource_title'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN resource_title VARCHAR(255) NULL DEFAULT NULL");
+    }
 } catch (Throwable $e) { /* yeni sistem yoksa eski akış çalışmaya devam eder */ }
 
 // 1. GÜVENLİK
@@ -207,14 +211,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
         } catch(Exception $e) {}
     }
 
+    // Durum Güncelleme (Program kartına tıklayıp "Durumu Güncelle" penceresinden — koç tarafı)
+    if (isset($_POST['update_status']) && $sid) {
+        $schedId = (int)($_POST['schedule_id'] ?? 0);
+        $newStatus = $_POST['status'] ?? 'bekliyor';
+        $newAmount = (int)($_POST['amount'] ?? 0);
+
+        $checkStmt = $pdo->prepare("SELECT amount, target_amount FROM schedule_items WHERE id = ? AND student_id = ?");
+        $checkStmt->execute([$schedId, $sid]);
+        $currentItem = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($currentItem) {
+            $finalTarget = ($currentItem['target_amount'] === null || $currentItem['target_amount'] === '')
+                ? $currentItem['amount'] : $currentItem['target_amount'];
+            $pdo->prepare("UPDATE schedule_items SET status = ?, amount = ?, target_amount = ? WHERE id = ? AND student_id = ?")
+                ->execute([$newStatus, $newAmount, $finalTarget, $schedId, $sid]);
+        }
+        $should_redirect = true;
+    }
+
     // Görev İşlemleri
     if (isset($_POST['save_schedule']) && $sid) {
         $date = $_POST['date']; $amt = $_POST['amount']; $act = $_POST['action_type'];
         $st = $_POST['status']; $tid = !empty($_POST['topic'])?$_POST['topic']:null;
         $csub = $_POST['custom_subject'] ?? ''; $ctop = $_POST['custom_topic'] ?? ''; $tn = $_POST['time_note'];
         $eduTid = !empty($_POST['edu_topic_id']) ? (int)$_POST['edu_topic_id'] : null; // YENİ müfredat konusu
+        $resTitle = trim($_POST['resource_title'] ?? '') ?: null; // Kaynaktan seçildiyse kaynak adı
         $id = $_POST['schedule_id'];
-        // edu_topic_id kolonu yoksa oluştur (yeni müfredat konu bağı için — idempotent)
+        // edu_topic_id / resource_title kolonları yoksa oluştur (idempotent)
         $hasEduCol = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'edu_topic_id'")->rowCount() > 0;
         if (!$hasEduCol) {
             try {
@@ -223,14 +247,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
                 $hasEduCol = true;
             } catch (Throwable $e) { $hasEduCol = false; }
         }
+        $hasResCol = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'resource_title'")->rowCount() > 0;
+        if (!$hasResCol) {
+            try {
+                $pdo->exec("ALTER TABLE schedule_items ADD COLUMN resource_title VARCHAR(255) NULL DEFAULT NULL");
+                $hasResCol = true;
+            } catch (Throwable $e) { $hasResCol = false; }
+        }
         if ($id) {
-            if ($hasEduCol) {
+            if ($hasEduCol && $hasResCol) {
+                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, topic_id=?, edu_topic_id=?, resource_title=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $tid, $eduTid, $resTitle, $csub, $ctop, $tn, $id]);
+            } elseif ($hasEduCol) {
                 $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, topic_id=?, edu_topic_id=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $tid, $eduTid, $csub, $ctop, $tn, $id]);
             } else {
                 $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, topic_id=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $tid, $csub, $ctop, $tn, $id]);
             }
         } else {
-            if ($hasEduCol) {
+            if ($hasEduCol && $hasResCol) {
+                $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, edu_topic_id, resource_title, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $eduTid, $resTitle, $csub, $ctop, $tn]);
+            } elseif ($hasEduCol) {
                 $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, edu_topic_id, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $eduTid, $csub, $ctop, $tn]);
             } else {
                 $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $csub, $ctop, $tn]);
@@ -324,13 +359,31 @@ if ($sid) {
         $t_week_stmt->execute([$sid, $week_ago]); $report_stats['week_t'] = $t_week_stmt->fetchColumn() ?: 0;
 
         $topic_stats = [];
-        $completed = $pdo->prepare("SELECT si.*, t.id as topic_id, t.name as topic_name, t.subject_id FROM schedule_items si LEFT JOIN coaching_topics t ON si.topic_id = t.id WHERE si.student_id = ? AND si.status = 'yapildi' ORDER BY si.date DESC");
+        // Öncelik: YENİ müfredat (edu_topic_id) -> eski koçluk konusu (topic_id) -> manuel (custom_topic)
+        $completed = $pdo->prepare("
+            SELECT si.*, t.id as topic_id, t.name as topic_name, t.subject_id,
+                   et.topic_name AS edu_topic_name
+            FROM schedule_items si
+            LEFT JOIN coaching_topics t ON si.topic_id = t.id
+            LEFT JOIN education_topics et ON si.edu_topic_id = et.id
+            WHERE si.student_id = ? AND si.status = 'yapildi'
+            ORDER BY si.date DESC
+        ");
         $completed->execute([$sid]);
         foreach($completed->fetchAll(PDO::FETCH_ASSOC) as $item) {
-            $tid = $item['topic_id'];
-            if (!$tid && !empty($item['custom_topic'])) $tid = 'custom_' . md5($item['custom_topic']);
-            if (!$tid) continue;
-            if(!isset($topic_stats[$tid])) $topic_stats[$tid] = ['total_questions'=>0, 'total_topics'=>0, 'history'=>[], 'name'=>$item['topic_name']??$item['custom_topic']];
+            if (!empty($item['edu_topic_id'])) {
+                $tid = 'edu_' . $item['edu_topic_id'];
+                $tname = $item['edu_topic_name'];
+            } elseif (!empty($item['topic_id'])) {
+                $tid = $item['topic_id'];
+                $tname = $item['topic_name'];
+            } elseif (!empty($item['custom_topic'])) {
+                $tid = 'custom_' . md5($item['custom_topic']);
+                $tname = $item['custom_topic'];
+            } else {
+                continue;
+            }
+            if(!isset($topic_stats[$tid])) $topic_stats[$tid] = ['total_questions'=>0, 'total_topics'=>0, 'history'=>[], 'name'=>$tname];
             if($item['action_type']=='soru') $topic_stats[$tid]['total_questions'] += (int)$item['amount'];
             if($item['action_type']=='konu') $topic_stats[$tid]['total_topics'] += 1;
             $topic_stats[$tid]['history'][] = [
@@ -345,6 +398,7 @@ if ($sid) {
             ];
         }
 
+        // 1) ESKİ koçluk müfredatı (topic_id bazlı) — dokunulmadı
         $catFilter = ($student_level == 'Ortaokul') ? "category = 'LGS'" : "category IN ('TYT', 'AYT')";
         $subs = $pdo->query("SELECT * FROM coaching_subjects WHERE $catFilter ORDER BY category, name")->fetchAll();
         foreach($subs as $sub) {
@@ -357,6 +411,29 @@ if ($sid) {
                 $sub_data['topics'][] = ['id'=>$t['id'], 'name'=>$t['name'], 'q_count'=>$stats['total_questions'], 't_count'=>$stats['total_topics'], 'history'=>$stats['history']];
             }
             $progress_data[] = $sub_data;
+        }
+
+        // 2) YENİ müfredat (edu_topic_id bazlı) — TYT/AYT sekmelerinde aynı yapıda ek kartlar
+        if ($student_level !== 'Ortaokul') {
+            $eduCats = $pdo->query("SELECT id, name FROM education_categories WHERE name IN ('TYT','AYT') ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($eduCats as $eduCat) {
+                $eduSubs = $pdo->prepare("SELECT * FROM education_subjects WHERE category_id = ? ORDER BY display_order, lesson_name");
+                $eduSubs->execute([$eduCat['id']]);
+                foreach ($eduSubs->fetchAll(PDO::FETCH_ASSOC) as $esub) {
+                    $eduTops = $pdo->prepare("SELECT * FROM education_topics WHERE subject_id = ? ORDER BY display_order, topic_name");
+                    $eduTops->execute([$esub['id']]);
+                    $et_list = $eduTops->fetchAll(PDO::FETCH_ASSOC);
+                    $esub_data = ['subject_name'=>$esub['lesson_name'], 'name'=>$esub['lesson_name'], 'category'=>$eduCat['name'], 'topics'=>[], 'q_total'=>0, 't_total'=>0];
+                    foreach ($et_list as $et) {
+                        $key = 'edu_' . $et['id'];
+                        $stats = $topic_stats[$key] ?? ['total_questions'=>0, 'total_topics'=>0, 'history'=>[]];
+                        $esub_data['q_total'] += $stats['total_questions'];
+                        $esub_data['t_total'] += $stats['total_topics'];
+                        $esub_data['topics'][] = ['id'=>$et['id'], 'name'=>$et['topic_name'], 'q_count'=>$stats['total_questions'], 't_count'=>$stats['total_topics'], 'history'=>$stats['history']];
+                    }
+                    $progress_data[] = $esub_data;
+                }
+            }
         }
     } catch (Exception $e) {}
 

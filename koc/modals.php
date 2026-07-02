@@ -22,6 +22,8 @@
                 <!-- Seçilen konunun okunur adları (görünürlük + eski uyumluluk için) -->
                 <input type="hidden" name="custom_subject" id="customSubjectV3">
                 <input type="hidden" name="custom_topic"   id="customTopicV3">
+                <!-- Kaynaktan seçildiyse kaynak adı (kartta kırmızı rozet olarak gösterilir) -->
+                <input type="hidden" name="resource_title" id="resourceTitleV3">
 
                 <div class="flex bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200 text-[11px] font-bold">
                     <button type="button" data-etab="mufredat" class="edu-tab flex-1 py-2.5 rounded-lg bg-white text-[#223488] shadow-sm transition">📚 MÜFREDATTAN</button>
@@ -298,6 +300,7 @@ if (!empty($sid)) {
     if (!eduIdEl) return;
     var csEl      = document.getElementById('customSubjectV3');
     var ctEl      = document.getElementById('customTopicV3');
+    var resTitleEl = document.getElementById('resourceTitleV3');
     var chosenBox = document.getElementById('eduChosen');
     var chosenTxt = document.getElementById('eduChosenText');
     var catSel    = document.getElementById('eduCatSel');
@@ -332,10 +335,11 @@ if (!empty($sid)) {
     });
 
     // ── Seçilen konuyu ayarla ──
-    function setChosen(eduId, subject, topic) {
+    function setChosen(eduId, subject, topic, resourceTitle) {
         eduIdEl.value = eduId || '';
         if (csEl) csEl.value = subject || '';
         if (ctEl) ctEl.value = topic || '';
+        if (resTitleEl) resTitleEl.value = resourceTitle || '';
         if (eduId || topic) {
             chosenTxt.textContent = (subject ? subject + ' › ' : '') + (topic || '');
             chosenBox.classList.remove('hidden');
@@ -432,7 +436,7 @@ if (!empty($sid)) {
         resLoaded = true;
         fetch(API + '?action=resources&per_page=200', {credentials:'same-origin'}).then(r=>r.json()).then(function(j){
             if (!j.ok || !j.data.length) { resSel.innerHTML = '<option value="">Henüz kaynak yok</option>'; return; }
-            resSel.innerHTML = '<option value="">Kaynak seçiniz...</option>' + j.data.map(function(res){return '<option value="'+res.id+'">'+esc(res.title)+' ('+(res.topic_count||0)+' konu)</option>';}).join('');
+            resSel.innerHTML = '<option value="">Kaynak seçiniz...</option>' + j.data.map(function(res){return '<option value="'+res.id+'" data-title="'+esc(res.title)+'">'+esc(res.title)+' ('+(res.topic_count||0)+' konu)</option>';}).join('');
         }).catch(function(){ resSel.innerHTML = '<option value="">Yüklenemedi</option>'; });
     }
     resSel.addEventListener('change', function () {
@@ -449,7 +453,9 @@ if (!empty($sid)) {
     resTopicSel.addEventListener('change', function () {
         var o = resTopicSel.options[resTopicSel.selectedIndex];
         if (!o || !o.value) { setChosen('', '', ''); return; }
-        setChosen(o.value, o.getAttribute('data-subject'), o.getAttribute('data-topic'));
+        var resOpt = resSel.options[resSel.selectedIndex];
+        var resTitle = resOpt ? (resOpt.getAttribute('data-title') || '') : '';
+        setChosen(o.value, o.getAttribute('data-subject'), o.getAttribute('data-topic'), resTitle);
     });
 
     // ── MANUEL (serbest metin → edu_topic_id boş) ──
@@ -477,7 +483,7 @@ if (!empty($sid)) {
         var subj = item.custom_subject || item.subject_name || '';
         var top  = item.custom_topic  || item.topic_name   || '';
         var eduId = item.edu_topic_id || '';
-        setChosen(eduId, subj, top);
+        setChosen(eduId, subj, top, item.resource_title || '');
         if (manSubj)  manSubj.value  = subj;
         if (manTopic) manTopic.value = top;
         var mtab = document.querySelector('.edu-tab[data-etab="manuel"]');

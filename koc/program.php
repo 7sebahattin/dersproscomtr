@@ -142,6 +142,7 @@
                             $isManual = (empty($eduCat) && empty($item['subject_category']) && (!empty($item['custom_topic']) || !empty($item['custom_subject'])));
                             $category = $eduCat ?: ($item['subject_category'] ?? '');
                             if ($category === '' && $isManual) $category = 'Diğer';
+                            $resourceTitle = $item['resource_title'] ?? '';
 
                             $borderClass = 'border-slate-300 hover:border-slate-400 bg-white';
                             $statusBadge = 'bg-slate-100 text-slate-700';
@@ -185,9 +186,15 @@
 
                                 <div class="flex items-center justify-between mb-1.5 gap-2">
                                     <div class="flex items-center gap-1.5 min-w-0">
+                                        <?php if ($resourceTitle !== ''): ?>
+                                        <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-red-50 text-red-600 border border-red-200 shrink-0 truncate max-w-[120px]" title="Kaynak: <?php echo htmlspecialchars($resourceTitle); ?>">
+                                            📕 <?php echo htmlspecialchars($resourceTitle); ?>
+                                        </span>
+                                        <?php else: ?>
                                         <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-[#223488] text-white shrink-0">
                                             <?php echo htmlspecialchars($category ?: 'Diğer'); ?>
                                         </span>
+                                        <?php endif; ?>
                                         <?php if (!empty($item['time_note'])): ?>
                                             <span class="text-[9px] font-bold text-[#ec9731] flex items-center gap-0.5 shrink-0">
                                                 ⏰<?php echo htmlspecialchars($item['time_note']); ?>

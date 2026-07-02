@@ -126,6 +126,7 @@
 
                             $title = $eduSubj ?: (!empty($item['topic_name']) ? ($item['subject_name'] ?? '') : ($item['custom_subject'] ?? ''));
                             $subtitle = $eduTopic ?: (!empty($item['topic_name']) ? ($item['topic_name'] ?? '') : ($item['custom_topic'] ?? ''));
+                            $resourceTitle = $item['resource_title'] ?? '';
                             $safeItem = htmlspecialchars(json_encode($item, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
                         ?>
                             <div class="task-card group relative rounded-xl border-[3px] <?php echo $borderClass; ?> p-3 shadow-sm transition-all duration-200 cursor-pointer z-10"
@@ -134,9 +135,15 @@
 
                                 <div class="flex items-center justify-between mb-2">
                                     <div class="flex items-center gap-2">
+                                        <?php if ($resourceTitle !== ''): ?>
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide bg-red-50 text-red-600 border border-red-200 truncate max-w-[120px]" title="Kaynak: <?php echo htmlspecialchars($resourceTitle); ?>">
+                                            📕 <?php echo htmlspecialchars($resourceTitle); ?>
+                                        </span>
+                                        <?php else: ?>
                                         <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide border border-transparent <?php echo $statusBadge; ?>">
                                             <?php echo htmlspecialchars($category ?: 'GENEL'); ?>
                                         </span>
+                                        <?php endif; ?>
                                         <?php if (!empty($item['time_note'])): ?>
                                             <span class="text-[10px] font-bold text-slate-600 flex items-center gap-1 bg-white/60 px-1.5 py-0.5 rounded border border-slate-300/50">
                                                 ⏰ <?php echo htmlspecialchars($item['time_note']); ?>

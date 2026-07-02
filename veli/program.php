@@ -114,13 +114,20 @@
                         $title = $eduSubj ?: (!empty($item['topic_name']) ? $item['subject_name'] : $item['custom_subject']);
                         $subtitle = $eduTopic ?: (!empty($item['topic_name']) ? $item['topic_name'] : $item['custom_topic']);
                         $metricLabel = ($action === 'soru') ? 'Soru' : 'Dakika';
+                        $resourceTitle = $item['resource_title'] ?? '';
                     ?>
                         <div class="bg-white group relative rounded-2xl border-2 <?php echo $borderClass; ?> p-3 shadow-sm transition duration-300">
-                            
+
                             <div class="flex items-start justify-between mb-2">
+                                <?php if ($resourceTitle !== ''): ?>
+                                <span class="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-tighter bg-red-50 text-red-600 border border-red-200 truncate max-w-[110px]" title="Kaynak: <?php echo htmlspecialchars($resourceTitle); ?>">
+                                    📕 <?php echo htmlspecialchars($resourceTitle); ?>
+                                </span>
+                                <?php else: ?>
                                 <span class="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-tighter <?php echo $statusBadge; ?>">
                                     <?php echo htmlspecialchars($category); ?>
                                 </span>
+                                <?php endif; ?>
                                 <span class="text-sm"><?php echo $statusIcon; ?></span>
                             </div>
 
