@@ -46,9 +46,15 @@
                             <option value="">Ders...</option>
                         </select>
                     </div>
-                    <select id="eduTopicSel" disabled class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none disabled:opacity-50">
-                        <option value="">Önce kategori ve ders seçin...</option>
-                    </select>
+                    <!-- Özel açılır konu seçici (native select yerine — daha şık + geçmiş adetleri gösterir) -->
+                    <div class="relative" id="eduTopicWrap">
+                        <button type="button" id="eduTopicBtn" disabled
+                            class="w-full flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-400 focus:bg-white focus:border-[#223488] outline-none disabled:opacity-50 text-left transition">
+                            <span id="eduTopicBtnLabel" class="truncate">Önce kategori ve ders seçin...</span>
+                            <svg class="w-4 h-4 text-slate-400 shrink-0 transition-transform" id="eduTopicChevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+                        <div id="eduTopicPanel" class="hidden absolute z-[60] left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl shadow-[#223488]/10 max-h-64 overflow-y-auto custom-scrollbar py-1"></div>
+                    </div>
                 </div>
 
                 <!-- KAYNAKTAN -->
@@ -243,10 +249,51 @@
         </form>
     </div>
 </div>
+<?php
+// Seçili öğrencinin konu bazlı GEÇMİŞ adetleri (yeni müfredat konusu = edu_topic_id).
+// Görev Ekle penceresinde her konunun yanında "kaç soru / kaç konu tamamlandı" rozeti için.
+$eduTopicStats = [];
+if (!empty($sid)) {
+    $addStat = function ($id, $soru, $konu) use (&$eduTopicStats) {
+        $id = (int)$id;
+        if (!isset($eduTopicStats[$id])) $eduTopicStats[$id] = ['soru' => 0, 'konu' => 0];
+        $eduTopicStats[$id]['soru'] += (int)$soru;
+        $eduTopicStats[$id]['konu'] += (int)$konu;
+    };
+    // 1) Doğrudan yeni müfredat konusuna bağlı tamamlanmış görevler
+    try {
+        $qStats = $pdo->prepare("
+            SELECT edu_topic_id AS etid,
+                   SUM(CASE WHEN action_type='soru' THEN amount ELSE 0 END) AS soru,
+                   SUM(CASE WHEN action_type='konu' THEN 1     ELSE 0 END) AS konu
+            FROM schedule_items
+            WHERE student_id = ? AND status = 'yapildi' AND edu_topic_id IS NOT NULL
+            GROUP BY edu_topic_id
+        ");
+        $qStats->execute([$sid]);
+        while ($r = $qStats->fetch(PDO::FETCH_ASSOC)) $addStat($r['etid'], $r['soru'], $r['konu']);
+    } catch (Throwable $e) {}
+    // 2) Göç haritası varsa: edu_topic_id atanmamış ESKİ koçluk görevlerini de eşleştir
+    try {
+        $qMap = $pdo->prepare("
+            SELECT m.new_topic_id AS etid,
+                   SUM(CASE WHEN si.action_type='soru' THEN si.amount ELSE 0 END) AS soru,
+                   SUM(CASE WHEN si.action_type='konu' THEN 1        ELSE 0 END) AS konu
+            FROM schedule_items si
+            JOIN education_topic_map m ON m.old_topic_id = si.topic_id
+            WHERE si.student_id = ? AND si.status = 'yapildi' AND si.edu_topic_id IS NULL
+            GROUP BY m.new_topic_id
+        ");
+        $qMap->execute([$sid]);
+        while ($r = $qMap->fetch(PDO::FETCH_ASSOC)) $addStat($r['etid'], $r['soru'], $r['konu']);
+    } catch (Throwable $e) { /* göç tablosu yoksa yok say */ }
+}
+?>
 <!-- ═══ YENİ İKİ KATMANLI KONU SEÇİCİ — kendi kendine yeten JS (scripts.php'ye bağımsız) ═══ -->
 <script>
 (function () {
     var API = '/ajax/education_api.php';
+    window.eduTopicStats = <?php echo json_encode($eduTopicStats, JSON_UNESCAPED_UNICODE); ?>;
     var eduIdEl   = document.getElementById('eduTopicIdV3');
     if (!eduIdEl) return;
     var csEl      = document.getElementById('customSubjectV3');
@@ -255,7 +302,11 @@
     var chosenTxt = document.getElementById('eduChosenText');
     var catSel    = document.getElementById('eduCatSel');
     var subjSel   = document.getElementById('eduSubjSel');
-    var topicSel  = document.getElementById('eduTopicSel');
+    var topicBtn   = document.getElementById('eduTopicBtn');
+    var topicLabel = document.getElementById('eduTopicBtnLabel');
+    var topicPanel = document.getElementById('eduTopicPanel');
+    var topicChev  = document.getElementById('eduTopicChevron');
+    var STATS      = window.eduTopicStats || {};
     var resSel    = document.getElementById('eduResourceSelect');
     var resTopicSel = document.getElementById('eduResourceTopicSel');
     var manSubj   = document.getElementById('eduManualSubject');
@@ -313,24 +364,68 @@
             subjSel.disabled = false;
         }).catch(function(){});
     });
+    // ── Özel açılır konu seçici yardımcıları ──
+    function topicPanelOpen(open){
+        topicPanel.classList.toggle('hidden', !open);
+        topicChev.style.transform = open ? 'rotate(180deg)' : '';
+    }
+    function resetTopicSel(msg){
+        topicBtn.disabled = true;
+        topicLabel.textContent = msg;
+        topicLabel.className = 'truncate text-slate-400';
+        topicPanel.innerHTML = '';
+        topicPanelOpen(false);
+    }
+    // Geçmiş adet rozeti (yeni müfredat konusu için)
+    function statBadge(topicId){
+        var s = STATS[topicId];
+        if (!s || (!s.soru && !s.konu)) return '';
+        var parts = [];
+        if (s.soru) parts.push(s.soru + ' soru');
+        if (s.konu) parts.push(s.konu + ' konu');
+        return '<span class="ml-2 shrink-0 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-md px-1.5 py-0.5">✓ ' + parts.join(' · ') + '</span>';
+    }
+    // Konu satırını seç
+    topicPanel.addEventListener('click', function (e) {
+        var row = e.target.closest('[data-topic-id]');
+        if (!row) return;
+        var id = row.getAttribute('data-topic-id');
+        var subj = row.getAttribute('data-subject');
+        var top = row.getAttribute('data-topic');
+        setChosen(id, subj, top);
+        topicLabel.textContent = top;
+        topicLabel.className = 'truncate text-slate-700 font-semibold';
+        topicPanelOpen(false);
+    });
+    topicBtn.addEventListener('click', function () {
+        if (topicBtn.disabled) return;
+        topicPanelOpen(topicPanel.classList.contains('hidden'));
+    });
+    // Dışarı tıklayınca kapan
+    document.addEventListener('click', function (e) {
+        var wrap = document.getElementById('eduTopicWrap');
+        if (wrap && !wrap.contains(e.target)) topicPanelOpen(false);
+    });
+
     subjSel.addEventListener('change', function () {
         if (!subjSel.value) { resetTopicSel('Önce ders seçin...'); return; }
         var subjName = subjSel.options[subjSel.selectedIndex].text;
-        topicSel.innerHTML = '<option value="">Yükleniyor...</option>'; topicSel.disabled = true;
+        topicBtn.disabled = true;
+        topicLabel.textContent = 'Yükleniyor...';
+        topicLabel.className = 'truncate text-slate-400';
         fetch(API + '?action=topics&subject_id=' + subjSel.value + '&per_page=500', {credentials:'same-origin'}).then(r=>r.json()).then(function(j){
-            if (!j.ok) return;
-            topicSel.innerHTML = '<option value="">Konu seçiniz...</option>' + j.data.map(function(t){
-                return '<option value="'+t.id+'" data-subject="'+esc(subjName)+'" data-topic="'+esc(t.topic_name)+'">'+esc(t.topic_name)+'</option>';
+            if (!j.ok) { resetTopicSel('Yüklenemedi'); return; }
+            if (!j.data.length) { resetTopicSel('Bu derste konu yok'); return; }
+            topicPanel.innerHTML = j.data.map(function(t){
+                return '<button type="button" data-topic-id="'+t.id+'" data-subject="'+esc(subjName)+'" data-topic="'+esc(t.topic_name)+'" ' +
+                    'class="w-full flex items-center justify-between text-left px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 transition">' +
+                    '<span class="truncate">'+esc(t.topic_name)+'</span>' + statBadge(t.id) + '</button>';
             }).join('');
-            topicSel.disabled = false;
+            topicBtn.disabled = false;
+            topicLabel.textContent = 'Konu seçiniz...';
+            topicLabel.className = 'truncate text-slate-500';
         }).catch(function(){ resetTopicSel('Yüklenemedi'); });
     });
-    topicSel.addEventListener('change', function () {
-        var o = topicSel.options[topicSel.selectedIndex];
-        if (!o || !o.value) { setChosen('', '', ''); return; }
-        setChosen(o.value, o.getAttribute('data-subject'), o.getAttribute('data-topic'));
-    });
-    function resetTopicSel(msg){ topicSel.innerHTML = '<option value="">'+esc(msg)+'</option>'; topicSel.disabled = true; }
 
     // ── KAYNAKTAN ──
     function loadResources() {
@@ -367,7 +462,7 @@
         setChosen('', '', '');
         if (catSel) catSel.value = '';
         if (subjSel) { subjSel.innerHTML = '<option value="">Ders...</option>'; subjSel.disabled = true; }
-        if (topicSel) { topicSel.innerHTML = '<option value="">Önce kategori ve ders seçin...</option>'; topicSel.disabled = true; }
+        resetTopicSel('Önce kategori ve ders seçin...');
         if (resSel) resSel.value = '';
         if (resTopicSel) { resTopicSel.innerHTML = '<option value="">Önce kaynak seçin...</option>'; resTopicSel.disabled = true; }
         if (manSubj) manSubj.value = '';
