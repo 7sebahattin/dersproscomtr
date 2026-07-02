@@ -75,13 +75,16 @@
                     <div id="eduManualLockHint" class="hidden bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold rounded-lg px-3 py-2">
                         🔒 Bu görev müfredat/kaynağa bağlı. Ders/konu adını değiştirmek için üstteki <b>✕</b> ile bağlantıyı kaldırın ya da Müfredattan/Kaynaktan sekmesini kullanın.
                     </div>
+                    <div id="eduManualError" class="hidden bg-red-50 border border-red-200 text-red-700 text-[11px] font-semibold rounded-lg px-3 py-2">
+                        ⚠️ Ders adı veya konu boş olamaz. Lütfen doldurun ya da Müfredattan/Kaynaktan seçin.
+                    </div>
                     <div>
                         <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Ders Adı</label>
-                        <input id="eduManualSubject" placeholder="Örn: Geometri" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none disabled:opacity-60">
+                        <input id="eduManualSubject" placeholder="ÖRN: GEOMETRİ" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 uppercase focus:bg-white focus:border-[#223488] outline-none disabled:opacity-60">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Konu / Not</label>
-                        <input id="eduManualTopic" placeholder="Örn: Üçgenler tekrar" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none disabled:opacity-60">
+                        <input id="eduManualTopic" placeholder="ÖRN: ÜÇGENLER TEKRAR" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 uppercase focus:bg-white focus:border-[#223488] outline-none disabled:opacity-60">
                     </div>
                     <p class="text-[10px] text-slate-400">Manuel görevler analizde <b>"Diğer"</b> başlığı altında listelenir.</p>
                 </div>
@@ -475,14 +478,48 @@ if (!empty($sid)) {
     });
 
     // ── MANUEL (serbest metin → edu_topic_id boş) ──
-    function manualSync(){ setChosen('', manSubj.value.trim(), manTopic.value.trim()); }
+    // Türkçe büyük/küçük harf eşleşme sorununu önlemek için (İ/I, ı/I vb.)
+    // yazılan her şey Türkçe kurallarına göre büyük harfe çevrilir.
+    function turkishUpper(el) {
+        var start = el.selectionStart, end = el.selectionEnd;
+        var upper = el.value.toLocaleUpperCase('tr-TR');
+        if (upper !== el.value) {
+            el.value = upper;
+            try { el.setSelectionRange(start, end); } catch (e) {}
+        }
+    }
+    var manError = document.getElementById('eduManualError');
+    function manualSync(){
+        turkishUpper(manSubj);
+        turkishUpper(manTopic);
+        if (manError) manError.classList.add('hidden');
+        setChosen('', manSubj.value.trim(), manTopic.value.trim());
+    }
     manSubj.addEventListener('input', manualSync);
     manTopic.addEventListener('input', manualSync);
+
+    // ── İsimsiz görev kaydını engelle ──
+    // Ne müfredat/kaynak bağlantısı ne de manuel ders/konu adı varsa kaydetme.
+    var scheduleFormEl = document.getElementById('scheduleFormV3');
+    if (scheduleFormEl) {
+        scheduleFormEl.addEventListener('submit', function (e) {
+            var hasEdu = !!eduIdEl.value;
+            var hasManual = (csEl.value || '').trim() !== '' || (ctEl.value || '').trim() !== '';
+            if (!hasEdu && !hasManual) {
+                e.preventDefault();
+                var mtab = document.querySelector('.edu-tab[data-etab="manuel"]');
+                if (mtab) mtab.click();
+                if (manError) manError.classList.remove('hidden');
+                if (manSubj) manSubj.focus();
+            }
+        });
+    }
 
     // ── scripts.php'nin çağıracağı global yardımcılar ──
     window.eduTaskReset = function () {
         setChosen('', '', '');
         setManualLock(false);
+        if (manError) manError.classList.add('hidden');
         if (catSel) catSel.value = '';
         if (subjSel) { subjSel.innerHTML = '<option value="" disabled selected>Ders...</option>'; subjSel.disabled = true; }
         resetTopicSel('Önce kategori ve ders seçin...');

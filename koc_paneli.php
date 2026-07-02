@@ -254,7 +254,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
                 $hasResCol = true;
             } catch (Throwable $e) { $hasResCol = false; }
         }
-        if ($id) {
+        // Sunucu tarafı güvenlik: JS doğrulaması atlanırsa bile isimsiz görev kaydedilmesin
+        if (!$eduTid && trim($csub) === '' && trim($ctop) === '') {
+            $error = "Ders adı veya konu boş olamaz. Görev kaydedilmedi.";
+        } elseif ($id) {
             // NOT: UPDATE'te topic_id kasıtlı olarak SET edilmiyor. Bu modalde artık eski
             // koçluk konusu seçme alanı yok (Faz 4'te kaldırıldı); topic_id'yi burada
             // yazmaya kalkışmak onu her düzenlemede sessizce null'a düşürüp eski müfredata
@@ -275,7 +278,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
                 $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $csub, $ctop, $tn]);
             }
         }
-        $should_redirect = true;
+        // Doğrulama hatası varsa yönlendirme yapılmaz, aksi halde $error kaybolur (redirect yeni GET başlatır)
+        if (empty($error)) { $should_redirect = true; }
     }
     if (isset($_POST['delete_schedule'])) { 
         $pdo->prepare("DELETE FROM schedule_items WHERE id=?")->execute([$_POST['schedule_id']]); 
