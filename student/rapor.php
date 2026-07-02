@@ -53,16 +53,18 @@ if ($sid > 0 && isset($pdo)) {
 
         // B. DERS BAZLI DAĞILIM
         $sql_subjects = "
-            SELECT 
-                COALESCE(s.name, si.custom_subject) as subject_name,
+            SELECT
+                COALESCE(es.lesson_name, s.name, si.custom_subject) as subject_name,
                 SUM(si.amount) as total_amount
             FROM schedule_items si
+            LEFT JOIN education_topics    et ON si.edu_topic_id = et.id
+            LEFT JOIN education_subjects  es ON et.subject_id   = es.id
             LEFT JOIN coaching_topics t ON si.topic_id = t.id
             LEFT JOIN coaching_subjects s ON t.subject_id = s.id
-            WHERE si.student_id = ? 
-              AND si.action_type = 'soru' 
+            WHERE si.student_id = ?
+              AND si.action_type = 'soru'
               AND (si.status = 'yapildi' OR si.status = '1')
-              AND (s.name IS NOT NULL OR si.custom_subject IS NOT NULL)
+              AND (es.lesson_name IS NOT NULL OR s.name IS NOT NULL OR si.custom_subject IS NOT NULL)
             GROUP BY subject_name
             ORDER BY total_amount DESC
         ";

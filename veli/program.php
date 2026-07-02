@@ -84,7 +84,13 @@
                     <?php if (!empty($dayItems)): foreach ($dayItems as $item):
                         $status   = $item['status'] ?? 'bekliyor';
                         $action   = $item['action_type'] ?? 'soru';
-                        $category = $item['subject_category'] ?? 'Genel';
+                        // Konu kimliği: önce YENİ müfredat (edu_*) -> eski koçluk -> manuel
+                        $eduCat   = $item['edu_category_name'] ?? '';
+                        $eduSubj  = $item['edu_subject_name']  ?? '';
+                        $eduTopic = $item['edu_topic_name']    ?? '';
+                        $isManual = ($eduCat === '' && empty($item['subject_category']) && (!empty($item['custom_topic']) || !empty($item['custom_subject'])));
+                        $category = $eduCat ?: ($item['subject_category'] ?? 'Genel');
+                        if (($category === '' || $category === 'Genel') && $isManual) $category = 'Diğer';
 
                         // Durum Stilleri
                         $borderClass = 'border-slate-200';
@@ -105,8 +111,8 @@
                             $statusIcon  = '⚠️';
                         }
 
-                        $title = !empty($item['topic_name']) ? $item['subject_name'] : $item['custom_subject'];
-                        $subtitle = !empty($item['topic_name']) ? $item['topic_name'] : $item['custom_topic'];
+                        $title = $eduSubj ?: (!empty($item['topic_name']) ? $item['subject_name'] : $item['custom_subject']);
+                        $subtitle = $eduTopic ?: (!empty($item['topic_name']) ? $item['topic_name'] : $item['custom_topic']);
                         $metricLabel = ($action === 'soru') ? 'Soru' : 'Dakika';
                     ?>
                         <div class="bg-white group relative rounded-2xl border-2 <?php echo $borderClass; ?> p-3 shadow-sm transition duration-300">

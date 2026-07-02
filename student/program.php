@@ -91,7 +91,13 @@
                         <?php if (!empty($dayItems)): foreach ($dayItems as $item):
                             $status   = $item['status'] ?? 'bekliyor';
                             $action   = $item['action_type'] ?? 'soru';
-                            $category = $item['subject_category'] ?? '';
+                            // Konu kimliği: önce YENİ müfredat (edu_*) -> eski koçluk -> manuel
+                            $eduCat   = $item['edu_category_name'] ?? '';
+                            $eduSubj  = $item['edu_subject_name']  ?? '';
+                            $eduTopic = $item['edu_topic_name']    ?? '';
+                            $isManual = ($eduCat === '' && empty($item['subject_category']) && (!empty($item['custom_topic']) || !empty($item['custom_subject'])));
+                            $category = $eduCat ?: ($item['subject_category'] ?? '');
+                            if ($category === '' && $isManual) $category = 'Diğer';
 
                             $borderClass = 'border-slate-300 hover:border-slate-400 bg-white';
                             $statusBadge = 'bg-slate-100 text-slate-700';
@@ -118,8 +124,8 @@
                             $metricLabel = ($action === 'konu') ? 'Dakika' : 'Soru';
                             $metricClass = ($action === 'konu') ? 'bg-[#ec9731] text-white' : 'bg-[#223488] text-white';
 
-                            $title = !empty($item['topic_name']) ? ($item['subject_name'] ?? '') : ($item['custom_subject'] ?? '');
-                            $subtitle = !empty($item['topic_name']) ? ($item['topic_name'] ?? '') : ($item['custom_topic'] ?? '');
+                            $title = $eduSubj ?: (!empty($item['topic_name']) ? ($item['subject_name'] ?? '') : ($item['custom_subject'] ?? ''));
+                            $subtitle = $eduTopic ?: (!empty($item['topic_name']) ? ($item['topic_name'] ?? '') : ($item['custom_topic'] ?? ''));
                             $safeItem = htmlspecialchars(json_encode($item, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
                         ?>
                             <div class="task-card group relative rounded-xl border-[3px] <?php echo $borderClass; ?> p-3 shadow-sm transition-all duration-200 cursor-pointer z-10"

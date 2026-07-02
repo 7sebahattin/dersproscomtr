@@ -9,8 +9,19 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'student') {
 }
 
 require_once __DIR__ . '/db.php';
+
+// Yeni müfredat şeması + schedule_items.edu_topic_id garanti (idempotent, eski sistemi etkilemez)
+require_once __DIR__ . '/education_lib.php';
+try {
+    education_ensure_schema($pdo);
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'edu_topic_id'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN edu_topic_id INT NULL DEFAULT NULL");
+        $pdo->exec("ALTER TABLE schedule_items ADD KEY idx_si_edu_topic (edu_topic_id)");
+    }
+} catch (Throwable $e) { /* şema hazır değilse sayfa eski alanlarla çalışmaya devam eder */ }
+
 $student_id = $_SESSION['user_id'];
-$sid = $student_id; 
+$sid = $student_id;
 $student_name = $_SESSION['first_name'] ?? 'Öğrenci';
 
 // Tarih Formatı
@@ -216,7 +227,7 @@ $today_date = date('Y-m-d');
 
 try {
     $today = date('Y-m-d');
-    $stmt = $pdo->prepare("SELECT si.*, t.name as topic_name, s.name as subject_name, s.category as subject_category FROM schedule_items si LEFT JOIN coaching_topics t ON si.topic_id = t.id LEFT JOIN coaching_subjects s ON t.subject_id = s.id WHERE si.student_id = ? AND si.date = ?");
+    $stmt = $pdo->prepare("SELECT si.*, t.name as topic_name, s.name as subject_name, s.category as subject_category, et.topic_name AS edu_topic_name, es.lesson_name AS edu_subject_name, ec.name AS edu_category_name FROM schedule_items si LEFT JOIN education_topics et ON si.edu_topic_id = et.id LEFT JOIN education_subjects es ON et.subject_id = es.id LEFT JOIN education_categories ec ON es.category_id = ec.id LEFT JOIN coaching_topics t ON si.topic_id = t.id LEFT JOIN coaching_subjects s ON t.subject_id = s.id WHERE si.student_id = ? AND si.date = ?");
     $stmt->execute([$student_id, $today]);
     $todays_tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $dash_total_tasks = count($todays_tasks); 
@@ -263,7 +274,7 @@ try {
 
 // PROGRAM VERİSİ
 $schedule_items = []; 
-$sc = $pdo->prepare("SELECT si.*, t.name as topic_name, s.name as subject_name, s.category as subject_category FROM schedule_items si LEFT JOIN coaching_topics t ON si.topic_id = t.id LEFT JOIN coaching_subjects s ON t.subject_id = s.id WHERE si.student_id = ? AND si.date BETWEEN ? AND ?");
+$sc = $pdo->prepare("SELECT si.*, t.name as topic_name, s.name as subject_name, s.category as subject_category, et.topic_name AS edu_topic_name, es.lesson_name AS edu_subject_name, ec.name AS edu_category_name FROM schedule_items si LEFT JOIN education_topics et ON si.edu_topic_id = et.id LEFT JOIN education_subjects es ON et.subject_id = es.id LEFT JOIN education_categories ec ON es.category_id = ec.id LEFT JOIN coaching_topics t ON si.topic_id = t.id LEFT JOIN coaching_subjects s ON t.subject_id = s.id WHERE si.student_id = ? AND si.date BETWEEN ? AND ?");
 $sc->execute([$sid, $week_dates[0], $week_dates[6]]);
 $raw_items = $sc->fetchAll(PDO::FETCH_ASSOC);
 foreach ($week_dates as $wd) { $schedule_items[$wd] = array_values(array_filter($raw_items, function ($i) use ($wd) { return ($i['date'] ?? '') === $wd; })); }
@@ -409,7 +420,7 @@ include __DIR__ . '/header.php';
                             <?php foreach($todays_tasks as $task): 
                                 $isDone = $task['status'] == 'yapildi';
                                 $icon = $task['action_type'] == 'soru' ? 'fa-pen' : 'fa-book-open';
-                                $title = $task['custom_topic'] ?? ($task['custom_subject'] ?? 'Genel Çalışma');
+                                $title = $task['edu_topic_name'] ?? $task['topic_name'] ?? $task['custom_topic'] ?? ($task['edu_subject_name'] ?? $task['custom_subject'] ?? 'Genel Çalışma');
                                 $desc = $task['action_type'] == 'soru' ? $task['amount'] . " Soru Çözümü" : "Konu Anlatımı / Tekrar";
                             ?>
                             <?php if(!$isDone): ?>

@@ -56,13 +56,16 @@ try {
     $stats = $stmt_stats->fetch(PDO::FETCH_ASSOC) ?: $stats;
 
     // B. DERS BAZLI DAĞILIM
+    // Önce YENİ müfredat (edu_topic_id) -> yoksa eski koçluk (topic_id) -> yoksa manuel (custom_subject)
     $sql_subjects = "
-        SELECT COALESCE(s.name, si.custom_subject) as subject_name, SUM(si.amount) as total_amount
+        SELECT COALESCE(es.lesson_name, s.name, si.custom_subject) as subject_name, SUM(si.amount) as total_amount
         FROM schedule_items si
+        LEFT JOIN education_topics    et ON si.edu_topic_id = et.id
+        LEFT JOIN education_subjects  es ON et.subject_id   = es.id
         LEFT JOIN coaching_topics t ON si.topic_id = t.id
         LEFT JOIN coaching_subjects s ON t.subject_id = s.id
         WHERE si.student_id = ? AND si.action_type = 'soru' AND si.status = 'yapildi'
-          AND (s.name IS NOT NULL OR si.custom_subject IS NOT NULL)
+          AND (es.lesson_name IS NOT NULL OR s.name IS NOT NULL OR si.custom_subject IS NOT NULL)
         GROUP BY subject_name ORDER BY total_amount DESC
     ";
     $stmt_sub = $pdo->prepare($sql_subjects);
@@ -94,17 +97,19 @@ try {
     // GROUP BY alias bazı MySQL modlarında çalışmaz, tam ifade kullanılıyor
     $sql_dy = "
         SELECT
-            COALESCE(s.name, si.custom_subject, '(Belirtilmemiş)') AS subject_name,
+            COALESCE(es.lesson_name, s.name, si.custom_subject, '(Belirtilmemiş)') AS subject_name,
             SUM(COALESCE(si.correct_count, 0)) AS total_correct,
             SUM(COALESCE(si.wrong_count, 0))   AS total_wrong
         FROM schedule_items si
+        LEFT JOIN education_topics    et ON si.edu_topic_id = et.id
+        LEFT JOIN education_subjects  es ON et.subject_id   = es.id
         LEFT JOIN coaching_topics t  ON si.topic_id  = t.id
         LEFT JOIN coaching_subjects s ON t.subject_id = s.id
         WHERE si.student_id = ?
           AND si.action_type = 'soru'
           AND (si.status = 'yapildi' OR si.status = 'yarim')
           AND (COALESCE(si.correct_count, 0) + COALESCE(si.wrong_count, 0)) > 0
-        GROUP BY COALESCE(s.name, si.custom_subject, '(Belirtilmemiş)')
+        GROUP BY COALESCE(es.lesson_name, s.name, si.custom_subject, '(Belirtilmemiş)')
         ORDER BY (SUM(COALESCE(si.correct_count, 0)) + SUM(COALESCE(si.wrong_count, 0))) DESC
     ";
     $stmt_dy = $pdo->prepare($sql_dy);
@@ -134,20 +139,23 @@ try {
     // Kategori (TYT/AYT/LGS) + ders adı ile gruplama
     $sql_gap = "
         SELECT
-            COALESCE(s.name, si.custom_subject, '(Belirtilmemiş)') AS subject_name,
-            COALESCE(s.category, '')                                 AS category,
+            COALESCE(es.lesson_name, s.name, si.custom_subject, '(Belirtilmemiş)') AS subject_name,
+            COALESCE(ec.name, s.category, '')                               AS category,
             SUM(CASE WHEN si.target_amount IS NOT NULL THEN si.target_amount ELSE si.amount END) AS hedef_toplam,
             SUM(si.amount) AS yapilan_toplam,
             COUNT(*) AS islem_sayisi
         FROM schedule_items si
+        LEFT JOIN education_topics     et ON si.edu_topic_id = et.id
+        LEFT JOIN education_subjects   es ON et.subject_id   = es.id
+        LEFT JOIN education_categories ec ON es.category_id  = ec.id
         LEFT JOIN coaching_topics t   ON si.topic_id   = t.id
         LEFT JOIN coaching_subjects s ON t.subject_id  = s.id
         WHERE si.student_id = ?
           AND si.action_type = 'soru'
           AND si.status IN ('yapildi','yarim')
         GROUP BY
-            COALESCE(s.name, si.custom_subject, '(Belirtilmemiş)'),
-            COALESCE(s.category, '')
+            COALESCE(es.lesson_name, s.name, si.custom_subject, '(Belirtilmemiş)'),
+            COALESCE(ec.name, s.category, '')
         HAVING SUM(CASE WHEN si.target_amount IS NOT NULL THEN si.target_amount ELSE si.amount END)
                != SUM(si.amount)
         ORDER BY ABS(
