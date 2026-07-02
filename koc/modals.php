@@ -26,7 +26,7 @@
                 <input type="hidden" name="resource_title" id="resourceTitleV3">
 
                 <div class="flex bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200 text-[11px] font-bold">
-                    <button type="button" data-etab="mufredat" class="edu-tab flex-1 py-2.5 rounded-lg bg-white text-[#223488] shadow-sm transition">📚 MÜFREDATTAN</button>
+                    <button type="button" data-etab="mufredat" class="edu-tab flex-1 py-2.5 rounded-lg bg-[#ec9731] text-white shadow-sm transition">📚 MÜFREDATTAN</button>
                     <button type="button" data-etab="kaynak"   class="edu-tab flex-1 py-2.5 rounded-lg text-slate-500 hover:text-[#223488] transition">🔗 KAYNAKTAN</button>
                     <button type="button" data-etab="manuel"   class="edu-tab flex-1 py-2.5 rounded-lg text-slate-500 hover:text-[#223488] transition">✏️ MANUEL</button>
                 </div>
@@ -42,10 +42,10 @@
                 <div class="edu-pane" data-epane="mufredat">
                     <div class="grid grid-cols-2 gap-3 mb-3">
                         <select id="eduCatSel" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none">
-                            <option value="">Kategori...</option>
+                            <option value="" disabled selected>Kategori...</option>
                         </select>
                         <select id="eduSubjSel" disabled class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none disabled:opacity-50">
-                            <option value="">Ders...</option>
+                            <option value="" disabled selected>Ders...</option>
                         </select>
                     </div>
                     <!-- Özel açılır konu seçici (native select yerine — daha şık + geçmiş adetleri gösterir) -->
@@ -62,23 +62,26 @@
                 <!-- KAYNAKTAN -->
                 <div class="edu-pane hidden" data-epane="kaynak">
                     <select id="eduResourceSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 mb-2 outline-none focus:bg-white focus:border-[#223488]">
-                        <option value="">Kaynak seçiniz...</option>
+                        <option value="" disabled selected>Kaynak seçiniz...</option>
                     </select>
                     <select id="eduResourceTopicSel" disabled class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none disabled:opacity-50">
-                        <option value="">Önce kaynak seçin...</option>
+                        <option value="" disabled selected>Önce kaynak seçin...</option>
                     </select>
                     <p class="text-[10px] text-slate-400 mt-1.5">Kaynak seçince yalnızca o kaynağa bağlı konular listelenir.</p>
                 </div>
 
                 <!-- MANUEL -->
                 <div class="edu-pane hidden space-y-3" data-epane="manuel">
+                    <div id="eduManualLockHint" class="hidden bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold rounded-lg px-3 py-2">
+                        🔒 Bu görev müfredat/kaynağa bağlı. Ders/konu adını değiştirmek için üstteki <b>✕</b> ile bağlantıyı kaldırın ya da Müfredattan/Kaynaktan sekmesini kullanın.
+                    </div>
                     <div>
                         <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Ders Adı</label>
-                        <input id="eduManualSubject" placeholder="Örn: Geometri" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none">
+                        <input id="eduManualSubject" placeholder="Örn: Geometri" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none disabled:opacity-60">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Konu / Not</label>
-                        <input id="eduManualTopic" placeholder="Örn: Üçgenler tekrar" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none">
+                        <input id="eduManualTopic" placeholder="Örn: Üçgenler tekrar" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none disabled:opacity-60">
                     </div>
                     <p class="text-[10px] text-slate-400">Manuel görevler analizde <b>"Diğer"</b> başlığı altında listelenir.</p>
                 </div>
@@ -314,7 +317,17 @@ if (!empty($sid)) {
     var resTopicSel = document.getElementById('eduResourceTopicSel');
     var manSubj   = document.getElementById('eduManualSubject');
     var manTopic  = document.getElementById('eduManualTopic');
+    var manHint   = document.getElementById('eduManualLockHint');
     var catsLoaded = false, resLoaded = false;
+
+    // Manuel alanları kilitle/aç — müfredat/kaynak bağlı bir görev "Manuel" sekmesinde
+    // salt-okunur gösterilir; aksi halde metni değiştirmek sessizce bağlantıyı koparıp
+    // görevi "Diğer" altına düşürürdü.
+    function setManualLock(locked) {
+        if (manSubj)  manSubj.disabled  = locked;
+        if (manTopic) manTopic.disabled = locked;
+        if (manHint)  manHint.classList.toggle('hidden', !locked);
+    }
 
     function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
@@ -324,7 +337,7 @@ if (!empty($sid)) {
             var tab = btn.dataset.etab;
             document.querySelectorAll('.edu-tab').forEach(function (b) {
                 var on = b.dataset.etab === tab;
-                b.className = 'edu-tab flex-1 py-2.5 rounded-lg transition ' + (on ? 'bg-white text-[#223488] shadow-sm' : 'text-slate-500 hover:text-[#223488]');
+                b.className = 'edu-tab flex-1 py-2.5 rounded-lg transition ' + (on ? 'bg-[#ec9731] text-white shadow-sm' : 'text-slate-500 hover:text-[#223488]');
             });
             document.querySelectorAll('.edu-pane').forEach(function (p) {
                 p.classList.toggle('hidden', p.dataset.epane !== tab);
@@ -348,23 +361,26 @@ if (!empty($sid)) {
         }
     }
     window.eduTaskSetChosen = setChosen;
-    document.getElementById('eduClear').addEventListener('click', function(){ setChosen('', '', ''); });
+    document.getElementById('eduClear').addEventListener('click', function(){
+        setChosen('', '', '');
+        setManualLock(false); // bağlantı kaldırıldı -> manuel alanlar artık serbestçe düzenlenebilir
+    });
 
     // ── MÜFREDATTAN ──
     function loadCats() {
         catsLoaded = true;
         fetch(API + '?action=categories', {credentials:'same-origin'}).then(r=>r.json()).then(function(j){
             if (!j.ok) return;
-            catSel.innerHTML = '<option value="">Kategori...</option>' + j.data.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join('');
+            catSel.innerHTML = '<option value="" disabled selected>Kategori...</option>' + j.data.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join('');
         }).catch(function(){});
     }
     catSel.addEventListener('change', function () {
-        subjSel.innerHTML = '<option value="">Yükleniyor...</option>'; subjSel.disabled = true;
+        subjSel.innerHTML = '<option value="" disabled selected>Yükleniyor...</option>'; subjSel.disabled = true;
         resetTopicSel('Önce ders seçin...');
-        if (!catSel.value) { subjSel.innerHTML = '<option value="">Ders...</option>'; return; }
+        if (!catSel.value) { subjSel.innerHTML = '<option value="" disabled selected>Ders...</option>'; return; }
         fetch(API + '?action=subjects&category_id=' + catSel.value, {credentials:'same-origin'}).then(r=>r.json()).then(function(j){
             if (!j.ok) return;
-            subjSel.innerHTML = '<option value="">Ders...</option>' + j.data.map(function(s){return '<option value="'+s.id+'">'+esc(s.lesson_name)+'</option>';}).join('');
+            subjSel.innerHTML = '<option value="" disabled selected>Ders...</option>' + j.data.map(function(s){return '<option value="'+s.id+'">'+esc(s.lesson_name)+'</option>';}).join('');
             subjSel.disabled = false;
         }).catch(function(){});
     });
@@ -435,20 +451,20 @@ if (!empty($sid)) {
     function loadResources() {
         resLoaded = true;
         fetch(API + '?action=resources&per_page=200', {credentials:'same-origin'}).then(r=>r.json()).then(function(j){
-            if (!j.ok || !j.data.length) { resSel.innerHTML = '<option value="">Henüz kaynak yok</option>'; return; }
-            resSel.innerHTML = '<option value="">Kaynak seçiniz...</option>' + j.data.map(function(res){return '<option value="'+res.id+'" data-title="'+esc(res.title)+'">'+esc(res.title)+' ('+(res.topic_count||0)+' konu)</option>';}).join('');
-        }).catch(function(){ resSel.innerHTML = '<option value="">Yüklenemedi</option>'; });
+            if (!j.ok || !j.data.length) { resSel.innerHTML = '<option value="" disabled selected>Henüz kaynak yok</option>'; return; }
+            resSel.innerHTML = '<option value="" disabled selected>Kaynak seçiniz...</option>' + j.data.map(function(res){return '<option value="'+res.id+'" data-title="'+esc(res.title)+'">'+esc(res.title)+' ('+(res.topic_count||0)+' konu)</option>';}).join('');
+        }).catch(function(){ resSel.innerHTML = '<option value="" disabled selected>Yüklenemedi</option>'; });
     }
     resSel.addEventListener('change', function () {
-        if (!resSel.value) { resTopicSel.innerHTML = '<option value="">Önce kaynak seçin...</option>'; resTopicSel.disabled = true; return; }
-        resTopicSel.innerHTML = '<option value="">Yükleniyor...</option>'; resTopicSel.disabled = true;
+        if (!resSel.value) { resTopicSel.innerHTML = '<option value="" disabled selected>Önce kaynak seçin...</option>'; resTopicSel.disabled = true; return; }
+        resTopicSel.innerHTML = '<option value="" disabled selected>Yükleniyor...</option>'; resTopicSel.disabled = true;
         fetch(API + '?action=resource_topics&resource_id=' + resSel.value, {credentials:'same-origin'}).then(r=>r.json()).then(function(j){
-            if (!j.ok || !j.data.length) { resTopicSel.innerHTML = '<option value="">Bu kaynağa konu bağlı değil</option>'; return; }
-            resTopicSel.innerHTML = '<option value="">Konu seçiniz...</option>' + j.data.map(function(t){
+            if (!j.ok || !j.data.length) { resTopicSel.innerHTML = '<option value="" disabled selected>Bu kaynağa konu bağlı değil</option>'; return; }
+            resTopicSel.innerHTML = '<option value="" disabled selected>Konu seçiniz...</option>' + j.data.map(function(t){
                 return '<option value="'+t.id+'" data-subject="'+esc(t.lesson_name)+'" data-topic="'+esc(t.topic_name)+'">'+esc(t.category_name+' › '+t.lesson_name+' › '+t.topic_name)+'</option>';
             }).join('');
             resTopicSel.disabled = false;
-        }).catch(function(){ resTopicSel.innerHTML = '<option value="">Yüklenemedi</option>'; });
+        }).catch(function(){ resTopicSel.innerHTML = '<option value="" disabled selected>Yüklenemedi</option>'; });
     });
     resTopicSel.addEventListener('change', function () {
         var o = resTopicSel.options[resTopicSel.selectedIndex];
@@ -466,11 +482,12 @@ if (!empty($sid)) {
     // ── scripts.php'nin çağıracağı global yardımcılar ──
     window.eduTaskReset = function () {
         setChosen('', '', '');
+        setManualLock(false);
         if (catSel) catSel.value = '';
-        if (subjSel) { subjSel.innerHTML = '<option value="">Ders...</option>'; subjSel.disabled = true; }
+        if (subjSel) { subjSel.innerHTML = '<option value="" disabled selected>Ders...</option>'; subjSel.disabled = true; }
         resetTopicSel('Önce kategori ve ders seçin...');
         if (resSel) resSel.value = '';
-        if (resTopicSel) { resTopicSel.innerHTML = '<option value="">Önce kaynak seçin...</option>'; resTopicSel.disabled = true; }
+        if (resTopicSel) { resTopicSel.innerHTML = '<option value="" disabled selected>Önce kaynak seçin...</option>'; resTopicSel.disabled = true; }
         if (manSubj) manSubj.value = '';
         if (manTopic) manTopic.value = '';
         // Varsayılan sekme: Müfredattan
@@ -480,12 +497,20 @@ if (!empty($sid)) {
     // Düzenlemede: eski/yeni görev verisini seçiciye önyükle (Manuel sekmesinde göster)
     window.eduTaskPrefill = function (item) {
         window.eduTaskReset();
-        var subj = item.custom_subject || item.subject_name || '';
-        var top  = item.custom_topic  || item.topic_name   || '';
         var eduId = item.edu_topic_id || '';
+        var subj, top;
+        if (eduId) {
+            // Müfredat/kaynak bağlı — okunur adları önce edu alanlarından al (otorite kaynağı)
+            subj = item.edu_subject_name || item.custom_subject || item.subject_name || '';
+            top  = item.edu_topic_name   || item.custom_topic   || item.topic_name   || '';
+        } else {
+            subj = item.custom_subject || item.subject_name || '';
+            top  = item.custom_topic  || item.topic_name   || '';
+        }
         setChosen(eduId, subj, top, item.resource_title || '');
         if (manSubj)  manSubj.value  = subj;
         if (manTopic) manTopic.value = top;
+        setManualLock(!!eduId); // müfredat/kaynak bağlıysa metin alanları kilitli gösterilir
         var mtab = document.querySelector('.edu-tab[data-etab="manuel"]');
         if (mtab) mtab.click();
     };

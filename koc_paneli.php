@@ -255,12 +255,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
             } catch (Throwable $e) { $hasResCol = false; }
         }
         if ($id) {
+            // NOT: UPDATE'te topic_id kasıtlı olarak SET edilmiyor. Bu modalde artık eski
+            // koçluk konusu seçme alanı yok (Faz 4'te kaldırıldı); topic_id'yi burada
+            // yazmaya kalkışmak onu her düzenlemede sessizce null'a düşürüp eski müfredata
+            // bağlı görevlerin bağlantısını koparırdı. Var olan değer neyse öyle kalır.
             if ($hasEduCol && $hasResCol) {
-                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, topic_id=?, edu_topic_id=?, resource_title=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $tid, $eduTid, $resTitle, $csub, $ctop, $tn, $id]);
+                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, edu_topic_id=?, resource_title=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $eduTid, $resTitle, $csub, $ctop, $tn, $id]);
             } elseif ($hasEduCol) {
-                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, topic_id=?, edu_topic_id=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $tid, $eduTid, $csub, $ctop, $tn, $id]);
+                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, edu_topic_id=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $eduTid, $csub, $ctop, $tn, $id]);
             } else {
-                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, topic_id=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $tid, $csub, $ctop, $tn, $id]);
+                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $csub, $ctop, $tn, $id]);
             }
         } else {
             if ($hasEduCol && $hasResCol) {
