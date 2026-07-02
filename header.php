@@ -6,8 +6,16 @@ date_default_timezone_set('Europe/Istanbul');
 
 // 1. OTURUM AYARLARI (Session her yerde geçerli olsun)
 if (session_status() === PHP_SESSION_NONE) {
-    session_set_cookie_params(0, '/'); 
+    session_set_cookie_params(0, '/');
     session_start();
+}
+
+// Sunucu/CDN/tarayıcı önbelleğini devre dışı bırak — deploy sonrası değişikliklerin
+// (header/footer dahil) eski önbellek yüzünden gecikmeli görünmesini önler.
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
 }
 
 // 2. DB BAĞLANTISI (Mutlak yol ile hata önleme)
@@ -139,7 +147,7 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DersPROS | Yeni Nesil Eğitim Platformu</title>
-    <link rel="icon" type="image/png" href="<?php echo $B; ?>/assets/images/favicon.png">
+    <link rel="icon" type="image/png" href="<?php echo $B; ?>/assets/images/icon-192.png?v=2">
 
     <!-- PWA: Ana ekrana ekleme / uygulama hissi -->
     <link rel="manifest" href="<?php echo $B; ?>/manifest.json?v=2">
@@ -168,8 +176,8 @@ try {
         <div class="flex justify-between h-16 md:h-20 items-center">
 
             <a href="<?php echo $B; ?>/index.php" class="flex items-center gap-2 group flex-shrink-0">
-                <div class="h-9 w-9 md:h-12 md:w-12 rounded-full flex items-center justify-center shadow-sm border border-slate-50 bg-blue-600 text-white relative overflow-hidden transition group-hover:scale-105">
-                    <span class="font-bold text-lg md:text-xl">DP</span>
+                <div class="h-9 w-9 md:h-12 md:w-12 rounded-full flex items-center justify-center shadow-sm border border-slate-50 overflow-hidden transition group-hover:scale-105">
+                    <img src="<?php echo $B; ?>/assets/images/icon-192.png?v=2" alt="DersPROS" class="w-full h-full object-cover">
                 </div>
                 <span class="text-lg md:text-xl font-bold text-slate-800 tracking-tight flex items-center">
                     Ders<span class="text-red-600 ml-0.5">PROS</span>

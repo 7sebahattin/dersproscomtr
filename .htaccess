@@ -32,3 +32,10 @@ Options -Indexes
 # Bu dosyalar yalnızca giriş yapmış kullanıcılara dosya.php üzerinden sunulur.
 RewriteEngine On
 RewriteRule ^uploads/exams/ - [F,L]
+
+# LiteSpeed sunucu önbelleği (LSCache) .php sayfalarını devre dışı bırakır.
+# Site tamamen oturum tabanlı/dinamik olduğundan sayfa önbelleklenmesi
+# deploy sonrası değişikliklerin (header/footer gibi) gecikmeli görünmesine yol açar.
+<IfModule LiteSpeed>
+    CacheLookup off
+</IfModule>
