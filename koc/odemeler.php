@@ -416,7 +416,7 @@ if ($selected_student) {
 </div>
 
 <!-- Gizli ekstre şablonu (PDF) -->
-<div id="statementSheet" style="display:none;width:800px;max-width:100%;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
+<div id="statementSheet" style="display:none;width:800px;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
 
 <!-- Ekstre modalı (script confirm yerine) -->
 <div class="odm-modal" id="stmtModal">
@@ -607,13 +607,13 @@ async function stmtWhatsApp(){
   buildStatement(STMT_SCOPE); closeM('stmtModal');
   await sendStatementWA();
 }
-/* Gizli şablonu geçici GÖRÜNÜR yapıp (normal akış) layout oturunca html2pdf ile
-   yakala — off-screen/absolute yakalamada oluşan boş PDF sorununu çözer. */
+/* Gizli şablonu geçici görünür yapıp html2pdf ile yakala.
+   NOT: scrollIntoView KULLANMA — sayfa scroll'u html2canvas çıktısını kaydırır/boşaltır.
+   Kanıtlanmış desen: display:block + html2canvas scrollY:0 (koc/sidebar.php ile birebir). */
 async function withSheet(fn){
   const el=document.getElementById('statementSheet');
   el.style.display='block';
-  el.scrollIntoView({block:'center'});
-  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); // 2 kare bekle (render)
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); // render otursun
   try { return await fn(el); } finally { el.style.display='none'; }
 }
 function buildStatement(scope){
@@ -649,7 +649,7 @@ function buildStatement(scope){
     </div>`;
 }
 function _pdfOpt(){ return { margin:8, filename:`Ekstre_${ODM.student}.pdf`, image:{type:'jpeg',quality:.98},
-  html2canvas:{scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth:820}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }; }
+  html2canvas:{scale:2, useCORS:true, scrollY:0}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }; }
 async function sendStatementWA(){
   try{
     toast('info','Ekstre hazırlanıyor…');

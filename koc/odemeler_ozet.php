@@ -162,7 +162,7 @@ include __DIR__ . '/../header.php';
 </div>
 
 <!-- PDF şablonu -->
-<div id="ozSheet" style="display:none;width:800px;max-width:100%;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
+<div id="ozSheet" style="display:none;width:800px;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
 
 <script>
 const OZ = {
@@ -220,11 +220,10 @@ async function ozExport(){
       <div style="display:flex;justify-content:space-between"><span>Toplam Bekleyen:</span><b style="color:#d97706">${tl(OZ.grand.unpaid)}</b></div>
       <div style="display:flex;justify-content:space-between"><span>Toplam Gecikmiş:</span><b style="color:#dc2626">${tl(OZ.grand.overdue)}</b></div>
     </div>`;
-  el.style.display='block';
-  el.scrollIntoView({block:'center'});
+  el.style.display='block'; // scrollIntoView YOK — scroll, html2canvas çıktısını kaydırır
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
   try {
-    await html2pdf().set({margin:8,filename:`Ozet_${OZ.period}.pdf`,image:{type:'jpeg',quality:.98},html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:820},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(el).save();
+    await html2pdf().set({margin:8,filename:`Ozet_${OZ.period}.pdf`,image:{type:'jpeg',quality:.98},html2canvas:{scale:2,useCORS:true,scrollY:0},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(el).save();
   } finally { el.style.display='none'; }
 }
 </script>
