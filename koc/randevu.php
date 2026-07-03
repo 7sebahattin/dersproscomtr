@@ -634,7 +634,7 @@ include $headerPath;
 .pulse-dot{width:7px;height:7px;border-radius:999px;background:var(--success);animation:pulse 1.6s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(5,150,105,.5)}70%{box-shadow:0 0 0 7px rgba(5,150,105,0)}100%{box-shadow:0 0 0 0 rgba(5,150,105,0)}}
 /* Kart aksiyon butonu */
-.act{display:inline-flex;align-items:center;gap:.3rem;min-height:38px;padding:0 .8rem;border-radius:12px;font-weight:700;font-size:.72rem;background:#fff;border:1px solid #e2e8f0;color:#334155;transition:all .15s;white-space:nowrap;cursor:pointer}
+.act{display:inline-flex;align-items:center;gap:.3rem;min-height:44px;padding:0 .9rem;border-radius:12px;font-weight:700;font-size:.75rem;background:#fff;border:1px solid #e2e8f0;color:#334155;transition:all .15s;white-space:nowrap;cursor:pointer}
 .act:hover{background:var(--surface,#f8fafc);border-color:#cbd5e1}
 .act:focus-visible{outline:3px solid var(--atla-primary-050);outline-offset:1px}
 .act-done:hover{border-color:#a7f3d0;color:var(--success)}
@@ -938,7 +938,7 @@ include $headerPath;
         <h3 class="font-black text-lg" id="historyModalTitle">Geçmiş</h3>
         <p class="text-xs text-white/60 font-semibold">Tüm randevular</p>
       </div>
-      <button onclick="closeModal('historyModal')" class="bg-white/15 hover:bg-white/25 rounded-full p-2 transition">✕</button>
+      <button onclick="closeModal('historyModal')" aria-label="Kapat" class="bg-white/15 hover:bg-white/25 rounded-full w-9 h-9 flex items-center justify-center transition">✕</button>
     </div>
     <div class="p-0 overflow-y-auto custom-scrollbar flex-grow bg-white" id="historyModalBody"></div>
   </div>
@@ -1046,7 +1046,7 @@ include $headerPath;
         <h3 class="font-black text-lg truncate" id="msgTitle">Mesajlar</h3>
         <p class="text-xs text-white/60 font-semibold" id="msgSub">Sohbet</p>
       </div>
-      <button type="button" onclick="closeMsgModal()" class="bg-white/20 hover:bg-white/30 rounded-full p-2 transition">✕</button>
+      <button type="button" onclick="closeMsgModal()" aria-label="Kapat" class="bg-white/20 hover:bg-white/30 rounded-full w-9 h-9 flex items-center justify-center transition">✕</button>
     </div>
     <div id="msgBody" class="p-5 max-h-[55vh] overflow-y-auto space-y-3 bg-slate-50"></div>
     <div class="p-5 border-t border-slate-200 bg-white">
@@ -1102,17 +1102,37 @@ function scrollToDay(dateStr){
   setTimeout(()=>el.classList.remove('ring-4','ring-indigo-100'), 1200);
 }
 
+let _lastFocused = null;
 function closeModal(id){
   const el = document.getElementById(id);
   if(!el) return;
   el.classList.add('hidden');
   el.classList.remove('flex');
+  el.removeAttribute('aria-modal'); el.removeAttribute('role');
+  // Erişilebilirlik: odağı modalı açan öğeye geri ver
+  if(_lastFocused && typeof _lastFocused.focus === 'function'){ _lastFocused.focus(); _lastFocused = null; }
 }
 function showModal(id){
   const el = document.getElementById(id);
   if(!el) return;
+  _lastFocused = document.activeElement;
   el.classList.remove('hidden');
   el.classList.add('flex');
+  el.setAttribute('role','dialog'); el.setAttribute('aria-modal','true');
+  // İlk odaklanabilir öğeye odak
+  const focusable = el.querySelector('input,select,textarea,button');
+  if(focusable) setTimeout(()=>focusable.focus(), 30);
+  // Basit focus-trap: Tab modal içinde döner
+  el.addEventListener('keydown', trapTab);
+}
+function trapTab(e){
+  if(e.key !== 'Tab') return;
+  const el = e.currentTarget;
+  const items = [...el.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])')].filter(x=>x.offsetParent!==null);
+  if(!items.length) return;
+  const first = items[0], last = items[items.length-1];
+  if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
 }
 
 function openAddModal(dateStr){
@@ -1221,16 +1241,22 @@ let CURRENT_APP_ID = null;
 
 function showMsgModal(){
   const m = document.getElementById('msgModal');
+  _lastFocused = document.activeElement;
   m.classList.remove('hidden');
   m.classList.add('flex');
+  m.setAttribute('role','dialog'); m.setAttribute('aria-modal','true');
+  m.addEventListener('keydown', trapTab);
+  setTimeout(()=>document.getElementById('msgText')?.focus(), 30);
 }
 function closeMsgModal(){
   const m = document.getElementById('msgModal');
   m.classList.add('hidden');
   m.classList.remove('flex');
+  m.removeAttribute('aria-modal'); m.removeAttribute('role');
   CURRENT_APP_ID = null;
   document.getElementById('msgBody').innerHTML = '';
   document.getElementById('msgText').value = '';
+  if(_lastFocused && typeof _lastFocused.focus === 'function'){ _lastFocused.focus(); _lastFocused = null; }
 }
 function esc(s){
   return (s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
