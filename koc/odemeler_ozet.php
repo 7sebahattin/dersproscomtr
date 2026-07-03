@@ -162,7 +162,8 @@ include __DIR__ . '/../header.php';
 </div>
 
 <!-- PDF şablonu -->
-<div id="ozSheet" style="display:none;width:800px;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
+<!-- A4 portrait (8mm kenar boşluklu) kullanılabilir genişlik ~733px; taşmaması için 720px -->
+<div id="ozSheet" style="display:none;width:720px;box-sizing:border-box;background:#fff;color:#111;padding:20px;font-family:Poppins,Arial,sans-serif"></div>
 
 <script>
 const OZ = {

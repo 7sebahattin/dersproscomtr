@@ -416,7 +416,8 @@ if ($selected_student) {
 </div>
 
 <!-- Gizli ekstre şablonu (PDF) -->
-<div id="statementSheet" style="display:none;width:800px;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
+<!-- A4 portrait (8mm kenar boşluklu) kullanılabilir genişlik ~733px; taşmaması için 720px -->
+<div id="statementSheet" style="display:none;width:720px;box-sizing:border-box;background:#fff;color:#111;padding:20px;font-family:Poppins,Arial,sans-serif"></div>
 
 <!-- Ekstre modalı (script confirm yerine) -->
 <div class="odm-modal" id="stmtModal">
