@@ -19,6 +19,19 @@ try {
     if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'resource_title'")->rowCount() === 0) {
         $pdo->exec("ALTER TABLE schedule_items ADD COLUMN resource_title VARCHAR(255) NULL DEFAULT NULL");
     }
+    // ── VİDEO GÖREV desteği (additive) ──
+    // action_type ENUM'una 'video' değeri: mevcut soru/konu verisi hiç etkilenmez
+    $atCol = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'action_type'")->fetch(PDO::FETCH_ASSOC);
+    if ($atCol && stripos($atCol['Type'] ?? '', 'video') === false) {
+        $pdo->exec("ALTER TABLE schedule_items MODIFY action_type ENUM('soru','konu','video') DEFAULT 'soru'");
+    }
+    // Kaynak bağı (video URL/tipi render'da canlı JOIN ile gelir) + görev kısa notu
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'resource_id'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN resource_id INT NULL DEFAULT NULL");
+    }
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'task_note'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN task_note VARCHAR(255) NULL DEFAULT NULL");
+    }
 } catch (Throwable $e) { /* yeni sistem yoksa eski akış çalışmaya devam eder */ }
 
 // 1. GÜVENLİK
@@ -237,23 +250,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
         $csub = $_POST['custom_subject'] ?? ''; $ctop = $_POST['custom_topic'] ?? ''; $tn = $_POST['time_note'];
         $eduTid = !empty($_POST['edu_topic_id']) ? (int)$_POST['edu_topic_id'] : null; // YENİ müfredat konusu
         $resTitle = trim($_POST['resource_title'] ?? '') ?: null; // Kaynaktan seçildiyse kaynak adı
+        $resId    = !empty($_POST['resource_id']) ? (int)$_POST['resource_id'] : null; // kaynak bağı (video URL/tip)
+        $taskNote = mb_substr(trim($_POST['task_note'] ?? ''), 0, 255) ?: null;        // görev kısa notu
+        if (!in_array($act, ['soru','konu','video'], true)) $act = 'soru';
+        if ($act === 'video') $amt = 1; // video görevde miktar tek video sabittir
         $id = $_POST['schedule_id'];
-        // edu_topic_id / resource_title kolonları yoksa oluştur (idempotent)
-        $hasEduCol = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'edu_topic_id'")->rowCount() > 0;
-        if (!$hasEduCol) {
-            try {
-                $pdo->exec("ALTER TABLE schedule_items ADD COLUMN edu_topic_id INT NULL DEFAULT NULL");
-                $pdo->exec("ALTER TABLE schedule_items ADD KEY idx_si_edu_topic (edu_topic_id)");
-                $hasEduCol = true;
-            } catch (Throwable $e) { $hasEduCol = false; }
+
+        // Opsiyonel kolonlar (üstteki ensure bloğu oluşturur; burada yalnızca var mı bakılır)
+        $optCols = [];
+        foreach (['edu_topic_id','resource_title','resource_id','task_note'] as $c) {
+            $optCols[$c] = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE '$c'")->rowCount() > 0;
         }
-        $hasResCol = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'resource_title'")->rowCount() > 0;
-        if (!$hasResCol) {
-            try {
-                $pdo->exec("ALTER TABLE schedule_items ADD COLUMN resource_title VARCHAR(255) NULL DEFAULT NULL");
-                $hasResCol = true;
-            } catch (Throwable $e) { $hasResCol = false; }
-        }
+        $optVals = ['edu_topic_id'=>$eduTid, 'resource_title'=>$resTitle, 'resource_id'=>$resId, 'task_note'=>$taskNote];
+
         // Sunucu tarafı güvenlik: JS doğrulaması atlanırsa bile isimsiz görev kaydedilmesin
         if (!$eduTid && trim($csub) === '' && trim($ctop) === '') {
             $error = "Ders adı veya konu boş olamaz. Görev kaydedilmedi.";
@@ -262,21 +271,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
             // koçluk konusu seçme alanı yok (Faz 4'te kaldırıldı); topic_id'yi burada
             // yazmaya kalkışmak onu her düzenlemede sessizce null'a düşürüp eski müfredata
             // bağlı görevlerin bağlantısını koparırdı. Var olan değer neyse öyle kalır.
-            if ($hasEduCol && $hasResCol) {
-                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, edu_topic_id=?, resource_title=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $eduTid, $resTitle, $csub, $ctop, $tn, $id]);
-            } elseif ($hasEduCol) {
-                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, edu_topic_id=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $eduTid, $csub, $ctop, $tn, $id]);
-            } else {
-                $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $csub, $ctop, $tn, $id]);
-            }
+            $set  = ['amount=?','action_type=?','status=?','custom_subject=?','custom_topic=?','time_note=?'];
+            $vals = [$amt, $act, $st, $csub, $ctop, $tn];
+            foreach ($optCols as $c => $has) { if ($has) { $set[] = "$c=?"; $vals[] = $optVals[$c]; } }
+            $vals[] = $id;
+            $pdo->prepare("UPDATE schedule_items SET ".implode(', ', $set)." WHERE id=?")->execute($vals);
         } else {
-            if ($hasEduCol && $hasResCol) {
-                $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, edu_topic_id, resource_title, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $eduTid, $resTitle, $csub, $ctop, $tn]);
-            } elseif ($hasEduCol) {
-                $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, edu_topic_id, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $eduTid, $csub, $ctop, $tn]);
-            } else {
-                $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $csub, $ctop, $tn]);
-            }
+            $cols = ['student_id','date','amount','action_type','status','topic_id','custom_subject','custom_topic','time_note'];
+            $vals = [$sid, $date, $amt, $act, $st, $tid, $csub, $ctop, $tn];
+            foreach ($optCols as $c => $has) { if ($has) { $cols[] = $c; $vals[] = $optVals[$c]; } }
+            $cols[] = 'item_order'; $vals[] = 0;
+            $qm = implode(', ', array_fill(0, count($cols), '?'));
+            $pdo->prepare("INSERT INTO schedule_items (".implode(', ', $cols).") VALUES ($qm)")->execute($vals);
         }
         // Doğrulama hatası varsa yönlendirme yapılmaz, aksi halde $error kaybolur (redirect yeni GET başlatır)
         if (empty($error)) { $should_redirect = true; }
@@ -332,13 +338,15 @@ if ($sid) {
     // PROGRAM VERİLERİ (Sıralama Düzeltildi)
     $sc = $pdo->prepare("
         SELECT si.*, t.name as topic_name, t.subject_id as subject_id, s.name as subject_name, s.category as subject_category,
-               et.topic_name AS edu_topic_name, es.lesson_name AS edu_subject_name, ec.name AS edu_category_name
+               et.topic_name AS edu_topic_name, es.lesson_name AS edu_subject_name, ec.name AS edu_category_name,
+               er.type AS resource_type, er.external_url AS resource_url
         FROM schedule_items si
         LEFT JOIN coaching_topics t ON si.topic_id = t.id
         LEFT JOIN coaching_subjects s ON t.subject_id = s.id
         LEFT JOIN education_topics    et ON si.edu_topic_id = et.id
         LEFT JOIN education_subjects  es ON et.subject_id = es.id
         LEFT JOIN education_categories ec ON es.category_id = ec.id
+        LEFT JOIN education_resources er ON si.resource_id = er.id
         WHERE si.student_id = ? AND si.date BETWEEN ? AND ?
         ORDER BY si.date ASC, si.item_order ASC, si.id ASC
     ");

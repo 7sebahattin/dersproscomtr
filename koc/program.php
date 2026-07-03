@@ -167,11 +167,17 @@
                             }
 
                             $metricLabel = 'Soru';
-                            $metricClass = 'bg-[#223488] text-white'; 
+                            $metricClass = 'bg-[#223488] text-white';
                             if ($action === 'konu') {
                                 $metricLabel = 'Dakika';
-                                $metricClass = 'bg-[#ec9731] text-white'; 
+                                $metricClass = 'bg-[#ec9731] text-white';
                             }
+                            $isVideoTask = ($action === 'video');
+                            if ($isVideoTask) {
+                                $metricLabel = 'Video';
+                                $metricClass = 'bg-red-600 text-white';
+                            }
+                            $taskNote = trim((string)($item['task_note'] ?? ''));
 
                             $title    = $eduSubj  ?: (!empty($item['topic_name']) ? ($item['subject_name'] ?? '') : ($item['custom_subject'] ?? ''));
                             $subtitle = $eduTopic ?: (!empty($item['topic_name']) ? ($item['topic_name'] ?? '') : ($item['custom_topic'] ?? ''));
@@ -186,7 +192,14 @@
 
                                 <div class="flex items-center justify-between mb-1.5 gap-2">
                                     <div class="flex items-center gap-1.5 min-w-0">
+                                        <?php if ($isVideoTask): ?>
+                                        <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-red-600 text-white shrink-0">🎬 VİDEO</span>
                                         <?php if ($resourceTitle !== ''): ?>
+                                        <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-red-50 text-red-600 border border-red-200 shrink-0 truncate max-w-[100px]" title="Kaynak: <?php echo htmlspecialchars($resourceTitle); ?>">
+                                            <?php echo htmlspecialchars($resourceTitle); ?>
+                                        </span>
+                                        <?php endif; ?>
+                                        <?php elseif ($resourceTitle !== ''): ?>
                                         <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-red-50 text-red-600 border border-red-200 shrink-0 truncate max-w-[120px]" title="Kaynak: <?php echo htmlspecialchars($resourceTitle); ?>">
                                             📕 <?php echo htmlspecialchars($resourceTitle); ?>
                                         </span>
@@ -211,6 +224,11 @@
                                     <div class="text-[11px] font-semibold text-[#314595] truncate">
                                         <?php echo htmlspecialchars($subtitle); ?>
                                     </div>
+                                    <?php if ($taskNote !== ''): ?>
+                                    <div class="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-1.5 py-0.5 mt-1 truncate" title="<?php echo htmlspecialchars($taskNote); ?>">
+                                        📝 <?php echo htmlspecialchars($taskNote); ?>
+                                    </div>
+                                    <?php endif; ?>
                                 </div>
 
                                 <div class="mt-1.5 pt-1.5 border-t border-black/5 flex items-center justify-between">

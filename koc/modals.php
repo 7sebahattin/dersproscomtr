@@ -24,6 +24,10 @@
                 <input type="hidden" name="custom_topic"   id="customTopicV3">
                 <!-- Kaynaktan seçildiyse kaynak adı (kartta kırmızı rozet olarak gösterilir) -->
                 <input type="hidden" name="resource_title" id="resourceTitleV3">
+                <!-- Kaynak bağı: video URL/tipi render'da bu id üzerinden canlı gelir -->
+                <input type="hidden" name="resource_id" id="resourceIdV3">
+                <!-- Video görev türü (video kaynak seçilince JS işaretler) -->
+                <input type="radio" name="action_type" value="video" id="videoRadioV3" class="sr-only" tabindex="-1">
 
                 <div class="flex bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200 text-[11px] font-bold">
                     <button type="button" data-etab="mufredat" class="edu-tab flex-1 py-2.5 rounded-lg bg-[#ec9731] text-white shadow-sm transition">📚 MÜFREDATTAN</button>
@@ -89,7 +93,13 @@
                     <p class="text-[10px] text-slate-400">Manuel görevler analizde <b>"Diğer"</b> başlığı altında listelenir.</p>
                 </div>
 
-                <div class="mt-5">
+                <!-- Video görev bilgi bandı (video kaynak seçilince görünür) -->
+                <div id="videoModeInfo" class="hidden mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-red-600">
+                    <span aria-hidden="true">🎬</span>
+                    <span>Video İzleme görevi — öğrenci videoyu izleyip <b>"İzledim"</b> diyecek. Miktar: 1 video.</span>
+                </div>
+
+                <div class="mt-5" id="turSectionV3">
                     <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-2 ml-1">Tür</label>
                     <div class="flex gap-3">
                         <label class="cursor-pointer flex-1 group">
@@ -107,13 +117,13 @@
                     </div>
                 </div>
 
-                <div class="mt-4">
+                <div class="mt-4" id="quickBtnsWrapV3">
                     <div id="quickButtonsContainer" class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar no-scrollbar touch-pan-x snap-x">
                         </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4 mt-2">
-                    <div>
+                    <div id="miktarBoxV3">
                         <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Miktar</label>
                         <div class="relative">
                             <input type="number" name="amount" id="amountInputV3" placeholder="0" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-black text-slate-800 text-center h-12 focus:bg-white focus:border-[#ec9731] focus:ring-0 outline-none transition-all" required>
@@ -124,6 +134,12 @@
                         <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Zaman</label>
                         <input type="time" name="time_note" id="timeInputV3" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm text-center h-12 font-bold text-slate-600 focus:bg-white focus:border-[#223488] focus:ring-1 focus:ring-[#223488] outline-none transition-all">
                     </div>
+                </div>
+
+                <div class="mt-4">
+                    <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Kısa Not <span class="normal-case text-slate-400 font-medium">(opsiyonel)</span></label>
+                    <input type="text" name="task_note" id="taskNoteV3" maxlength="255" placeholder="Örn: 2. bölümü mutlaka izle / dikkat: süre tut"
+                           class="w-full bg-[#fdf3e7] border border-dashed border-[#ec9731] rounded-xl text-sm p-3 font-medium text-amber-800 placeholder:text-[#ec9731]/70 focus:bg-white focus:border-[#223488] focus:border-solid outline-none transition-all">
                 </div>
 
                 <div class="mt-5">
@@ -307,6 +323,7 @@ if (!empty($sid)) {
     var csEl      = document.getElementById('customSubjectV3');
     var ctEl      = document.getElementById('customTopicV3');
     var resTitleEl = document.getElementById('resourceTitleV3');
+    var resIdEl    = document.getElementById('resourceIdV3');
     var chosenBox = document.getElementById('eduChosen');
     var chosenTxt = document.getElementById('eduChosenText');
     var catSel    = document.getElementById('eduCatSel');
@@ -350,12 +367,42 @@ if (!empty($sid)) {
         });
     });
 
+    // ── Video görev modu: Tür/Miktar gizlenir, miktar=1, video radyosu işaretlenir ──
+    function videoMode(on) {
+        var tur  = document.getElementById('turSectionV3');
+        var mik  = document.getElementById('miktarBoxV3');
+        var qb   = document.getElementById('quickBtnsWrapV3');
+        var info = document.getElementById('videoModeInfo');
+        var vr   = document.getElementById('videoRadioV3');
+        var amt  = document.getElementById('amountInputV3');
+        if (on) {
+            if (vr) vr.checked = true;
+            if (amt) amt.value = 1;
+            if (tur) tur.classList.add('hidden');
+            if (mik) mik.classList.add('hidden');
+            if (qb)  qb.classList.add('hidden');
+            if (info) info.classList.remove('hidden');
+        } else {
+            // video radyosu işaretliyken mod kapanıyorsa varsayılana (soru) dön
+            if (vr && vr.checked) {
+                var s = document.querySelector('input[name="action_type"][value="soru"]');
+                if (s) { s.checked = true; if (typeof updateQuickButtons === 'function') updateQuickButtons('soru'); }
+            }
+            if (tur) tur.classList.remove('hidden');
+            if (mik) mik.classList.remove('hidden');
+            if (qb)  qb.classList.remove('hidden');
+            if (info) info.classList.add('hidden');
+        }
+    }
+
     // ── Seçilen konuyu ayarla ──
-    function setChosen(eduId, subject, topic, resourceTitle) {
+    function setChosen(eduId, subject, topic, resourceTitle, resourceId, resourceType) {
         eduIdEl.value = eduId || '';
         if (csEl) csEl.value = subject || '';
         if (ctEl) ctEl.value = topic || '';
         if (resTitleEl) resTitleEl.value = resourceTitle || '';
+        if (resIdEl) resIdEl.value = resourceId || '';
+        videoMode(resourceType === 'video' && !!resourceId);
         if (eduId || topic) {
             chosenTxt.textContent = (subject ? subject + ' › ' : '') + (topic || '');
             chosenBox.classList.remove('hidden');
@@ -455,7 +502,12 @@ if (!empty($sid)) {
         resLoaded = true;
         fetch(API + '?action=resources&per_page=200', {credentials:'same-origin'}).then(r=>r.json()).then(function(j){
             if (!j.ok || !j.data.length) { resSel.innerHTML = '<option value="" disabled selected>Henüz kaynak yok</option>'; return; }
-            resSel.innerHTML = '<option value="" disabled selected>Kaynak seçiniz...</option>' + j.data.map(function(res){return '<option value="'+res.id+'" data-title="'+esc(res.title)+'">'+esc(res.title)+' ('+(res.topic_count||0)+' konu)</option>';}).join('');
+            var tIcon = {kitap:'📕', deneme:'📝', pdf:'📄', video:'🎬', diger:'📦'};
+            resSel.innerHTML = '<option value="" disabled selected>Kaynak seçiniz...</option>' + j.data.map(function(res){
+                var ic = tIcon[res.type] || '📦';
+                var vid = res.type === 'video' ? ' [VİDEO]' : '';
+                return '<option value="'+res.id+'" data-title="'+esc(res.title)+'" data-type="'+esc(res.type||'')+'">'+ic+' '+esc(res.title)+vid+' ('+(res.topic_count||0)+' konu)</option>';
+            }).join('');
         }).catch(function(){ resSel.innerHTML = '<option value="" disabled selected>Yüklenemedi</option>'; });
     }
     resSel.addEventListener('change', function () {
@@ -474,7 +526,8 @@ if (!empty($sid)) {
         if (!o || !o.value) { setChosen('', '', ''); return; }
         var resOpt = resSel.options[resSel.selectedIndex];
         var resTitle = resOpt ? (resOpt.getAttribute('data-title') || '') : '';
-        setChosen(o.value, o.getAttribute('data-subject'), o.getAttribute('data-topic'), resTitle);
+        var resType  = resOpt ? (resOpt.getAttribute('data-type')  || '') : '';
+        setChosen(o.value, o.getAttribute('data-subject'), o.getAttribute('data-topic'), resTitle, resSel.value, resType);
     });
 
     // ── MANUEL (serbest metin → edu_topic_id boş) ──
@@ -527,6 +580,9 @@ if (!empty($sid)) {
         if (resTopicSel) { resTopicSel.innerHTML = '<option value="" disabled selected>Önce kaynak seçin...</option>'; resTopicSel.disabled = true; }
         if (manSubj) manSubj.value = '';
         if (manTopic) manTopic.value = '';
+        var tnEl = document.getElementById('taskNoteV3');
+        if (tnEl) tnEl.value = '';
+        videoMode(false);
         // Varsayılan sekme: Müfredattan
         var first = document.querySelector('.edu-tab[data-etab="mufredat"]');
         if (first) first.click();
@@ -544,9 +600,13 @@ if (!empty($sid)) {
             subj = item.custom_subject || item.subject_name || '';
             top  = item.custom_topic  || item.topic_name   || '';
         }
-        setChosen(eduId, subj, top, item.resource_title || '');
+        setChosen(eduId, subj, top, item.resource_title || '', item.resource_id || '', item.resource_type || '');
         if (manSubj)  manSubj.value  = subj;
         if (manTopic) manTopic.value = top;
+        var tnEl = document.getElementById('taskNoteV3');
+        if (tnEl) tnEl.value = item.task_note || '';
+        // Kayıt video göreviyse (resource_type gelmese bile) video modunu koru
+        if (item.action_type === 'video') videoMode(true);
         setManualLock(!!eduId); // müfredat/kaynak bağlıysa metin alanları kilitli gösterilir
         var mtab = document.querySelector('.edu-tab[data-etab="manuel"]');
         if (mtab) mtab.click();
