@@ -15,11 +15,31 @@ $teacher_id = (int)$_SESSION['user_id'];
 $selected_student = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
 $alert = null;
 
+require_once __DIR__ . '/../payments_lib.php';
+payments_ensure_schema($pdo);
+
+/** Dekont yükleme yardımcı — güvenli dosya adı, tip/boyut kontrolü. Yol döner ya da null. */
+function odemeler_store_receipt(array $file): ?string {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) return null;
+    if (($file['size'] ?? 0) > 5 * 1024 * 1024) return null; // 5MB
+    $allowed = ['image/jpeg'=>'jpg','image/png'=>'png','application/pdf'=>'pdf'];
+    $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : null;
+    $mime  = $finfo ? finfo_file($finfo, $file['tmp_name']) : ($file['type'] ?? '');
+    if ($finfo) finfo_close($finfo);
+    if (!isset($allowed[$mime])) return null;
+    $dir = __DIR__ . '/../uploads/receipts';
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $name = 'dekont_' . bin2hex(random_bytes(10)) . '.' . $allowed[$mime];
+    if (!move_uploaded_file($file['tmp_name'], "$dir/$name")) return null;
+    return 'uploads/receipts/' . $name; // repo köküne göreli
+}
+
 // --- İŞLEMLER ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if (function_exists('mb_internal_encoding')) mb_internal_encoding('UTF-8');
-    
+
     try {
+        $pid = (int)($_POST['id'] ?? 0);
         switch($_POST['action']) {
             case 'update_price':
                 if ($selected_student) {
@@ -34,26 +54,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $amount = (float)$_POST['amount'];
                     $desc = trim($_POST['description']);
                     $due = $_POST['due_date'];
-                    
                     $pdo->prepare("INSERT INTO payments (student_id, teacher_id, amount, description, due_date, status) VALUES (?, ?, ?, ?, ?, 'odenmedi')")
                         ->execute([$selected_student, $teacher_id, $amount, $desc, $due]);
                     header("Location: ?student_id=$selected_student&msg=added"); exit;
                 }
                 break;
             case 'update':
-                $pdo->prepare("UPDATE payments SET amount=?, description=?, due_date=?, status=? WHERE id=?")
-                    ->execute([$_POST['amount'], $_POST['description'], $_POST['due_date'], $_POST['status'], $_POST['id']]);
+                if (payment_owned_by($pdo, $pid, $teacher_id)) {
+                    $pdo->prepare("UPDATE payments SET amount=?, description=?, due_date=?, status=? WHERE id=? AND teacher_id=?")
+                        ->execute([$_POST['amount'], $_POST['description'], $_POST['due_date'], $_POST['status'], $pid, $teacher_id]);
+                }
                 header("Location: ?student_id=$selected_student&msg=updated"); exit;
                 break;
+            case 'save_note': // Kısa not kaydet
+                if (payment_owned_by($pdo, $pid, $teacher_id)) {
+                    $note = mb_substr(trim($_POST['note'] ?? ''), 0, 255);
+                    $pdo->prepare("UPDATE payments SET note=? WHERE id=? AND teacher_id=?")->execute([$note ?: null, $pid, $teacher_id]);
+                }
+                header("Location: ?student_id=$selected_student&msg=note_saved"); exit;
+                break;
+            case 'mark_paid': // Ödendi işaretle (+ isteğe bağlı dekont)
+                if (payment_owned_by($pdo, $pid, $teacher_id)) {
+                    $receiptPath = isset($_FILES['receipt']) ? odemeler_store_receipt($_FILES['receipt']) : null;
+                    if ($receiptPath) {
+                        $pdo->prepare("UPDATE payments SET status='odendi', paid_date=CURDATE(), receipt_path=? WHERE id=? AND teacher_id=?")
+                            ->execute([$receiptPath, $pid, $teacher_id]);
+                    } else {
+                        $pdo->prepare("UPDATE payments SET status='odendi', paid_date=CURDATE() WHERE id=? AND teacher_id=?")
+                            ->execute([$pid, $teacher_id]);
+                    }
+                }
+                header("Location: ?student_id=$selected_student&msg=paid"); exit;
+                break;
+            case 'unmark_paid': // Ödemeyi geri al
+                if (payment_owned_by($pdo, $pid, $teacher_id)) {
+                    $pdo->prepare("UPDATE payments SET status='odenmedi', paid_date=NULL WHERE id=? AND teacher_id=?")->execute([$pid, $teacher_id]);
+                }
+                header("Location: ?student_id=$selected_student&msg=unpaid"); exit;
+                break;
+            case 'upload_receipt': // Var olan ödemeye dekont ekle/güncelle
+                if (payment_owned_by($pdo, $pid, $teacher_id)) {
+                    $receiptPath = isset($_FILES['receipt']) ? odemeler_store_receipt($_FILES['receipt']) : null;
+                    if ($receiptPath) $pdo->prepare("UPDATE payments SET receipt_path=? WHERE id=? AND teacher_id=?")->execute([$receiptPath, $pid, $teacher_id]);
+                }
+                header("Location: ?student_id=$selected_student&msg=receipt_added"); exit;
+                break;
             case 'delete':
-                $pdo->prepare("DELETE FROM payments WHERE id=?")->execute([$_POST['id']]);
+                if (payment_owned_by($pdo, $pid, $teacher_id)) {
+                    $pdo->prepare("DELETE FROM payments WHERE id=? AND teacher_id=?")->execute([$pid, $teacher_id]);
+                }
                 header("Location: ?student_id=$selected_student&msg=deleted"); exit;
                 break;
-            case 'bulk_delete': 
+            case 'bulk_delete':
                 if (!empty($_POST['ids'])) {
                     $ids = array_map('intval', $_POST['ids']);
                     $placeholders = implode(',', array_fill(0, count($ids), '?'));
-                    $pdo->prepare("DELETE FROM payments WHERE id IN ($placeholders)")->execute($ids);
+                    $pdo->prepare("DELETE FROM payments WHERE id IN ($placeholders) AND teacher_id=?")->execute(array_merge($ids, [$teacher_id]));
                     header("Location: ?student_id=$selected_student&msg=bulk_deleted&count=".count($ids)); exit;
                 }
                 break;
@@ -61,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if (!empty($_POST['ids'])) {
                     $ids = array_map('intval', $_POST['ids']);
                     $placeholders = implode(',', array_fill(0, count($ids), '?'));
-                    $pdo->prepare("UPDATE payments SET status='odendi' WHERE id IN ($placeholders)")->execute($ids);
+                    $pdo->prepare("UPDATE payments SET status='odendi', paid_date=CURDATE() WHERE id IN ($placeholders) AND teacher_id=?")->execute(array_merge($ids, [$teacher_id]));
                     header("Location: ?student_id=$selected_student&msg=bulk_paid&count=".count($ids)); exit;
                 }
                 break;
@@ -69,25 +125,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     } catch(Exception $e) { error_log($e->getMessage()); }
 }
 
-// --- ARKA PLAN SORGULARI ---
-try {
-    $stmt = $pdo->prepare("
-        SELECT a.id, a.student_id, a.appointment_date, cr.lesson_price
-        FROM appointments a
-        JOIN coaching_relationships cr ON (a.student_id = cr.student_id AND a.teacher_id = cr.teacher_id)
-        WHERE a.teacher_id = ? AND a.appointment_date < CURDATE() AND a.status != 'cancelled' AND cr.lesson_price > 0
-        AND NOT EXISTS (
-            SELECT 1 FROM payments p 
-            WHERE p.student_id = a.student_id AND p.teacher_id = a.teacher_id
-            AND DATE(p.due_date) = DATE(a.appointment_date)
-        )
-    ");
-    $stmt->execute([$teacher_id]);
-    foreach ($stmt->fetchAll() as $apt) {
-        $pdo->prepare("INSERT INTO payments (student_id, teacher_id, amount, description, due_date, status) VALUES (?, ?, ?, ?, ?, 'odenmedi')")
-            ->execute([$apt['student_id'], $teacher_id, $apt['lesson_price'], date('d.m.Y', strtotime($apt['appointment_date'])).' Tarihli Seans', $apt['appointment_date']]);
-    }
-} catch(Exception $e) { error_log($e->getMessage()); }
+// --- OTOMASYON: günü geçen iptal edilmemiş randevular -> 'odenmedi' borç kaydı ---
+// (Ödeme olarak İŞARETLEMEZ; cron_notifications.php'de de global çalışır.)
+payments_generate_due($pdo, $teacher_id);
 
 include '../header.php';
 

@@ -33,6 +33,10 @@ Options -Indexes
 RewriteEngine On
 RewriteRule ^uploads/exams/ - [F,L]
 
+# Ödeme dekontlarına DOĞRUDAN erişimi engelle (mali/kişisel veri).
+# Yalnızca ödemenin sahibi öğretmene koc/dekont.php üzerinden sunulur.
+RewriteRule ^uploads/receipts/ - [F,L]
+
 # LiteSpeed sunucu önbelleği (LSCache) .php sayfalarını devre dışı bırakır.
 # Site tamamen oturum tabanlı/dinamik olduğundan sayfa önbelleklenmesi
 # deploy sonrası değişikliklerin (header/footer gibi) gecikmeli görünmesine yol açar.

@@ -45,6 +45,15 @@ try {
     }
 } catch (Throwable $e) { /* şema hazır değilse bildirim eski alanlarla devam eder */ }
 
+// ── Ödeme otomasyonu: günü geçen iptal edilmemiş randevular için 'odenmedi' borç
+//    kaydı üret (tüm öğretmenler). Öğretmen sayfayı hiç açmasa da otomatik işler. ──
+try {
+    require_once __DIR__ . '/payments_lib.php';
+    payments_ensure_schema($pdo);
+    $genCount = payments_generate_due($pdo, null);
+    if ($genCount > 0) cron_log("  [ÖDEME] $genCount adet vadesi geçmiş seans borç olarak eklendi.");
+} catch (Throwable $e) { /* ödeme tablosu yoksa yok say */ }
+
 // ── Bildirim Ayarları: DB'den oku, yoksa varsayılan kullan ───────────────────
 function get_notif_setting(PDO $pdo, int $teacher_id, int $student_id, string $scenario): array {
     static $cache = [];
