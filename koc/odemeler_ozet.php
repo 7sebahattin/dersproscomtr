@@ -11,15 +11,22 @@ require_once __DIR__ . '/../payments_lib.php';
 payments_ensure_schema($pdo);
 payments_generate_due($pdo, $teacher_id);
 
-// Dönem seçimi
+// Dönem seçimi (hazır kısayollar + özel tarih aralığı)
 $period = $_GET['period'] ?? 'all';
 $periodStart = $periodEnd = null; $periodLabel = 'Tüm Zamanlar';
+$dFrom = $_GET['from'] ?? ''; $dTo = $_GET['to'] ?? '';
+$validDate = fn($s)=> (bool)preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$s);
+
 if ($period === 'this') {
     $periodStart = date('Y-m-01'); $periodEnd = date('Y-m-t'); $periodLabel = 'Bu Ay (' . date('m.Y') . ')';
 } elseif ($period === 'last') {
     $periodStart = date('Y-m-01', strtotime('first day of last month'));
     $periodEnd   = date('Y-m-t', strtotime('last day of last month'));
     $periodLabel = 'Geçen Ay (' . date('m.Y', strtotime('last month')) . ')';
+} elseif ($period === 'range' && ($validDate($dFrom) || $validDate($dTo))) {
+    $periodStart = $validDate($dFrom) ? $dFrom : '2000-01-01';
+    $periodEnd   = $validDate($dTo)   ? $dTo   : date('Y-m-d');
+    $periodLabel = 'Tarih Aralığı (' . date('d.m.Y', strtotime($periodStart)) . ' – ' . date('d.m.Y', strtotime($periodEnd)) . ')';
 } else { $period = 'all'; }
 
 // Ödeme JOIN'ine uygulanacak dönem filtresi
@@ -81,12 +88,22 @@ include __DIR__ . '/../header.php';
     <a href="<?= $B ?>/koc/odemeler.php" class="oz-btn" style="background:#fff;color:var(--atla-primary)">← Ödeme Yönetimi</a>
   </div>
 
-  <!-- Dönem filtresi -->
-  <div class="flex flex-wrap items-center gap-2 mb-3">
-    <span class="text-xs font-bold text-slate-400 uppercase mr-1">Dönem:</span>
-    <a href="?period=all"  class="oz-chip <?= $period==='all'?'active':'' ?>">Tüm Zamanlar</a>
-    <a href="?period=this" class="oz-chip <?= $period==='this'?'active':'' ?>">Bu Ay</a>
-    <a href="?period=last" class="oz-chip <?= $period==='last'?'active':'' ?>">Geçen Ay</a>
+  <!-- Dönem filtresi: kısayollar + özel tarih aralığı -->
+  <div class="oz-card p-3 mb-4">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-xs font-bold text-slate-400 uppercase mr-1">Dönem:</span>
+      <a href="?period=all"  class="oz-chip <?= $period==='all'?'active':'' ?>">Tüm Zamanlar</a>
+      <a href="?period=this" class="oz-chip <?= $period==='this'?'active':'' ?>">Bu Ay</a>
+      <a href="?period=last" class="oz-chip <?= $period==='last'?'active':'' ?>">Geçen Ay</a>
+      <form method="get" class="flex items-center gap-1.5 flex-wrap ml-auto">
+        <input type="hidden" name="period" value="range">
+        <input type="date" name="from" value="<?= $oh($dFrom) ?>" class="border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[color:var(--atla-primary)]">
+        <span class="text-slate-400 text-xs">–</span>
+        <input type="date" name="to" value="<?= $oh($dTo) ?>" class="border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[color:var(--atla-primary)]">
+        <button type="submit" class="oz-btn oz-b-primary">Uygula</button>
+      </form>
+    </div>
+    <?php if($period==='range'): ?><p class="text-[11px] text-slate-500 font-semibold mt-2">Seçili: <?= $oh($periodLabel) ?></p><?php endif; ?>
   </div>
 
   <!-- Genel toplamlar -->
@@ -145,7 +162,7 @@ include __DIR__ . '/../header.php';
 </div>
 
 <!-- PDF şablonu -->
-<div id="ozSheet" style="display:none;position:absolute;left:0;top:0;z-index:-1;width:800px;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
+<div id="ozSheet" style="display:none;width:800px;max-width:100%;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
 
 <script>
 const OZ = {
@@ -204,8 +221,10 @@ async function ozExport(){
       <div style="display:flex;justify-content:space-between"><span>Toplam Gecikmiş:</span><b style="color:#dc2626">${tl(OZ.grand.overdue)}</b></div>
     </div>`;
   el.style.display='block';
+  el.scrollIntoView({block:'center'});
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
   try {
-    await html2pdf().set({margin:8,filename:`Ozet_${OZ.period}.pdf`,image:{type:'jpeg',quality:.98},html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(el).save();
+    await html2pdf().set({margin:8,filename:`Ozet_${OZ.period}.pdf`,image:{type:'jpeg',quality:.98},html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:820},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(el).save();
   } finally { el.style.display='none'; }
 }
 </script>
