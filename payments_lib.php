@@ -85,6 +85,17 @@ function payments_generate_due(PDO $pdo, ?int $teacherId = null): int
     }
 }
 
+/** Telefonu WhatsApp (wa.me) için uluslararası formata çevirir. TR varsayımı. */
+function wa_phone(?string $raw): string
+{
+    $d = preg_replace('/\D+/', '', (string)$raw);
+    if ($d === '') return '';
+    if (strpos($d, '90') === 0 && strlen($d) >= 12) return $d;     // zaten 90...
+    $d = ltrim($d, '0');                                            // baştaki 0'ları at
+    if (strlen($d) === 10 && $d[0] === '5') return '90' . $d;       // TR cep: 5XXXXXXXXX
+    return $d;                                                      // aksi halde olduğu gibi
+}
+
 /** Öğretmen bu ödeme kaydının sahibi mi? (IDOR koruması) */
 function payment_owned_by(PDO $pdo, int $paymentId, int $teacherId): bool
 {

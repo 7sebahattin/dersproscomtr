@@ -73,16 +73,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
                 header("Location: ?student_id=$selected_student&msg=note_saved"); exit;
                 break;
-            case 'mark_paid': // Ödendi işaretle (+ isteğe bağlı dekont)
+            case 'mark_paid': // Ödendi işaretle (+ düzenlenebilir tutar + isteğe bağlı dekont)
                 if (payment_owned_by($pdo, $pid, $teacher_id)) {
+                    $paidAmount = isset($_POST['amount']) && $_POST['amount'] !== '' ? (float)$_POST['amount'] : null;
                     $receiptPath = isset($_FILES['receipt']) ? odemeler_store_receipt($_FILES['receipt']) : null;
-                    if ($receiptPath) {
-                        $pdo->prepare("UPDATE payments SET status='odendi', paid_date=CURDATE(), receipt_path=? WHERE id=? AND teacher_id=?")
-                            ->execute([$receiptPath, $pid, $teacher_id]);
-                    } else {
-                        $pdo->prepare("UPDATE payments SET status='odendi', paid_date=CURDATE() WHERE id=? AND teacher_id=?")
-                            ->execute([$pid, $teacher_id]);
-                    }
+                    $set = "status='odendi', paid_date=CURDATE()";
+                    $vals = [];
+                    if ($paidAmount !== null) { $set .= ", amount=?"; $vals[] = $paidAmount; }
+                    if ($receiptPath)        { $set .= ", receipt_path=?"; $vals[] = $receiptPath; }
+                    $vals[] = $pid; $vals[] = $teacher_id;
+                    $pdo->prepare("UPDATE payments SET $set WHERE id=? AND teacher_id=?")->execute($vals);
                 }
                 header("Location: ?student_id=$selected_student&msg=paid"); exit;
                 break;
@@ -156,8 +156,8 @@ if ($selected_student) {
         $ph = $pdo->prepare("SELECT phone, parent_phone FROM users WHERE id = ?");
         $ph->execute([$selected_student]);
         if ($prow = $ph->fetch(PDO::FETCH_ASSOC)) {
-            $data['student_phone'] = preg_replace('/\D+/', '', (string)($prow['phone'] ?? ''));
-            $data['parent_phone']  = preg_replace('/\D+/', '', (string)($prow['parent_phone'] ?? ''));
+            $data['student_phone'] = wa_phone($prow['phone'] ?? '');
+            $data['parent_phone']  = wa_phone($prow['parent_phone'] ?? '');
         }
     } catch (Throwable $e) {}
 
@@ -193,7 +193,7 @@ if ($selected_student) {
 <style>
 :root{
   --atla-primary:#223488; --atla-primary-600:#314595; --atla-primary-050:#eef1fb;
-  --atla-accent:#ec9731; --atla-accent-600:#d68625;
+  --atla-accent:#ec9731; --atla-accent-600:#d68625; --atla-accent-050:#fdf3e7;
   --success:#059669; --success-050:#ecfdf5; --warning:#d97706; --warning-050:#fffbeb;
   --error:#dc2626; --error-050:#fef2f2; --border:#e2e8f0;
 }
@@ -221,8 +221,10 @@ if ($selected_student) {
 .odm-table{width:100%;border-collapse:collapse;font-size:.82rem}
 .odm-table th{background:#f8fafc;padding:.6rem .7rem;text-align:left;font-weight:700;color:#64748b;font-size:.68rem;text-transform:uppercase;border-bottom:2px solid var(--border);white-space:nowrap}
 .odm-table td{padding:.6rem .7rem;border-bottom:1px solid #f1f5f9;vertical-align:middle}
-.note-input{border:1px dashed transparent;background:transparent;border-radius:8px;padding:.3rem .4rem;font-size:.78rem;width:100%;min-width:90px;font-family:inherit;color:#475569}
-.note-input:hover{border-color:#cbd5e1}.note-input:focus{border-color:var(--atla-primary);background:#fff;outline:none}
+.note-input{border:1px dashed var(--atla-accent);background:var(--atla-accent-050,#fdf3e7);border-radius:8px;padding:.35rem .5rem;font-size:.78rem;width:100%;min-width:110px;font-family:inherit;color:#92400e}
+.note-input::placeholder{color:var(--atla-accent);opacity:.8;font-weight:600}
+.note-input:hover{border-color:var(--atla-accent-600)}
+.note-input:focus{border-color:var(--atla-primary);background:#fff;outline:none;color:#334155}
 /* Toast */
 #odmToast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;width:min(92vw,420px)}
 .odm-toast{display:flex;align-items:center;gap:.6rem;padding:.85rem 1rem;border-radius:14px;font-weight:600;font-size:.85rem;box-shadow:0 10px 25px -5px rgba(0,0,0,.2);border:1px solid;animation:odmIn .35s cubic-bezier(.2,.8,.2,1)}
@@ -371,7 +373,7 @@ if ($selected_student) {
                   <form method="POST" class="note-form" onsubmit="return true">
                     <input type="hidden" name="action" value="save_note">
                     <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
-                    <input type="text" name="note" value="<?= $oh($p['note'] ?? '') ?>" placeholder="not…" class="note-input"
+                    <input type="text" name="note" value="<?= $oh($p['note'] ?? '') ?>" placeholder="+ not ekle" class="note-input"
                            onblur="if(this.value!==this.defaultValue)this.form.submit()">
                   </form>
                 </td>
@@ -414,7 +416,30 @@ if ($selected_student) {
 </div>
 
 <!-- Gizli ekstre şablonu (PDF) -->
-<div id="statementSheet" style="position:fixed;left:-9999px;top:0;width:800px;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
+<div id="statementSheet" style="display:none;position:absolute;left:0;top:0;z-index:-1;width:800px;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
+
+<!-- Ekstre modalı (script confirm yerine) -->
+<div class="odm-modal" id="stmtModal">
+  <div class="odm-modal-c">
+    <div class="p-4 text-white flex justify-between items-center" style="background:var(--atla-primary)">
+      <h3 class="font-extrabold">📄 Ekstre Oluştur</h3>
+      <button onclick="closeM('stmtModal')" aria-label="Kapat" class="bg-white/20 rounded-full w-8 h-8">✕</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="text-xs font-bold text-slate-500 block mb-1.5">Kapsam</label>
+        <div class="flex gap-2">
+          <button type="button" id="stmt_all" onclick="stmtSetScope('all')" class="odm-btn b-primary flex-1">Tüm Kayıtlar</button>
+          <button type="button" id="stmt_unpaid" onclick="stmtSetScope('odenmedi')" class="odm-btn b-soft flex-1">Sadece Ödenmemiş</button>
+        </div>
+      </div>
+      <div class="pt-1 grid grid-cols-2 gap-2">
+        <button type="button" onclick="stmtDownload()" class="odm-btn b-soft">⬇️ PDF İndir</button>
+        <button type="button" onclick="stmtWhatsApp()" class="odm-btn b-wa">💬 WhatsApp Gönder</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Ödendi + dekont modalı -->
 <div class="odm-modal" id="paidModal">
@@ -427,6 +452,10 @@ if ($selected_student) {
       <input type="hidden" name="action" value="mark_paid">
       <input type="hidden" name="id" id="paid_id">
       <p class="text-sm text-slate-600" id="paid_desc"></p>
+      <div>
+        <label class="text-xs font-bold text-slate-500 block mb-1">Alınan Tutar (₺) — eksik ödeme için değiştirebilirsiniz</label>
+        <input type="number" step="0.01" name="amount" id="paid_amount" class="odm-input" required>
+      </div>
       <div>
         <label class="text-xs font-bold text-slate-500 block mb-1">Dekont (isteğe bağlı — resim/PDF)</label>
         <input type="file" name="receipt" accept="image/*,application/pdf" class="odm-input" style="padding:.4rem">
@@ -515,7 +544,8 @@ function editPay(p){
 }
 function openPaidModal(p){
   document.getElementById('paid_id').value=p.id;
-  document.getElementById('paid_desc').textContent=p.description+' — '+Number(p.amount).toLocaleString('tr-TR')+'₺';
+  document.getElementById('paid_amount').value=p.amount;
+  document.getElementById('paid_desc').textContent='Beklenen: '+p.description+' ('+Number(p.amount).toLocaleString('tr-TR')+'₺)';
   document.getElementById('paidModal').classList.add('active');
 }
 function postAction(fields){ const f=document.createElement('form'); f.method='POST';
@@ -540,8 +570,11 @@ function filterStatus(status,btn){
   });
 }
 
-/* ── WhatsApp ödeme hatırlatma ── */
-function waSend(phone,text){ window.open(`https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`,'_blank'); }
+/* ── WhatsApp ödeme hatırlatma (wa.me evrensel link — hem mobil app hem masaüstü) ── */
+function waSend(phone,text){
+  if(!phone){ toast('warning','Telefon kayıtlı değil.'); return; }
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,'_blank');
+}
 function remindOne(p){
   if(!ODM.parentPhone) return toast('warning','Telefon kayıtlı değil.');
   const due=new Date(p.due_date).toLocaleDateString('tr-TR');
@@ -559,13 +592,26 @@ function sendReminder(){
   waSend(ODM.parentPhone,t);
 }
 
-/* ── Ekstre (PDF): kapsam seç → indir / WhatsApp ── */
-function openStatement(){
-  const scope = confirm('Ekstre kapsamı:\n\nTAMAM = Sadece ödenmemişler\nİPTAL = Tüm kayıtlar') ? 'odenmedi' : 'all';
-  buildStatement(scope);
-  const wa = ODM.parentPhone ? '\n\nWhatsApp ile göndermek için: TAMAM' : '';
-  if(ODM.parentPhone && confirm('Ekstre hazır.'+wa+'\n\nİPTAL = sadece PDF indir')){ sendStatementWA(); }
-  else { downloadStatement(); }
+/* ── Ekstre (PDF): modal ile kapsam + eylem seçimi ── */
+let STMT_SCOPE = 'all';
+function openStatement(){ stmtSetScope('all'); document.getElementById('stmtModal').classList.add('active'); }
+function stmtSetScope(scope){
+  STMT_SCOPE = scope;
+  const a=document.getElementById('stmt_all'), u=document.getElementById('stmt_unpaid');
+  a.classList.toggle('b-primary', scope==='all'); a.classList.toggle('b-soft', scope!=='all');
+  u.classList.toggle('b-primary', scope!=='all'); u.classList.toggle('b-soft', scope==='all');
+}
+async function stmtDownload(){ buildStatement(STMT_SCOPE); closeM('stmtModal'); await withSheet(el=>html2pdf().set(_pdfOpt()).from(el).save()); }
+async function stmtWhatsApp(){
+  if(!ODM.parentPhone){ toast('warning','Telefon kayıtlı değil.'); return; }
+  buildStatement(STMT_SCOPE); closeM('stmtModal');
+  await sendStatementWA();
+}
+/* Gizli şablonu geçici görünür yapıp html2pdf ile yakala (boş PDF sorununu çözer) */
+async function withSheet(fn){
+  const el=document.getElementById('statementSheet');
+  el.style.display='block';
+  try { return await fn(el); } finally { el.style.display='none'; }
 }
 function buildStatement(scope){
   const rows = ODM.payments.filter(p=> scope==='all' ? true : p.status!=='odendi');
@@ -601,10 +647,10 @@ function buildStatement(scope){
 }
 function _pdfOpt(){ return { margin:8, filename:`Ekstre_${ODM.student}.pdf`, image:{type:'jpeg',quality:.98},
   html2canvas:{scale:2}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }; }
-function downloadStatement(){ html2pdf().set(_pdfOpt()).from(document.getElementById('statementSheet')).save(); }
 async function sendStatementWA(){
   try{
-    const blob = await html2pdf().set(_pdfOpt()).from(document.getElementById('statementSheet')).outputPdf('blob');
+    toast('info','Ekstre hazırlanıyor…');
+    const blob = await withSheet(el=>html2pdf().set(_pdfOpt()).from(el).outputPdf('blob'));
     const fd=new FormData(); fd.append('pdf', blob, `Ekstre_${ODM.student}.pdf`);
     const r=await fetch(ODM.base+'/save_temp_pdf.php',{method:'POST',body:fd}); const j=await r.json();
     if(!j.ok) throw new Error(j.error||'Yükleme hatası');
