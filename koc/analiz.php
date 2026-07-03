@@ -19,7 +19,8 @@ $start_month = date('Y-m-01');
 // Varsayılan değerler (try başarısız olursa tanımsız değişken hatası önlenir)
 $stats = [
     'today_q' => 0, 'week_q' => 0, 'month_q' => 0, 'total_q' => 0,
-    'today_t' => 0, 'week_t' => 0, 'month_t' => 0, 'total_t' => 0
+    'today_t' => 0, 'week_t' => 0, 'month_t' => 0, 'total_t' => 0,
+    'today_v' => 0, 'week_v' => 0, 'month_v' => 0, 'total_v' => 0
 ];
 $subject_data      = [];
 $graph_dates       = [];
@@ -48,7 +49,11 @@ try {
             COUNT(CASE WHEN action_type='konu' AND date = '$today' AND status='yapildi' THEN 1 ELSE NULL END) as today_t,
             COUNT(CASE WHEN action_type='konu' AND date >= '$start_week' AND status='yapildi' THEN 1 ELSE NULL END) as week_t,
             COUNT(CASE WHEN action_type='konu' AND date >= '$start_month' AND status='yapildi' THEN 1 ELSE NULL END) as month_t,
-            COUNT(CASE WHEN action_type='konu' AND status='yapildi' THEN 1 ELSE NULL END) as total_t
+            COUNT(CASE WHEN action_type='konu' AND status='yapildi' THEN 1 ELSE NULL END) as total_t,
+            COUNT(CASE WHEN action_type='video' AND date = '$today' AND status='yapildi' THEN 1 ELSE NULL END) as today_v,
+            COUNT(CASE WHEN action_type='video' AND date >= '$start_week' AND status='yapildi' THEN 1 ELSE NULL END) as week_v,
+            COUNT(CASE WHEN action_type='video' AND date >= '$start_month' AND status='yapildi' THEN 1 ELSE NULL END) as month_v,
+            COUNT(CASE WHEN action_type='video' AND status='yapildi' THEN 1 ELSE NULL END) as total_v
         FROM schedule_items WHERE student_id = ?
     ";
     $stmt_stats = $pdo->prepare($sql_stats);
@@ -251,6 +256,11 @@ try {
                         <span class="text-2xl font-black text-[#ec9731] leading-none"><?php echo number_format($stats['today_t']); ?></span>
                         <span class="text-[9px] font-bold text-slate-400 uppercase mt-1">Konu</span>
                     </div>
+                    <div class="w-px h-8 bg-slate-200"></div>
+                    <div class="flex flex-col text-right">
+                        <span class="text-2xl font-black text-red-600 leading-none"><?php echo number_format($stats['today_v']); ?></span>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase mt-1">Video</span>
+                    </div>
                 </div>
             </div>
 
@@ -266,6 +276,11 @@ try {
                         <span class="text-2xl font-black text-[#ec9731] leading-none"><?php echo number_format($stats['week_t']); ?></span>
                         <span class="text-[9px] font-bold text-slate-400 uppercase mt-1">Konu</span>
                     </div>
+                    <div class="w-px h-8 bg-slate-200"></div>
+                    <div class="flex flex-col text-right">
+                        <span class="text-2xl font-black text-red-600 leading-none"><?php echo number_format($stats['week_v']); ?></span>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase mt-1">Video</span>
+                    </div>
                 </div>
             </div>
 
@@ -280,6 +295,11 @@ try {
                     <div class="flex flex-col text-right">
                         <span class="text-2xl font-black text-[#ec9731] leading-none"><?php echo number_format($stats['month_t']); ?></span>
                         <span class="text-[9px] font-bold text-slate-400 uppercase mt-1">Konu</span>
+                    </div>
+                    <div class="w-px h-8 bg-slate-200"></div>
+                    <div class="flex flex-col text-right">
+                        <span class="text-2xl font-black text-red-600 leading-none"><?php echo number_format($stats['month_v']); ?></span>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase mt-1">Video</span>
                     </div>
                 </div>
             </div>
@@ -298,6 +318,11 @@ try {
                     <div class="flex flex-col text-right">
                         <span class="text-2xl font-black text-[#ec9731] leading-none"><?php echo number_format($stats['total_t']); ?></span>
                         <span class="text-[9px] font-bold text-slate-400 uppercase mt-1">Konu</span>
+                    </div>
+                    <div class="w-px h-8 bg-slate-200"></div>
+                    <div class="flex flex-col text-right">
+                        <span class="text-2xl font-black text-red-600 leading-none"><?php echo number_format($stats['total_v']); ?></span>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase mt-1">Video</span>
                     </div>
                 </div>
                 <div class="w-full bg-slate-100 h-1 mt-3 rounded-full overflow-hidden">
@@ -616,14 +641,16 @@ try {
 
             $topics = $sub['topics'] ?? [];
             
-            $qTotal = 0; $tTotal = 0;
+            $qTotal = 0; $tTotal = 0; $vTotal = 0;
             if (isset($sub['q_total'])) {
                 $qTotal = (int)$sub['q_total'];
                 $tTotal = (int)($sub['t_total'] ?? 0);
+                $vTotal = (int)($sub['v_total'] ?? 0);
             } else {
                 foreach ($topics as $tpItem) {
                     $qTotal += (int)($tpItem['q_count'] ?? 0);
                     $tTotal += (int)($tpItem['t_count'] ?? 0);
+                    $vTotal += (int)($tpItem['v_count'] ?? 0);
                 }
             }
 
@@ -678,6 +705,13 @@ try {
                                 <div class="text-[10px] text-slate-400 uppercase font-bold">Konu</div>
                                 <div class="text-lg font-black text-slate-700"><?php echo $tTotal; ?></div>
                             </div>
+                            <?php if($vTotal > 0): ?>
+                            <div class="w-px bg-slate-200"></div>
+                            <div>
+                                <div class="text-[10px] text-slate-400 uppercase font-bold">Video</div>
+                                <div class="text-lg font-black text-red-600"><?php echo $vTotal; ?></div>
+                            </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -696,6 +730,7 @@ try {
                             $topicName = $t['name'] ?? 'Konu';
                             $qCount = (int)($t['q_count'] ?? 0);
                             $tCount = (int)($t['t_count'] ?? 0);
+                            $vCount = (int)($t['v_count'] ?? 0);
                             $history = $t['history'] ?? [];
                             $hasHistory = !empty($history);
                             
@@ -728,6 +763,11 @@ try {
                                 <?php if($tCount > 0): ?>
                                 <span class="bg-orange-50 text-[#ec9731] text-[10px] font-bold px-2 py-1 rounded border border-orange-100 min-w-[35px] text-center">
                                     <?php echo $tCount; ?>k
+                                </span>
+                                <?php endif; ?>
+                                <?php if($vCount > 0): ?>
+                                <span class="bg-red-50 text-red-600 text-[10px] font-bold px-2 py-1 rounded border border-red-100 min-w-[35px] text-center" title="İzlenen video">
+                                    <?php echo $vCount; ?>v
                                 </span>
                                 <?php endif; ?>
                             </div>
@@ -931,7 +971,9 @@ function showModal(title, data) {
             var type = (row.action_type || '').toLowerCase();
             var badgeHTML = type === 'soru'
                 ? '<span class="inline-flex items-center gap-1 bg-blue-50 text-[#223488] px-2 py-1 rounded text-[10px] font-bold border border-blue-100">❓ Soru</span>'
-                : '<span class="inline-flex items-center gap-1 bg-orange-50 text-[#ec9731] px-2 py-1 rounded text-[10px] font-bold border border-orange-100">📖 Konu</span>';
+                : (type === 'video'
+                    ? '<span class="inline-flex items-center gap-1 bg-red-50 text-red-600 px-2 py-1 rounded text-[10px] font-bold border border-red-100">🎬 Video</span>'
+                    : '<span class="inline-flex items-center gap-1 bg-orange-50 text-[#ec9731] px-2 py-1 rounded text-[10px] font-bold border border-orange-100">📖 Konu</span>');
 
             // Doğru / Yanlış
             var dogruHTML = '-', yanlisHTML = '-';
@@ -943,7 +985,7 @@ function showModal(title, data) {
             }
 
             // Hedef ve Yapılan — ayrı sütunlar
-            var unit = (type !== 'soru') ? ' dk' : '';
+            var unit = (type === 'video') ? '' : ((type !== 'soru') ? ' dk' : '');
             var realAmount   = parseInt(row.amount || 0);
             var targetAmount = (row.target_amount !== null && row.target_amount !== undefined && row.target_amount !== '') ? parseInt(row.target_amount) : realAmount;
 

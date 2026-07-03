@@ -278,24 +278,26 @@
 // Görev Ekle penceresinde her konunun yanında "kaç soru / kaç konu tamamlandı" rozeti için.
 $eduTopicStats = [];
 if (!empty($sid)) {
-    $addStat = function ($id, $soru, $konu) use (&$eduTopicStats) {
+    $addStat = function ($id, $soru, $konu, $video = 0) use (&$eduTopicStats) {
         $id = (int)$id;
-        if (!isset($eduTopicStats[$id])) $eduTopicStats[$id] = ['soru' => 0, 'konu' => 0];
-        $eduTopicStats[$id]['soru'] += (int)$soru;
-        $eduTopicStats[$id]['konu'] += (int)$konu;
+        if (!isset($eduTopicStats[$id])) $eduTopicStats[$id] = ['soru' => 0, 'konu' => 0, 'video' => 0];
+        $eduTopicStats[$id]['soru']  += (int)$soru;
+        $eduTopicStats[$id]['konu']  += (int)$konu;
+        $eduTopicStats[$id]['video'] += (int)$video;
     };
     // 1) Doğrudan yeni müfredat konusuna bağlı tamamlanmış görevler
     try {
         $qStats = $pdo->prepare("
             SELECT edu_topic_id AS etid,
                    SUM(CASE WHEN action_type='soru' THEN amount ELSE 0 END) AS soru,
-                   SUM(CASE WHEN action_type='konu' THEN 1     ELSE 0 END) AS konu
+                   SUM(CASE WHEN action_type='konu' THEN 1      ELSE 0 END) AS konu,
+                   SUM(CASE WHEN action_type='video' THEN 1     ELSE 0 END) AS video
             FROM schedule_items
             WHERE student_id = ? AND status = 'yapildi' AND edu_topic_id IS NOT NULL
             GROUP BY edu_topic_id
         ");
         $qStats->execute([$sid]);
-        while ($r = $qStats->fetch(PDO::FETCH_ASSOC)) $addStat($r['etid'], $r['soru'], $r['konu']);
+        while ($r = $qStats->fetch(PDO::FETCH_ASSOC)) $addStat($r['etid'], $r['soru'], $r['konu'], $r['video'] ?? 0);
     } catch (Throwable $e) {}
     // 2) Göç haritası varsa: edu_topic_id atanmamış ESKİ koçluk görevlerini de eşleştir
     try {
@@ -449,10 +451,11 @@ if (!empty($sid)) {
     // Geçmiş adet rozeti (yeni müfredat konusu için)
     function statBadge(topicId){
         var s = STATS[topicId];
-        if (!s || (!s.soru && !s.konu)) return '';
+        if (!s || (!s.soru && !s.konu && !s.video)) return '';
         var parts = [];
         if (s.soru) parts.push(s.soru + ' soru');
         if (s.konu) parts.push(s.konu + ' konu');
+        if (s.video) parts.push(s.video + ' video');
         return '<span class="ml-2 shrink-0 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-md px-1.5 py-0.5">✓ ' + parts.join(' · ') + '</span>';
     }
     // Konu satırını seç

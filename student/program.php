@@ -127,15 +127,21 @@
                             $title = $eduSubj ?: (!empty($item['topic_name']) ? ($item['subject_name'] ?? '') : ($item['custom_subject'] ?? ''));
                             $subtitle = $eduTopic ?: (!empty($item['topic_name']) ? ($item['topic_name'] ?? '') : ($item['custom_topic'] ?? ''));
                             $resourceTitle = $item['resource_title'] ?? '';
+                            $isVideoTask = (($item['action_type'] ?? '') === 'video');
+                            $taskNote = trim((string)($item['task_note'] ?? ''));
+                            if ($isVideoTask) { $metricLabel = 'Video'; $metricClass = 'bg-red-600 text-white'; }
                             $safeItem = htmlspecialchars(json_encode($item, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                            $clickFn = $isVideoTask ? 'openVideoTaskModal' : 'openStatusModal';
                         ?>
                             <div class="task-card group relative rounded-xl border-[3px] <?php echo $borderClass; ?> p-3 shadow-sm transition-all duration-200 cursor-pointer z-10"
                                  data-item='<?php echo $safeItem; ?>'
-                                 onclick='openStatusModal(JSON.parse(this.getAttribute("data-item")))'>
+                                 onclick='<?php echo $clickFn; ?>(JSON.parse(this.getAttribute("data-item")))'>
 
                                 <div class="flex items-center justify-between mb-2">
                                     <div class="flex items-center gap-2">
-                                        <?php if ($resourceTitle !== ''): ?>
+                                        <?php if ($isVideoTask): ?>
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide bg-red-600 text-white">🎬 VİDEO</span>
+                                        <?php elseif ($resourceTitle !== ''): ?>
                                         <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide bg-red-50 text-red-600 border border-red-200 truncate max-w-[120px]" title="Kaynak: <?php echo htmlspecialchars($resourceTitle); ?>">
                                             📕 <?php echo htmlspecialchars($resourceTitle); ?>
                                         </span>
@@ -162,6 +168,11 @@
                                     <div class="text-xs font-bold text-slate-600 truncate">
                                         <?php echo htmlspecialchars($subtitle); ?>
                                     </div>
+                                    <?php if ($taskNote !== ''): ?>
+                                    <div class="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5 mt-1 truncate" title="<?php echo htmlspecialchars($taskNote); ?>">
+                                        📝 <?php echo htmlspecialchars($taskNote); ?>
+                                    </div>
+                                    <?php endif; ?>
                                 </div>
 
                                 <div class="mt-3 pt-2 border-t border-black/10 flex items-center justify-between">

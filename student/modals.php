@@ -281,3 +281,107 @@
         </form>
     </div>
 </div>
+<!-- ═══ VİDEO GÖREV MODALI: üstte izlenebilir YouTube, altta kaynak linki, "İzledim" ═══ -->
+<div id="videoTaskModal" class="fixed inset-0 z-[9999] items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 hidden">
+    <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden relative animate-fadeIn max-h-[92vh] flex flex-col">
+        <div class="bg-red-600 p-4 flex justify-between items-center text-white flex-shrink-0">
+            <h3 class="font-black text-sm tracking-wide flex items-center gap-2">🎬 Video Görevi</h3>
+            <button type="button" onclick="closeVideoTaskModal()" aria-label="Kapat" class="bg-white/20 hover:bg-white/30 rounded-full w-8 h-8 flex items-center justify-center transition">✕</button>
+        </div>
+        <div class="p-5 space-y-4 overflow-y-auto">
+            <div class="border-b border-slate-100 pb-3">
+                <p id="vtSubject" class="font-black text-[#223488] text-lg leading-tight">-</p>
+                <p id="vtTopic" class="font-medium text-slate-600 text-sm leading-tight">-</p>
+                <p id="vtResource" class="text-[11px] font-bold text-red-600 mt-1 hidden"></p>
+            </div>
+
+            <!-- YouTube gömülü oynatıcı (YouTube linkiyse) -->
+            <div id="vtEmbedWrap" class="hidden rounded-2xl overflow-hidden border border-slate-200 bg-black" style="aspect-ratio:16/9">
+                <iframe id="vtEmbed" class="w-full h-full" src="" title="Video" frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowfullscreen></iframe>
+            </div>
+
+            <!-- Görev notu -->
+            <div id="vtNote" class="hidden text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">📝 <span></span></div>
+
+            <!-- Kaynağa giden link -->
+            <a id="vtLink" href="#" target="_blank" rel="noopener"
+               class="hidden w-full flex items-center justify-center gap-2 bg-white border-2 border-slate-200 hover:border-[#223488] text-[#223488] py-3 rounded-xl font-bold text-sm transition">
+                🔗 Videoyu Kaynağında Aç
+            </a>
+            <p id="vtNoUrl" class="hidden text-center text-xs text-slate-400 font-semibold py-2">Bu kaynak için bağlantı eklenmemiş — koçuna sorabilirsin.</p>
+
+            <!-- İzledim / İzlendi -->
+            <form method="POST" id="vtForm">
+                <input type="hidden" name="update_status" value="1">
+                <input type="hidden" name="schedule_id" id="vtSchedId">
+                <input type="hidden" name="status" value="yapildi">
+                <input type="hidden" name="amount" value="1">
+                <button type="submit" id="vtWatchBtn"
+                        class="w-full bg-green-500 hover:bg-green-600 text-white py-3.5 rounded-xl font-black text-sm shadow-lg shadow-green-200 transition active:scale-[0.98]">
+                    ✅ İzledim
+                </button>
+            </form>
+            <div id="vtWatched" class="hidden w-full text-center bg-green-50 border border-green-200 text-green-700 py-3 rounded-xl font-black text-sm">
+                ✓ Bu video izlendi olarak işaretlendi
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// YouTube linkinden video ID çıkar (watch / youtu.be / embed / shorts / live)
+function _ytId(u){
+    if(!u) return null;
+    var m = String(u).match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+    return m ? m[1] : null;
+}
+function openVideoTaskModal(item){
+    var subj = item.edu_subject_name || item.custom_subject || item.subject_name || '-';
+    var top  = item.edu_topic_name  || item.custom_topic  || item.topic_name  || '-';
+    document.getElementById('vtSubject').textContent = subj;
+    document.getElementById('vtTopic').textContent = top;
+
+    var resEl = document.getElementById('vtResource');
+    if(item.resource_title){ resEl.textContent = '🎬 ' + item.resource_title; resEl.classList.remove('hidden'); }
+    else resEl.classList.add('hidden');
+
+    var noteEl = document.getElementById('vtNote');
+    if(item.task_note){ noteEl.querySelector('span').textContent = item.task_note; noteEl.classList.remove('hidden'); }
+    else noteEl.classList.add('hidden');
+
+    var url = item.resource_url || '';
+    var vid = _ytId(url);
+    var wrap = document.getElementById('vtEmbedWrap'), ifr = document.getElementById('vtEmbed');
+    var link = document.getElementById('vtLink'), noUrl = document.getElementById('vtNoUrl');
+    if(vid){
+        ifr.src = 'https://www.youtube-nocookie.com/embed/' + vid;
+        wrap.classList.remove('hidden');
+    } else { ifr.src = ''; wrap.classList.add('hidden'); }
+    if(url){ link.href = url; link.classList.remove('hidden'); noUrl.classList.add('hidden'); }
+    else { link.classList.add('hidden'); noUrl.classList.remove('hidden'); }
+
+    document.getElementById('vtSchedId').value = item.id;
+    var done = (item.status === 'yapildi');
+    document.getElementById('vtForm').classList.toggle('hidden', done);
+    document.getElementById('vtWatched').classList.toggle('hidden', !done);
+
+    var m = document.getElementById('videoTaskModal');
+    m.classList.remove('hidden'); m.classList.add('flex');
+}
+function closeVideoTaskModal(){
+    var m = document.getElementById('videoTaskModal');
+    m.classList.add('hidden'); m.classList.remove('flex');
+    document.getElementById('vtEmbed').src = ''; // videoyu durdur
+}
+document.getElementById('videoTaskModal').addEventListener('click', function(e){
+    if(e.target === this) closeVideoTaskModal();
+});
+document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+        var m = document.getElementById('videoTaskModal');
+        if(m && !m.classList.contains('hidden')) closeVideoTaskModal();
+    }
+});
+</script>
