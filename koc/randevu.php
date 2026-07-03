@@ -157,6 +157,43 @@ function has_conflict(PDO $pdo, int $teacher_id, string $date, string $new_start
     return ((int)$st->fetchColumn() > 0);
 }
 
+/* --- AJAX: CANLI ÇAKIŞMA ÖN-KONTROLÜ (modalda saat seçilirken) ---
+   JSON döner, header'dan önce çalışır ve çıkar. */
+if (($_GET['ajax'] ?? '') === 'check_conflict') {
+    header('Content-Type: application/json; charset=utf-8');
+    $c_date = (string)($_GET['date'] ?? '');
+    $c_time = normalize_time($_GET['time'] ?? '');
+    $c_dur  = (int)($_GET['duration'] ?? 0);
+    $c_excl = !empty($_GET['exclude_id']) ? (int)$_GET['exclude_id'] : null;
+    if (!$c_date || !$c_time || $c_dur < 5) { echo json_encode(['ok'=>false]); exit; }
+
+    $c_start = $c_time;
+    $c_end   = date('H:i:s', strtotime("$c_time +$c_dur minutes"));
+
+    // Çakışan randevunun kimle/ne zaman olduğunu da döndürelim
+    $whereNotCancelled = "1=1";
+    if ($APP_STATUS)       $whereNotCancelled = "(a.`$APP_STATUS` IS NULL OR a.`$APP_STATUS` != 'cancelled')";
+    elseif ($APP_ISCANCEL) $whereNotCancelled = "(a.`$APP_ISCANCEL` IS NULL OR a.`$APP_ISCANCEL` = 0)";
+    $sqlC = "SELECT u.first_name, u.last_name, a.`$APP_TIME` AS t, a.`$APP_DUR` AS d
+             FROM appointments a JOIN users u ON a.`$APP_STUDENT` = u.id
+             WHERE a.`$APP_TEACHER` = ? AND a.`$APP_DATE` = ? AND $whereNotCancelled
+               ".($c_excl ? " AND a.`$APP_ID` != ? " : "")."
+               AND (a.`$APP_TIME` < ?) AND (ADDTIME(a.`$APP_TIME`, SEC_TO_TIME(IFNULL(a.`$APP_DUR`,0)*60)) > ?)
+             LIMIT 1";
+    $pC = [$teacher_id, $c_date]; if ($c_excl) $pC[] = $c_excl; $pC[] = $c_end; $pC[] = $c_start;
+    $stC = $pdo->prepare($sqlC); $stC->execute($pC);
+    $hit = $stC->fetch(PDO::FETCH_ASSOC);
+    if ($hit) {
+        $who = trim(($hit['first_name'] ?? '').' '.($hit['last_name'] ?? ''));
+        $ht  = date('H:i', strtotime($hit['t']));
+        $he  = date('H:i', strtotime($hit['t'].' +'.((int)$hit['d']).' minutes'));
+        echo json_encode(['ok'=>true, 'conflict'=>true, 'who'=>$who, 'range'=>"$ht–$he"]);
+    } else {
+        echo json_encode(['ok'=>true, 'conflict'=>false]);
+    }
+    exit;
+}
+
 /* --- POST ACTIONS --- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $post_csrf = $_POST['csrf_token'] ?? '';
@@ -268,6 +305,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("UPDATE appointments SET `$APP_ISCANCEL`=1 WHERE `$APP_ID`=? AND `$APP_TEACHER`=?")->execute([$app_id, $teacher_id]);
             }
             $flash = ['t'=>'warning','m'=>'🚫 Randevu iptal edildi.'];
+        }
+
+        // (B2) Complete Appointment — "Tamamla" (yalnızca status kolonu varsa)
+        if (isset($_POST['complete_appointment']) && $APP_STATUS) {
+            $app_id = (int)($_POST['appointment_id'] ?? 0);
+            $pdo->prepare("UPDATE appointments SET `$APP_STATUS`='completed' WHERE `$APP_ID`=? AND `$APP_TEACHER`=? AND `$APP_STATUS`!='cancelled'")
+                ->execute([$app_id, $teacher_id]);
+            $flash = ['t'=>'success','m'=>'✅ Randevu tamamlandı olarak işaretlendi.'];
         }
 
         // (C) Add Appointment
@@ -407,6 +452,43 @@ $app_stmt = $pdo->prepare($sqlApps);
 $app_stmt->execute([$teacher_id, $week_start, $week_end]);
 $appointments = $app_stmt->fetchAll(PDO::FETCH_ASSOC);
 
+/* --- ÖDEME DURUMU HARİTASI (randevuya bağlı payments kaydı) --- */
+$pay_by_appt = [];
+$colsPay2 = getColumns($pdo, 'payments');
+if ($colsPay2 && in_array('appointment_id', $colsPay2, true) && $appointments) {
+    $ids = array_values(array_unique(array_map(fn($a)=>(int)$a['id'], $appointments)));
+    if ($ids) {
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        try {
+            $pst = $pdo->prepare("SELECT appointment_id, status, amount FROM payments WHERE teacher_id = ? AND appointment_id IN ($ph)");
+            $pst->execute(array_merge([$teacher_id], $ids));
+            foreach ($pst->fetchAll(PDO::FETCH_ASSOC) as $pr) {
+                $pay_by_appt[(int)$pr['appointment_id']] = ['status'=>(string)$pr['status'], 'amount'=>(float)$pr['amount']];
+            }
+        } catch (Throwable $e) {}
+    }
+}
+
+/* Öğrenci başına ders ücreti (ödeme talebi tutarı için) */
+$lesson_prices = [];
+try {
+    $lp = $pdo->prepare("SELECT student_id, lesson_price FROM coaching_relationships WHERE teacher_id = ?");
+    $lp->execute([$teacher_id]);
+    foreach ($lp->fetchAll(PDO::FETCH_ASSOC) as $r) $lesson_prices[(int)$r['student_id']] = (float)$r['lesson_price'];
+} catch (Throwable $e) {}
+
+/* Randevu için görüntülenecek türetilmiş durum: confirmed | live | done | cancel */
+function appt_view_status(array $app): string {
+    $s = (string)($app['status'] ?? 'active');
+    if ($s === 'cancelled') return 'cancel';
+    if ($s === 'completed') return 'done';
+    $start = strtotime($app['appointment_date'].' '.$app['appointment_time']);
+    $end   = $start + ((int)($app['duration'] ?? 0)) * 60;
+    $now   = time();
+    if ($now >= $start && $now < $end) return 'live';
+    return 'confirmed';
+}
+
 $grouped_appointments = [];
 $daily_counts_active = [];
 $daily_counts_total = [];
@@ -533,6 +615,32 @@ include $headerPath;
 .toast.info{background:var(--atla-primary-050);color:var(--atla-primary);border-color:#c7d2fe}
 /* Hafta günü hücresi yoğunluk noktası */
 .wk-day{scroll-snap-align:center}
+/* Randevu kartı + çipler (UI Kit) */
+.appt{background:#fff;border:1px solid var(--border,#e2e8f0);border-left-width:5px;border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:box-shadow .18s,transform .18s}
+.appt:hover{box-shadow:0 4px 6px -1px rgba(0,0,0,.1);transform:translateY(-1px)}
+.bar-confirmed{border-left-color:var(--atla-primary)}
+.bar-live{border-left-color:var(--success)}
+.bar-done{border-left-color:#94a3b8}
+.bar-cancel{border-left-color:var(--error)}
+.appt.is-cancel{opacity:.72}
+.chip{display:inline-flex;align-items:center;gap:.3rem;font-weight:700;font-size:.66rem;padding:.24rem .55rem;border-radius:999px;border:1px solid;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
+.chip-confirmed{background:var(--atla-primary-050);color:var(--atla-primary);border-color:#c7d2fe}
+.chip-live{background:var(--success-050);color:var(--success);border-color:#a7f3d0}
+.chip-done{background:#f1f5f9;color:#64748b;border-color:#e2e8f0}
+.chip-cancel{background:var(--error-050);color:var(--error);border-color:#fecaca}
+.chip-pay-none{background:#f1f5f9;color:#94a3b8;border-color:#e2e8f0}
+.chip-pay-wait{background:var(--warning-050);color:var(--warning);border-color:#fde68a}
+.chip-pay-paid{background:var(--success-050);color:var(--success);border-color:#a7f3d0}
+.pulse-dot{width:7px;height:7px;border-radius:999px;background:var(--success);animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(5,150,105,.5)}70%{box-shadow:0 0 0 7px rgba(5,150,105,0)}100%{box-shadow:0 0 0 0 rgba(5,150,105,0)}}
+/* Kart aksiyon butonu */
+.act{display:inline-flex;align-items:center;gap:.3rem;min-height:38px;padding:0 .8rem;border-radius:12px;font-weight:700;font-size:.72rem;background:#fff;border:1px solid #e2e8f0;color:#334155;transition:all .15s;white-space:nowrap;cursor:pointer}
+.act:hover{background:var(--surface,#f8fafc);border-color:#cbd5e1}
+.act:focus-visible{outline:3px solid var(--atla-primary-050);outline-offset:1px}
+.act-done:hover{border-color:#a7f3d0;color:var(--success)}
+.act-edit:hover{border-color:#c7d2fe;color:var(--atla-primary)}
+.act-cancel:hover{border-color:#fecaca;color:var(--error)}
+.act-pay:hover{border-color:#fde68a;color:var(--warning)}
 </style>
 
 <div id="toastWrap" aria-live="polite" aria-atomic="true"></div>
@@ -612,14 +720,17 @@ include $headerPath;
 
       <div class="space-y-6">
 
-        <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 max-h-[420px] overflow-y-auto custom-scrollbar">
-          <h3 class="font-black text-slate-800 mb-4 flex items-center justify-between">
-            <span class="flex items-center gap-2">🧩 Bekleyen Talepler</span>
-            <span class="text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-200 px-2 py-1 rounded-xl"><?php echo count($pending_requests); ?></span>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 max-h-[420px] overflow-y-auto custom-scrollbar">
+          <h3 class="font-extrabold text-slate-800 mb-4 flex items-center justify-between">
+            <span class="flex items-center gap-2">🔔 Bekleyen Talepler</span>
+            <span class="chip <?php echo count($pending_requests)>0 ? 'chip-pay-wait' : 'chip-done'; ?>"><?php echo count($pending_requests); ?></span>
           </h3>
 
           <?php if(empty($pending_requests)): ?>
-            <div class="text-xs text-slate-500 font-semibold italic">Talep yok.</div>
+            <div class="text-center py-6">
+              <div class="text-3xl mb-2 opacity-40">✅</div>
+              <p class="text-xs text-slate-500 font-semibold">Bekleyen talep yok — her şey güncel.</p>
+            </div>
           <?php else: ?>
             <div class="space-y-3">
               <?php foreach($pending_requests as $r):
@@ -657,15 +768,18 @@ include $headerPath;
           <?php endif; ?>
         </div>
 
-        <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 max-h-[420px] overflow-y-auto custom-scrollbar">
-          <h3 class="font-black text-slate-800 mb-4 flex items-center justify-between">
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 max-h-[420px] overflow-y-auto custom-scrollbar">
+          <h3 class="font-extrabold text-slate-800 mb-4 flex items-center justify-between">
             <span class="flex items-center gap-2">📊 Karne</span>
-            <span class="text-[9px] font-normal text-slate-400 bg-slate-50 px-2 py-1 rounded">Detay için tıkla</span>
+            <span class="text-[10px] font-semibold text-slate-400">Detay için tıkla →</span>
           </h3>
           <?php if (empty($student_stats)): ?>
-            <p class="text-xs text-slate-400">Veri yok.</p>
+            <div class="text-center py-6">
+              <div class="text-3xl mb-2 opacity-40">📭</div>
+              <p class="text-xs text-slate-400 font-semibold">Henüz randevu geçmişi yok.</p>
+            </div>
           <?php else: ?>
-            <div class="space-y-3">
+            <div class="space-y-2">
               <?php foreach ($student_stats as $stat):
                 $sId = (int)$stat['student_id'];
                 $name = $stat['first_name'].' '.$stat['last_name'];
@@ -673,25 +787,25 @@ include $headerPath;
                 $cancel = (int)$stat['cancelled_app'];
                 $ok = max(0,$total-$cancel);
                 $ratio = $total>0 ? (int)round(($ok/$total)*100) : 0;
+                $ringCol = $ratio>=80 ? 'var(--success)' : ($ratio>=50 ? 'var(--atla-accent)' : 'var(--error)');
+                $badge = $ratio>=80 ? '⭐' : ($ratio>=50 ? '🎯' : '');
+                $circ = 2*M_PI*18; $off = $circ*(1-$ratio/100);
               ?>
-              <div onclick="openHistoryModal(<?php echo $sId; ?>,'<?php echo h($name); ?>')"
-                   class="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-indigo-50 hover:border-indigo-100 transition cursor-pointer group">
-                <div class="flex items-center justify-between gap-3">
-                  <div class="flex items-center gap-3 min-w-0">
-                    <div class="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-xs font-black text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition">
-                      <?php echo h(mb_substr($stat['first_name'],0,1,'UTF-8')); ?>
-                    </div>
-                    <div class="min-w-0">
-                      <p class="text-sm font-black text-slate-800 truncate group-hover:text-indigo-800"><?php echo h($name); ?></p>
-                      <p class="text-[10px] text-slate-500 font-bold"><?php echo $ok; ?> tamam • <?php echo $cancel; ?> iptal</p>
-                    </div>
-                  </div>
-                  <span class="text-[10px] font-black <?php echo $ratio>=70?'text-green-600':'text-amber-600'; ?> bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-sm">%<?php echo $ratio; ?></span>
+              <button type="button" onclick="openHistoryModal(<?php echo $sId; ?>,'<?php echo h($name); ?>')"
+                   class="w-full text-left flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition">
+                <div class="relative shrink-0" style="width:46px;height:46px">
+                  <svg width="46" height="46" viewBox="0 0 46 46">
+                    <circle cx="23" cy="23" r="18" fill="none" stroke="#e2e8f0" stroke-width="4"/>
+                    <circle cx="23" cy="23" r="18" fill="none" stroke="<?php echo $ringCol; ?>" stroke-width="4" stroke-linecap="round"
+                      stroke-dasharray="<?php echo $circ; ?>" stroke-dashoffset="<?php echo $off; ?>" transform="rotate(-90 23 23)"/>
+                  </svg>
+                  <span class="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-slate-700">%<?php echo $ratio; ?></span>
                 </div>
-                <div class="mt-3 h-2 bg-white rounded-full border border-slate-200 overflow-hidden">
-                  <div class="h-full <?php echo $ratio>=70?'bg-green-500':'bg-amber-500'; ?>" style="width:<?php echo $ratio; ?>%"></div>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-bold text-slate-800 truncate flex items-center gap-1"><?php echo h($name); ?> <span><?php echo $badge; ?></span></p>
+                  <p class="text-[11px] text-slate-500 font-semibold"><?php echo $ok; ?> tamam · <?php echo $cancel; ?> iptal</p>
                 </div>
-              </div>
+              </button>
               <?php endforeach; ?>
             </div>
           <?php endif; ?>
@@ -699,137 +813,107 @@ include $headerPath;
       </div>
 
       <div class="lg:col-span-2 space-y-4">
-        <?php foreach($week_days as $dt):
+        <?php
+          // Durum -> etiket + çip sınıfı + zaman-kutusu tema eşlemesi
+          $statusMeta = [
+            'confirmed' => ['t'=>'Onaylı',      'chip'=>'chip-confirmed', 'bar'=>'bar-confirmed', 'timeBg'=>'var(--atla-primary-050)','timeFg'=>'var(--atla-primary)'],
+            'live'      => ['t'=>'Devam',       'chip'=>'chip-live',      'bar'=>'bar-live',      'timeBg'=>'var(--success-050)',     'timeFg'=>'var(--success)'],
+            'done'      => ['t'=>'Tamamlandı',  'chip'=>'chip-done',      'bar'=>'bar-done',      'timeBg'=>'#f1f5f9',                'timeFg'=>'#64748b'],
+            'cancel'    => ['t'=>'İptal',       'chip'=>'chip-cancel',    'bar'=>'bar-cancel',    'timeBg'=>'#f1f5f9',                'timeFg'=>'#94a3b8'],
+          ];
+        foreach($week_days as $dt):
           $curr_date = $dt->format('Y-m-d');
           $day_appointments = $grouped_appointments[$curr_date] ?? [];
           $activeCount = $daily_counts_active[$curr_date] ?? 0;
           $totalCount  = $daily_counts_total[$curr_date] ?? 0;
+          $is_today_card = ($curr_date === date('Y-m-d'));
         ?>
-        <div id="day-<?php echo h($curr_date); ?>" class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-          <div class="bg-slate-200 px-6 py-4 border-b border-slate-300 flex justify-between items-center">
+        <div id="day-<?php echo h($curr_date); ?>" class="bg-white rounded-2xl shadow-sm border <?php echo $is_today_card?'border-[color:var(--atla-primary)]':'border-slate-200'; ?> overflow-hidden">
+          <div class="px-4 md:px-5 py-3 border-b border-slate-100 flex justify-between items-center" style="background:<?php echo $is_today_card?'var(--atla-primary-050)':'#fff'; ?>">
             <div class="flex items-center gap-3">
-              <span class="text-indigo-700 bg-white w-9 h-9 flex items-center justify-center rounded-2xl shadow-sm text-sm border border-indigo-100 font-black"><?php echo h($dt->format('d')); ?></span>
+              <span class="w-9 h-9 flex items-center justify-center rounded-xl text-sm font-extrabold" style="background:<?php echo $is_today_card?'var(--atla-primary)':'#f1f5f9'; ?>;color:<?php echo $is_today_card?'#fff':'#334155'; ?>"><?php echo h($dt->format('d')); ?></span>
               <div>
-                <h3 class="font-black text-slate-900 text-sm">
+                <h3 class="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                   <?php echo h($gunlerTR[$dt->format('l')]); ?>
-                  <span class="text-slate-700 font-bold text-xs ml-1"><?php echo h(date('d.m.Y', strtotime($curr_date))); ?></span>
+                  <?php if($is_today_card): ?><span class="chip chip-confirmed">Bugün</span><?php endif; ?>
                 </h3>
-                <p class="text-[10px] text-slate-700 font-bold"><?php echo (int)$activeCount; ?> aktif • <?php echo (int)$totalCount; ?> toplam</p>
+                <p class="text-[11px] text-slate-500 font-semibold"><?php echo (int)$activeCount; ?> aktif · <?php echo (int)$totalCount; ?> toplam</p>
               </div>
             </div>
-            <button onclick="openAddModal('<?php echo h($curr_date); ?>')" class="bg-white border border-slate-300 hover:border-indigo-200 hover:bg-indigo-50 text-indigo-700 px-3 py-2 rounded-2xl font-black text-xs transition shadow-sm">➕ Ekle</button>
+            <button onclick="openAddModal('<?php echo h($curr_date); ?>')" class="act act-edit" aria-label="<?php echo h($curr_date); ?> gününe randevu ekle">＋ Ekle</button>
           </div>
 
-          <div class="divide-y divide-slate-200 bg-slate-100/30">
+          <div class="p-3 md:p-4 space-y-3 bg-slate-50/40">
             <?php if (empty($day_appointments)): ?>
-              <div class="p-10 text-center text-slate-500 text-sm font-semibold italic opacity-80">Boş</div>
+              <button type="button" onclick="openAddModal('<?php echo h($curr_date); ?>')"
+                class="w-full py-5 rounded-xl border-2 border-dashed border-slate-200 text-sm font-bold text-slate-400 hover:border-[color:var(--atla-primary)] hover:text-[color:var(--atla-primary)] transition">
+                Bu gün boş — ＋ randevu eklemek için tıklayın
+              </button>
             <?php else: ?>
               <?php
-                // --- LOOP START ---
-                // We define ALL variables here to avoid scope issues inside HTML
-                $themes = [
-                  ['row'=>'bg-indigo-100',  'border'=>'border-indigo-200',  'bar'=>'border-indigo-500',  'time'=>'bg-indigo-200 text-indigo-900 border-indigo-300',   'hover'=>'hover:bg-indigo-200/80'],
-                  ['row'=>'bg-emerald-100', 'border'=>'border-emerald-200', 'bar'=>'border-emerald-500', 'time'=>'bg-emerald-200 text-emerald-900 border-emerald-300','hover'=>'hover:bg-emerald-200/80'],
-                  ['row'=>'bg-amber-100',   'border'=>'border-amber-200',   'bar'=>'border-amber-500',   'time'=>'bg-amber-200 text-amber-900 border-amber-300',     'hover'=>'hover:bg-amber-200/80'],
-                  ['row'=>'bg-sky-100',     'border'=>'border-sky-200',     'bar'=>'border-sky-500',     'time'=>'bg-sky-200 text-sky-900 border-sky-300',            'hover'=>'hover:bg-sky-200/80'],
-                  ['row'=>'bg-fuchsia-100', 'border'=>'border-fuchsia-200', 'bar'=>'border-fuchsia-500', 'time'=>'bg-fuchsia-200 text-fuchsia-900 border-fuchsia-300','hover'=>'hover:bg-fuchsia-200/80'],
-                  ['row'=>'bg-rose-100',    'border'=>'border-rose-200',    'bar'=>'border-rose-500',    'time'=>'bg-rose-200 text-rose-900 border-rose-300',         'hover'=>'hover:bg-rose-200/80'],
-                ];
-                
                 foreach($day_appointments as $app):
-                  // 1. Prepare Logic Variables
-                  $status = (string)($app['status'] ?? 'active');
-                  $is_cancelled = ($status === 'cancelled');
+                  $vs         = appt_view_status($app);
+                  $meta       = $statusMeta[$vs];
+                  $is_cancelled = ($vs === 'cancel');
+                  $is_done      = ($vs === 'done');
                   $studentName = trim(($app['first_name'] ?? '').' '.($app['last_name'] ?? ''));
-                  $appId = (int)$app['id'];
-                  $duration = (int)($app['duration'] ?? 0);
-                  $timeStr = date('H:i', strtotime($app['appointment_time']));
-                  $privateNote = $app['private_note'] ?? '';
-
-                  // 2. Prepare Style Variables
-                  if ($is_cancelled) {
-                    $rowClass  = "bg-slate-100 border border-slate-200 border-l-8 border-l-slate-300";
-                    $timeClass = "bg-slate-200 text-slate-700 border-slate-300";
-                    $hoverClass = "hover:bg-slate-200/60";
-                    $badgeClass = "bg-red-50 text-red-700 border-red-200";
-                    $badgeText  = "İPTAL";
-                  } else {
-                    $sid = (int)($app['student_id'] ?? 0);
-                    $ix  = $sid % count($themes);
-                    $t   = $themes[$ix];
-                    $rowClass   = $t['row']." border ".$t['border']." border-l-8 ".$t['bar'];
-                    $timeClass  = $t['time'];
-                    $hoverClass = $t['hover'];
-                    $badgeClass = "bg-green-50 text-green-700 border-green-200";
-                    $badgeText  = "AKTİF";
-                  }
-
-                  // 3. Prepare Safe JSON for JS
-                  $appJson = htmlspecialchars(json_encode($app, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
-                  
-                  // 4. Construct Final CSS String for the container
-                  $finalContainerClass = "p-5 transition " . $rowClass . " " . $hoverClass;
+                  $appId      = (int)$app['id'];
+                  $duration   = (int)($app['duration'] ?? 0);
+                  $timeStr    = date('H:i', strtotime($app['appointment_time']));
+                  $privateNote= $app['private_note'] ?? '';
+                  $pay        = $pay_by_appt[$appId] ?? null;
+                  $appJson    = htmlspecialchars(json_encode($app, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
               ?>
+                <div class="appt <?php echo $meta['bar']; ?> <?php echo $is_cancelled?'is-cancel':''; ?> p-3 md:p-4">
+                  <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
 
-                <div class="<?php echo $finalContainerClass; ?>">
-                  <div class="flex flex-col md:flex-row gap-4 md:items-center">
-
-                    <div class="w-full md:w-28">
-                      <div class="<?php echo $timeClass; ?> border rounded-2xl py-3 px-3 shadow-sm flex items-center justify-between md:flex-col md:items-center md:gap-1">
-                        <span class="text-lg font-black"><?php echo $timeStr; ?></span>
-                        <span class="text-[10px] font-black opacity-80"><?php echo $duration; ?> dk</span>
-                      </div>
+                    <!-- Zaman kutusu -->
+                    <div class="shrink-0 text-center px-3 py-2 rounded-xl w-full sm:w-20 flex sm:flex-col items-center justify-between sm:justify-center" style="background:<?php echo $meta['timeBg']; ?>">
+                      <span class="text-lg font-extrabold <?php echo $is_cancelled?'line-through':''; ?>" style="color:<?php echo $meta['timeFg']; ?>"><?php echo $timeStr; ?></span>
+                      <span class="text-[10px] font-bold text-slate-400"><?php echo $duration; ?> dk</span>
                     </div>
 
+                    <!-- Bilgi -->
                     <div class="flex-1 min-w-0">
-                      <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                        <div class="min-w-0">
-                          <div class="flex items-center gap-2 min-w-0">
-                            <div class="text-base font-black text-slate-900 truncate">
-                              <?php echo h($studentName); ?>
-                            </div>
-                            <span class="text-[10px] font-black px-2 py-1 rounded-xl border whitespace-nowrap <?php echo $badgeClass; ?>">
-                              <?php echo $badgeText; ?>
-                            </span>
-                          </div>
-                        </div>
-
-                        <div class="w-full md:w-auto flex md:justify-end justify-start gap-2 flex-wrap items-center">
-                          <button type="button"
-                            class="text-xs font-black text-indigo-700 hover:text-indigo-900 bg-white border border-slate-200 hover:border-indigo-200 px-4 py-2 rounded-2xl transition shadow-sm whitespace-nowrap"
-                            data-msg-open="<?php echo $appId; ?>">
-                            💬 Mesajlar
-                          </button>
-
-                          <?php if(!$is_cancelled): ?>
-                            <button type="button" onclick='openEditModal(<?php echo $appJson; ?>)'
-                              class="text-xs font-black text-blue-700 hover:text-blue-900 bg-white border border-slate-200 hover:border-blue-200 px-4 py-2 rounded-2xl transition shadow-sm whitespace-nowrap">
-                              ✏️ Düzenle
-                            </button>
-
-                            <form method="POST" onsubmit="return confirm('İptal etmek istediğinize emin misiniz?');" class="inline">
-                              <input type="hidden" name="csrf_token" value="<?php echo h($csrf); ?>">
-                              <input type="hidden" name="cancel_appointment" value="1">
-                              <input type="hidden" name="appointment_id" value="<?php echo $appId; ?>">
-                              <button type="submit"
-                                class="text-xs font-black text-red-600 hover:text-red-800 bg-white border border-slate-200 hover:border-red-200 px-4 py-2 rounded-2xl transition shadow-sm whitespace-nowrap">
-                                🚫 İptal
-                              </button>
-                            </form>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-extrabold text-slate-900 truncate <?php echo $is_cancelled?'line-through text-slate-400':''; ?>"><?php echo h($studentName); ?></span>
+                        <span class="chip <?php echo $meta['chip']; ?>"><?php if($vs==='live'): ?><span class="pulse-dot"></span><?php endif; ?><?php echo h($meta['t']); ?></span>
+                        <?php if($pay): ?>
+                          <?php if(($pay['status'] ?? '')==='odendi'): ?>
+                            <span class="chip chip-pay-paid">✅ Ödendi</span>
+                          <?php else: ?>
+                            <span class="chip chip-pay-wait">💳 Ödeme bekliyor</span>
                           <?php endif; ?>
-                        </div>
+                        <?php endif; ?>
                       </div>
-
                       <?php if($privateNote): ?>
-                        <div class="mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-3 text-amber-900">
-                          <p class="text-[11px] font-black text-amber-700 uppercase tracking-wider mb-1">📝 Not</p>
-                          <div class="text-sm font-semibold break-words"><?php echo h($privateNote); ?></div>
-                        </div>
+                        <p class="text-xs text-slate-500 font-medium mt-1 truncate">📝 <?php echo h($privateNote); ?></p>
+                      <?php endif; ?>
+                    </div>
+
+                    <!-- Aksiyonlar -->
+                    <div class="flex gap-2 flex-wrap sm:justify-end shrink-0">
+                      <button type="button" class="act" data-msg-open="<?php echo $appId; ?>">💬 Mesaj</button>
+                      <?php if(!$is_cancelled && !$is_done): ?>
+                        <?php if($APP_STATUS): ?>
+                        <form method="POST" class="inline">
+                          <input type="hidden" name="csrf_token" value="<?php echo h($csrf); ?>">
+                          <input type="hidden" name="complete_appointment" value="1">
+                          <input type="hidden" name="appointment_id" value="<?php echo $appId; ?>">
+                          <button type="submit" class="act act-done">✓ Tamamla</button>
+                        </form>
+                        <?php endif; ?>
+                        <button type="button" onclick='openEditModal(<?php echo $appJson; ?>)' class="act act-edit">✏️ Düzenle</button>
+                        <form method="POST" onsubmit="return confirm('Bu randevuyu iptal etmek istediğinize emin misiniz?');" class="inline">
+                          <input type="hidden" name="csrf_token" value="<?php echo h($csrf); ?>">
+                          <input type="hidden" name="cancel_appointment" value="1">
+                          <input type="hidden" name="appointment_id" value="<?php echo $appId; ?>">
+                          <button type="submit" class="act act-cancel">🚫 İptal</button>
+                        </form>
                       <?php endif; ?>
                     </div>
                   </div>
                 </div>
-
               <?php endforeach; ?>
             <?php endif; ?>
           </div>
@@ -861,17 +945,17 @@ include $headerPath;
 </div>
 
 <div id="addModal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
-  <div class="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden relative">
-    <div class="bg-slate-900 p-5 flex justify-between items-center text-white">
-      <h3 class="font-black text-lg">📅 Yeni Randevu</h3>
-      <button type="button" onclick="closeModal('addModal')" class="bg-white/20 hover:bg-white/30 rounded-full p-2 transition">✕</button>
+  <div class="bg-white rounded-[1.5rem] w-full max-w-lg shadow-2xl overflow-hidden relative">
+    <div class="p-5 flex justify-between items-center text-white" style="background:var(--atla-primary)">
+      <h3 class="font-extrabold text-lg">📅 Yeni Randevu</h3>
+      <button type="button" onclick="closeModal('addModal')" aria-label="Kapat" class="bg-white/20 hover:bg-white/30 rounded-full w-9 h-9 flex items-center justify-center transition">✕</button>
     </div>
-    <form method="POST" class="p-6 space-y-4">
+    <form method="POST" id="addForm" class="p-6 space-y-4">
       <input type="hidden" name="csrf_token" value="<?php echo h($csrf); ?>">
       <input type="hidden" name="add_appointment" value="1">
       <div>
-        <label class="block text-xs font-black text-slate-500 uppercase mb-1">Öğrenci</label>
-        <select name="student_id" required class="w-full border border-slate-200 rounded-2xl p-3 text-sm font-semibold outline-none focus:border-indigo-500 bg-white">
+        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Öğrenci</label>
+        <select name="student_id" id="add_student" required class="w-full border border-slate-200 rounded-xl p-3 text-sm font-semibold outline-none focus:border-[color:var(--atla-primary)] bg-white">
           <?php foreach($my_students as $s): ?>
             <option value="<?php echo (int)$s['id']; ?>"><?php echo h($s['first_name'].' '.$s['last_name']); ?></option>
           <?php endforeach; ?>
@@ -879,29 +963,33 @@ include $headerPath;
       </div>
       <div class="grid grid-cols-3 gap-3">
         <div class="col-span-1">
-          <label class="block text-xs font-black text-slate-500 uppercase mb-1">Tarih</label>
-          <input id="add_date" type="date" name="date" required value="<?php echo h(date('Y-m-d')); ?>" class="w-full border border-slate-200 rounded-2xl p-3 text-sm font-semibold">
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Tarih</label>
+          <input id="add_date" type="date" name="date" required value="<?php echo h(date('Y-m-d')); ?>" class="w-full border border-slate-200 rounded-xl p-3 text-sm font-semibold outline-none focus:border-[color:var(--atla-primary)]">
         </div>
         <div class="col-span-1">
-          <label class="block text-xs font-black text-slate-500 uppercase mb-1">Saat</label>
-          <input type="time" name="time" required class="w-full border border-slate-200 rounded-2xl p-3 text-sm font-semibold">
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Saat</label>
+          <input id="add_time" type="time" name="time" required class="w-full border border-slate-200 rounded-xl p-3 text-sm font-semibold outline-none focus:border-[color:var(--atla-primary)]">
         </div>
         <div class="col-span-1">
-          <label class="block text-xs font-black text-slate-500 uppercase mb-1">Süre (dk)</label>
-          <input type="number" name="duration" value="30" min="15" step="5" required class="w-full border border-slate-200 rounded-2xl p-3 text-sm font-semibold bg-slate-50">
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Süre (dk)</label>
+          <input id="add_duration" type="number" name="duration" value="30" min="15" step="5" required class="w-full border border-slate-200 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:border-[color:var(--atla-primary)]">
         </div>
       </div>
+
+      <!-- Canlı çakışma / müsaitlik geri bildirimi -->
+      <div id="add_conflict" class="hidden rounded-xl p-3 text-xs font-semibold" role="status" aria-live="polite"></div>
+
       <div>
-        <label class="block text-xs font-black text-slate-500 uppercase mb-1">Not</label>
-        <input type="text" name="private_note" placeholder="Örn: Konu tekrarı..." class="w-full border border-amber-200 rounded-2xl p-3 text-sm text-amber-700 bg-amber-50">
+        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Not</label>
+        <input type="text" name="private_note" placeholder="Örn: Konu tekrarı..." class="w-full border border-amber-200 rounded-xl p-3 text-sm text-amber-700 bg-amber-50 outline-none">
       </div>
-      <div class="flex items-center gap-3 bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
-        <input type="checkbox" name="is_recurring" id="is_recurring" class="w-5 h-5 text-indigo-600 rounded border-slate-300">
-        <label for="is_recurring" class="text-sm font-black text-indigo-900 cursor-pointer">Her Hafta Tekrarla (4 Hafta)</label>
-      </div>
-      <div class="pt-2 flex gap-3">
-        <button type="button" onclick="closeModal('addModal')" class="flex-1 bg-slate-100 text-slate-600 py-3 rounded-2xl font-black text-sm">Vazgeç</button>
-        <button type="submit" class="flex-1 bg-indigo-600 text-white py-3 rounded-2xl font-black text-sm shadow-lg">Oluştur</button>
+      <label class="flex items-center gap-3 bg-[color:var(--atla-primary-050)] p-3.5 rounded-xl border border-indigo-100 cursor-pointer">
+        <input type="checkbox" name="is_recurring" id="is_recurring" class="w-5 h-5 rounded border-slate-300" style="accent-color:var(--atla-primary)">
+        <span class="text-sm font-bold" style="color:var(--atla-primary)">Her Hafta Tekrarla (4 Hafta)</span>
+      </label>
+      <div class="pt-1 flex gap-3">
+        <button type="button" onclick="closeModal('addModal')" class="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm hover:bg-slate-200 transition">Vazgeç</button>
+        <button type="submit" id="add_submit" class="flex-1 text-white py-3 rounded-xl font-bold text-sm shadow-lg transition" style="background:var(--atla-primary)" onmouseover="this.style.background='var(--atla-primary-600)'" onmouseout="this.style.background='var(--atla-primary)'">Oluştur</button>
       </div>
     </form>
   </div>
@@ -909,9 +997,9 @@ include $headerPath;
 
 <div id="editModal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
   <div class="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden relative">
-    <div class="bg-slate-900 p-5 flex justify-between items-center text-white">
-      <h3 class="font-black text-lg">✏️ Randevu Düzenle</h3>
-      <button type="button" onclick="closeModal('editModal')" class="bg-white/20 hover:bg-white/30 rounded-full p-2 transition">✕</button>
+    <div class="p-5 flex justify-between items-center text-white" style="background:var(--atla-primary)">
+      <h3 class="font-extrabold text-lg">✏️ Randevu Düzenle</h3>
+      <button type="button" onclick="closeModal('editModal')" aria-label="Kapat" class="bg-white/20 hover:bg-white/30 rounded-full w-9 h-9 flex items-center justify-center transition">✕</button>
     </div>
     <form method="POST" class="p-6 space-y-4">
       <input type="hidden" name="csrf_token" value="<?php echo h($csrf); ?>">
@@ -945,7 +1033,7 @@ include $headerPath;
       </div>
       <div class="pt-2 flex gap-3">
         <button type="button" onclick="closeModal('editModal')" class="flex-1 bg-slate-100 text-slate-600 py-3 rounded-2xl font-black text-sm">Vazgeç</button>
-        <button type="submit" class="flex-1 bg-blue-600 text-white py-3 rounded-2xl font-black text-sm shadow-lg">Güncelle</button>
+        <button type="submit" class="flex-1 text-white py-3 rounded-xl font-bold text-sm shadow-lg transition" style="background:var(--atla-primary)" onmouseover="this.style.background='var(--atla-primary-600)'" onmouseout="this.style.background='var(--atla-primary)'">Güncelle</button>
       </div>
     </form>
   </div>
@@ -964,7 +1052,7 @@ include $headerPath;
     <div class="p-5 border-t border-slate-200 bg-white">
       <div class="flex gap-2">
         <textarea id="msgText" rows="2" class="flex-1 rounded-2xl border border-slate-200 p-3 text-sm font-semibold outline-none focus:border-indigo-500" placeholder="Mesaj yaz..."></textarea>
-        <button type="button" onclick="sendMsg()" class="px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black">Gönder</button>
+        <button type="button" onclick="sendMsg()" class="px-5 rounded-xl text-white font-bold transition" style="background:var(--atla-primary)" onmouseover="this.style.background='var(--atla-primary-600)'" onmouseout="this.style.background='var(--atla-primary)'">Gönder</button>
       </div>
     </div>
   </div>
@@ -1030,8 +1118,42 @@ function showModal(id){
 function openAddModal(dateStr){
   const dateInput = document.getElementById('add_date');
   if(dateStr && dateInput) dateInput.value = dateStr;
+  const cb = document.getElementById('add_conflict');
+  if(cb){ cb.classList.add('hidden'); cb.textContent=''; }
   showModal('addModal');
+  checkAddConflict();
 }
+
+/* Canlı çakışma / müsaitlik ön-kontrolü (add modal) */
+let _conflictTimer = null;
+function checkAddConflict(){
+  const d = document.getElementById('add_date')?.value;
+  const t = document.getElementById('add_time')?.value;
+  const dur = document.getElementById('add_duration')?.value;
+  const box = document.getElementById('add_conflict');
+  if(!box) return;
+  if(!d || !t || !dur){ box.classList.add('hidden'); return; }
+  clearTimeout(_conflictTimer);
+  _conflictTimer = setTimeout(async ()=>{
+    try {
+      const url = `?ajax=check_conflict&date=${encodeURIComponent(d)}&time=${encodeURIComponent(t)}&duration=${encodeURIComponent(dur)}`;
+      const res = await fetch(url, {credentials:'same-origin'});
+      const js = await res.json();
+      if(!js.ok){ box.classList.add('hidden'); return; }
+      box.classList.remove('hidden');
+      if(js.conflict){
+        box.style.background='var(--warning-050)'; box.style.color='var(--warning)'; box.style.border='1px solid #fde68a';
+        box.innerHTML = `⚠️ Bu saatte <b>${(js.who||'bir öğrenci')}</b> ile randevunuz var (${js.range||''}). Yine de kaydedebilirsiniz.`;
+      } else {
+        box.style.background='var(--success-050)'; box.style.color='var(--success)'; box.style.border='1px solid #a7f3d0';
+        box.innerHTML = '✓ Bu saat müsait.';
+      }
+    } catch(e){ box.classList.add('hidden'); }
+  }, 300);
+}
+['add_date','add_time','add_duration'].forEach(id=>{
+  document.addEventListener('input', e=>{ if(e.target && e.target.id===id) checkAddConflict(); });
+});
 
 function openEditModal(data){
   document.getElementById('edit_id').value = data.id;
@@ -1075,6 +1197,17 @@ window.addEventListener('click', function(e){
   if(e.target && e.target.id === 'addModal') closeModal('addModal');
   if(e.target && e.target.id === 'editModal') closeModal('editModal');
   if(e.target && e.target.id === 'historyModal') closeModal('historyModal');
+});
+
+/* Erişilebilirlik: Escape ile açık modalı kapat */
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Escape') return;
+  ['addModal','editModal','historyModal'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el && !el.classList.contains('hidden')) closeModal(id);
+  });
+  const m = document.getElementById('msgModal');
+  if(m && !m.classList.contains('hidden')) closeMsgModal();
 });
 
 const MSG_API = "/appointment_messages_api.php";
@@ -1146,9 +1279,10 @@ async function openMsg(appId){
     } else {
       document.getElementById('msgBody').innerHTML = msgs.map(m=>{
         const mine = (m.sender_role === MY_ROLE);
-        const box = mine ? 'bg-indigo-600 text-white ml-auto' : 'bg-white border border-slate-200 text-slate-800';
+        const box = mine ? 'text-white ml-auto' : 'bg-white border border-slate-200 text-slate-800';
+        const boxStyle = mine ? 'style="background:var(--atla-primary)"' : '';
         const who = mine ? 'Siz' : (m.sender_role === 'teacher' ? 'Öğretmen' : (m.sender_role === 'parent' ? 'Veli' : 'Öğrenci'));
-        return `<div class="max-w-[85%] rounded-2xl p-3 ${box}"><div class="text-[10px] font-black opacity-80 mb-1">${who} • ${esc(m.created_at)}</div><div class="text-sm font-semibold break-words">${esc(m.message)}</div></div>`;
+        return `<div class="max-w-[85%] rounded-2xl p-3 ${box}" ${boxStyle}><div class="text-[10px] font-black opacity-80 mb-1">${who} • ${esc(m.created_at)}</div><div class="text-sm font-semibold break-words">${esc(m.message)}</div></div>`;
       }).join('');
       const body = document.getElementById('msgBody');
       body.scrollTop = body.scrollHeight;
