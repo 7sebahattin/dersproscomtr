@@ -136,11 +136,31 @@ $students = $pdo->prepare("SELECT u.id, u.first_name, u.last_name, cr.lesson_pri
 $students->execute([$teacher_id]);
 $student_list = $students->fetchAll(PDO::FETCH_ASSOC);
 
-$data = ['student_name' => '', 'lesson_price' => 0, 'stats' => ['paid'=>0,'unpaid'=>0,'overdue'=>0,'total'=>0], 'payments' => [], 'future_sessions' => []];
+$data = ['student_name' => '', 'lesson_price' => 0, 'parent_phone' => '', 'student_phone' => '', 'stats' => ['paid'=>0,'unpaid'=>0,'overdue'=>0,'total'=>0], 'payments' => [], 'future_sessions' => []];
+
+// ?msg= parametresini toast'a çevir (PRG geri bildirimi)
+$msgMap = [
+    'price_updated'=>['success','Seans ücreti güncellendi.'], 'added'=>['success','Ödeme kaydı eklendi.'],
+    'updated'=>['info','Kayıt güncellendi.'], 'deleted'=>['warning','Kayıt silindi.'],
+    'note_saved'=>['success','Not kaydedildi.'], 'paid'=>['success','Ödeme "ödendi" olarak işaretlendi.'],
+    'unpaid'=>['warning','Ödeme geri alındı.'], 'receipt_added'=>['success','Dekont eklendi.'],
+    'bulk_paid'=>['success','Seçili kayıtlar ödendi işaretlendi.'], 'bulk_deleted'=>['warning','Seçili kayıtlar silindi.'],
+];
+$flash = isset($_GET['msg']) && isset($msgMap[$_GET['msg']]) ? $msgMap[$_GET['msg']] : null;
 
 if ($selected_student) {
     foreach($student_list as $s) { if($s['id'] == $selected_student) { $data['student_name'] = $s['first_name'].' '.$s['last_name']; $data['lesson_price'] = $s['lesson_price']; break; } }
-    
+
+    // Veli / öğrenci telefonu (WhatsApp için)
+    try {
+        $ph = $pdo->prepare("SELECT phone, parent_phone FROM users WHERE id = ?");
+        $ph->execute([$selected_student]);
+        if ($prow = $ph->fetch(PDO::FETCH_ASSOC)) {
+            $data['student_phone'] = preg_replace('/\D+/', '', (string)($prow['phone'] ?? ''));
+            $data['parent_phone']  = preg_replace('/\D+/', '', (string)($prow['parent_phone'] ?? ''));
+        }
+    } catch (Throwable $e) {}
+
     // İstatistikler
     $stats = $pdo->prepare("SELECT SUM(CASE WHEN status='odendi' THEN amount ELSE 0 END) as paid, SUM(CASE WHEN status='odenmedi' AND due_date >= CURDATE() THEN amount ELSE 0 END) as unpaid, SUM(CASE WHEN status='odenmedi' AND due_date < CURDATE() THEN amount ELSE 0 END) as overdue, COUNT(*) as total FROM payments WHERE student_id=? AND teacher_id=?");
     $stats->execute([$selected_student, $teacher_id]);
@@ -168,586 +188,428 @@ if ($selected_student) {
 }
 ?>
 
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ödeme Yönetimi</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        /* --- GENEL STİLLER --- */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: #f5f7fa; color: #1e293b; line-height: 1.5; font-size: 14px; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        
-        .header { background: white; padding: 16px 24px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-        
-        .alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; font-weight: 500; }
-        .alert.success { background: #d1fae5; color: #065f46; border: 1px solid #86efac; }
-        
-        /* Layout Grid */
-        .layout { display: grid; grid-template-columns: 250px 1fr; gap: 20px; }
-        @media (max-width: 1024px) { .layout { grid-template-columns: 1fr; } }
-        
-        .sidebar { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); height: fit-content; position: sticky; top: 20px; }
-        .student-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 6px; text-decoration: none; color: #475569; font-weight: 500; margin-bottom: 4px; transition: all 0.15s; }
-        .student-item:hover { background: #f1f5f9; color: #0f172a; }
-        .student-item.active { background: #3b82f6; color: white; }
-        .student-avatar { width: 32px; height: 32px; border-radius: 50%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0; }
-        .student-item.active .student-avatar { background: rgba(255,255,255,0.2); color: white; }
+<?php $oh = fn($s)=>htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); $B = defined('BASE_URL')?BASE_URL:''; ?>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+:root{
+  --atla-primary:#223488; --atla-primary-600:#314595; --atla-primary-050:#eef1fb;
+  --atla-accent:#ec9731; --atla-accent-600:#d68625;
+  --success:#059669; --success-050:#ecfdf5; --warning:#d97706; --warning-050:#fffbeb;
+  --error:#dc2626; --error-050:#fef2f2; --border:#e2e8f0;
+}
+.odm-wrap{max-width:1200px;margin:0 auto;padding:16px}
+.odm-card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.odm-btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;min-height:44px;padding:0 1rem;border-radius:12px;font-weight:700;font-size:.82rem;border:1px solid transparent;cursor:pointer;transition:all .15s;white-space:nowrap}
+.odm-btn:active{transform:scale(.97)}
+.b-primary{background:var(--atla-primary);color:#fff}.b-primary:hover{background:var(--atla-primary-600)}
+.b-accent{background:var(--atla-accent);color:#fff}.b-accent:hover{background:var(--atla-accent-600)}
+.b-wa{background:#25D366;color:#fff}.b-wa:hover{background:#1ebe5b}
+.b-soft{background:#fff;color:#334155;border-color:var(--border)}.b-soft:hover{background:#f8fafc}
+.b-danger{background:var(--error-050);color:var(--error);border-color:#fecaca}.b-danger:hover{background:var(--error);color:#fff}
+.b-sm{min-height:36px;padding:0 .7rem;font-size:.72rem;border-radius:10px}
+.odm-badge{display:inline-flex;align-items:center;gap:.3rem;font-weight:700;font-size:.68rem;padding:.24rem .6rem;border-radius:999px;border:1px solid}
+.bg-paid{background:var(--success-050);color:var(--success);border-color:#a7f3d0}
+.bg-unpaid{background:var(--warning-050);color:var(--warning);border-color:#fde68a}
+.bg-over{background:var(--error-050);color:var(--error);border-color:#fecaca}
+.odm-input{width:100%;padding:.6rem .7rem;border:1px solid var(--border);border-radius:10px;font-size:.85rem;outline:none;font-family:inherit}
+.odm-input:focus{border-color:var(--atla-primary)}
+.stu-item{display:flex;align-items:center;gap:.6rem;padding:.55rem .6rem;border-radius:10px;text-decoration:none;color:#475569;font-weight:600;font-size:.85rem;transition:all .12s}
+.stu-item:hover{background:#f1f5f9}
+.stu-item.active{background:var(--atla-primary);color:#fff}
+.stu-av{width:32px;height:32px;border-radius:999px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.75rem;flex-shrink:0}
+.stu-item.active .stu-av{background:rgba(255,255,255,.2);color:#fff}
+.odm-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.odm-table th{background:#f8fafc;padding:.6rem .7rem;text-align:left;font-weight:700;color:#64748b;font-size:.68rem;text-transform:uppercase;border-bottom:2px solid var(--border);white-space:nowrap}
+.odm-table td{padding:.6rem .7rem;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.note-input{border:1px dashed transparent;background:transparent;border-radius:8px;padding:.3rem .4rem;font-size:.78rem;width:100%;min-width:90px;font-family:inherit;color:#475569}
+.note-input:hover{border-color:#cbd5e1}.note-input:focus{border-color:var(--atla-primary);background:#fff;outline:none}
+/* Toast */
+#odmToast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;width:min(92vw,420px)}
+.odm-toast{display:flex;align-items:center;gap:.6rem;padding:.85rem 1rem;border-radius:14px;font-weight:600;font-size:.85rem;box-shadow:0 10px 25px -5px rgba(0,0,0,.2);border:1px solid;animation:odmIn .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes odmIn{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+.odm-toast.success{background:var(--success-050);color:var(--success);border-color:#a7f3d0}
+.odm-toast.info{background:var(--atla-primary-050);color:var(--atla-primary);border-color:#c7d2fe}
+.odm-toast.warning{background:var(--warning-050);color:var(--warning);border-color:#fde68a}
+.odm-toast.error{background:var(--error-050);color:var(--error);border-color:#fecaca}
+/* Modal */
+.odm-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);backdrop-filter:blur(2px);align-items:center;justify-content:center;z-index:1000;padding:16px}
+.odm-modal.active{display:flex}
+.odm-modal-c{background:#fff;border-radius:18px;width:100%;max-width:440px;overflow:hidden}
+.stat-tile{background:#fff;border:1px solid var(--border);border-left-width:4px;border-radius:14px;padding:.9rem 1rem}
+@media (max-width:900px){ .odm-grid{grid-template-columns:1fr !important} .odm-side{position:static !important} }
+</style>
 
-        .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        
-        /* Orta Kısım Grid */
-        .middle-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
-        @media (max-width: 900px) { .middle-layout { grid-template-columns: 1fr; } }
+<div id="odmToast" aria-live="polite"></div>
 
-        .card-header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
-        .card-title { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 8px; }
-        
-        /* Seans Ücreti Alanı */
-        .price-setter form { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 6px 12px; border-radius: 8px; }
-        .price-setter label { font-size: 12px; font-weight: 600; color: #64748b; white-space: nowrap; }
-        .price-setter input { width: 70px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: bold; color: #0f172a; text-align: center; }
-        .btn-save-price { padding: 4px 8px; background: #0f172a; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; }
-        .btn-save-price:hover { background: #334155; }
+<div class="odm-wrap">
+  <!-- Başlık -->
+  <div class="odm-card p-4 md:p-5 mb-4 flex flex-wrap items-center justify-between gap-3" style="background:linear-gradient(135deg,var(--atla-primary),var(--atla-primary-600));color:#fff;border:none">
+    <div class="min-w-0">
+      <h1 class="text-xl md:text-2xl font-extrabold">💰 Ödeme Yönetimi</h1>
+      <?php if($selected_student): ?><p class="text-white/70 text-sm font-semibold mt-0.5"><?= $oh($data['student_name']) ?></p><?php endif; ?>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="<?= $B ?>/koc/odemeler_ozet.php" class="odm-btn b-accent">📊 Tüm Öğrenciler Özeti</a>
+    </div>
+  </div>
 
-        /* İstatistikler */
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-        .stat-card { background: white; border-radius: 8px; padding: 16px; border-left: 3px solid; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .stat-card.green { border-color: #10b981; } .stat-card.yellow { border-color: #f59e0b; }
-        .stat-card.red { border-color: #ef4444; } .stat-card.blue { border-color: #3b82f6; }
-        .stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 5px; }
-        .stat-value { font-size: 20px; font-weight: 700; color: #0f172a; }
-        
-        /* Form & Butonlar */
-        .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
-        .btn-primary { background: #3b82f6; color: white; }
-        .btn-secondary { background: #e2e8f0; color: #475569; }
-        .btn-danger { background: #fee2e2; color: #991b1b; }
-        .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; font-weight: 500; }
-        
-        .form-input, .form-select { width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
-        
-        /* Dikey Form */
-        .vertical-form .form-group { margin-bottom: 12px; width: 100%; }
-        .vertical-form label { display: block; margin-bottom: 4px; font-weight: 500; font-size: 12px; color: #64748b; }
+  <div class="grid gap-4 odm-grid" style="grid-template-columns:250px 1fr">
+    <!-- Öğrenci listesi -->
+    <aside class="odm-card p-3 odm-side h-fit" style="position:sticky;top:16px">
+      <div class="text-xs font-bold text-slate-400 uppercase tracking-wide px-1 mb-2">Öğrenciler (<?= count($student_list) ?>)</div>
+      <div class="space-y-1 max-h-[70vh] overflow-y-auto">
+      <?php foreach($student_list as $s): ?>
+        <a href="?student_id=<?= (int)$s['id'] ?>" class="stu-item <?= $selected_student==$s['id']?'active':'' ?>">
+          <span class="stu-av"><?= $oh(mb_strtoupper(mb_substr($s['first_name'],0,1))) ?></span>
+          <span class="truncate"><?= $oh($s['first_name'].' '.$s['last_name']) ?></span>
+        </a>
+      <?php endforeach; ?>
+      </div>
+    </aside>
 
-        /* TOOLBAR */
-        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: #fff; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; flex-wrap: wrap; gap: 12px; }
-        .toolbar-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .toolbar-label { font-size: 13px; font-weight: 500; color: #64748b; margin-right: 4px; }
-        
-        #btn-all.active, #btn-odenmedi.active, #btn-odendi.active { background-color: #3b82f6; color: white; }
-        #btn-all, #btn-odenmedi, #btn-odendi { background-color: #e2e8f0; color: #475569; }
-        
-        .btn-paid-action { background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0 !important; }
-        .btn-delete-action { background-color: #fef2f2; color: #dc2626; border: 1px solid #fecaca !important; }
-        .btn-print-action { background-color: #1e293b; color: white; }
-
-        /* TABLO */
-        .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
-        th { background: #f8fafc; padding: 12px; text-align: left; font-weight: 600; color: #64748b; font-size: 11px; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-        
-        .compact-table th, .compact-table td { padding: 8px 10px; font-size: 12px; }
-        .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; white-space: nowrap; }
-        .badge.paid { background: #dcfce7; color: #15803d; }
-        .badge.unpaid { background: #fee2e2; color: #b91c1c; }
-        .icon-btn { border: none; background: none; cursor: pointer; font-size: 16px; padding: 4px; }
-        .icon-btn.edit { color: #f97316; } .icon-btn.delete { color: #94a3b8; }
-        
-        .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index: 1000; padding: 20px; }
-        .modal.active { display:flex; }
-        .modal-content { background:white; padding:24px; border-radius:12px; width:100%; max-width: 400px; }
-
-        .mobile-divider { display: none; }
-
-        @media (max-width: 768px) {
-            .layout { display: block; width: 100%; overflow-x: hidden; }
-            .container { padding: 10px; width: 100%; max-width: 100vw; overflow-x: hidden; }
-            .header { flex-direction: column; align-items: flex-start; }
-            .middle-layout { margin-bottom: 0; }
-            .card { padding: 15px; width: 100%; margin-bottom: 15px; }
-            .toolbar { display: block; padding: 10px; }
-            .toolbar-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; margin-bottom: 0; }
-            .toolbar-label { display: none; }
-            .mobile-divider { display: block; border-top: 1px solid #f1f5f9; margin: 10px 0; width: 100%; }
-            .btn-sm { width: 100%; justify-content: center; padding: 8px 4px; font-size: 12px; }
-            #paymentsTable { min-width: 600px; }
-            
-            /* Seanslar tablosu için özel mobil ayarı */
-    .compact-table { 
-        min-width: auto !important; /* Tabloyu ekrana sığdır */
-        width: 100% !important; 
-    }
-    
-    .compact-table th, .compact-table td { 
-        padding: 8px 4px !important; /* Yan boşlukları daralt */
-        white-space: normal !important; /* Yazı gerekirse alt satıra geçsin */
-    }
-    
-    /* Butonun olduğu hücreyi sağa yasla ve daralt */
-    .compact-table td:last-child {
-        text-align: right;
-        width: 1%;
-        white-space: nowrap !important;
-    }
-        }
-
-        /* ========== YAZDIRMA CSS (GÜNCELLENDİ) ========== */
-        .print-header, .print-info-box, .print-summary-box, .print-footer { display: none; }
-        
-        @media print {
-            @page { margin: 15mm; size: A4 portrait; }
-            
-            /* SİSTEM ELEMANLARINI GİZLE - GÜÇLENDİRİLMİŞ SELECTORLER */
-            nav, header, footer, aside,
-            #mobile-menu-drawer, #mobile-menu-overlay, /* Header.php'den gelen mobil menü */
-            .toolbar, .add-section, .alert, .modal, .middle-layout, 
-            .price-setter, .stats, .action-btns, .card-title,
-            .btn, .sidebar, .header /* .header class'ı çakışabilir, tekrar gizle */
-            { display: none !important; }
-            
-            /* Sayfa Yapısını Sıfırla */
-            body, .container, .layout, .main, .card {
-                background: white !important;
-                width: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                display: block !important;
-                position: static !important;
-                box-shadow: none !important;
-                border: none !important;
-                grid-template-columns: none !important;
-            }
-            
-            /* Yazdırma elemanlarını göster */
-            .print-header, .print-info-box, .print-summary-box { display: block !important; }
-            
-            /* Header */
-            .print-header { 
-                display: flex !important; 
-                justify-content: space-between !important; 
-                margin-bottom: 15px !important; 
-                padding-bottom: 8px !important; 
-                border-bottom: 2px solid #000 !important; 
-            }
-            .print-logo { font-size: 20pt !important; font-weight: bold !important; }
-            .print-date { text-align: right !important; font-size: 10pt !important; }
-            
-            /* Info Box */
-            .print-info-box { 
-                display: flex !important; 
-                justify-content: space-between !important; 
-                margin-bottom: 20px !important; 
-                padding: 10px !important; 
-                border: 1px solid #333 !important; 
-                background: #f9f9f9 !important; 
-            }
-            .print-info-col { width: 48% !important; }
-            .print-label { font-size: 9pt !important; color: #555 !important; margin-bottom: 3px !important; }
-            .print-value { font-size: 12pt !important; font-weight: bold !important; }
-            
-            /* Tablo */
-            table { 
-                width: 100% !important; 
-                border-collapse: collapse !important; 
-                margin-bottom: 15px !important; 
-                border: 1px solid #000 !important;
-                min-width: 100% !important;
-            }
-            th { 
-                background: #e0e0e0 !important; 
-                border: 1px solid #000 !important; 
-                padding: 8px !important; 
-                font-size: 10pt !important; 
-                color: #000 !important;
-            }
-            td { 
-                border: 1px solid #000 !important; 
-                padding: 6px !important; 
-                font-size: 10pt !important; 
-            }
-            
-            /* Sadece seçili satırları göster */
-            tbody tr { display: none !important; }
-            tbody tr.print-selected { display: table-row !important; }
-            
-            /* Summary Box */
-            .print-summary-box { 
-                margin-top: 15px !important; 
-                padding: 12px !important; 
-                border: 2px solid #000 !important; 
-                background: #f5f5f5 !important; 
-                width: 100% !important;
-                box-sizing: border-box !important;
-            }
-            .print-summary-title { font-size: 11pt !important; font-weight: bold !important; margin-bottom: 8px !important; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
-            .print-summary-row { 
-                display: flex !important; 
-                justify-content: space-between !important; 
-                padding: 4px 0 !important; 
-                font-size: 10pt !important; 
-                width: 100% !important;
-            }
-            .print-summary-row.total { 
-                border-top: 2px solid #000 !important; 
-                margin-top: 6px !important; 
-                padding-top: 8px !important; 
-                font-weight: bold !important; 
-                font-size: 11pt !important; 
-            }
-        }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <?php if($alert): ?>
-    <div class="alert <?php echo $alert[0]; ?>"><?php echo htmlspecialchars($alert[1]); ?></div>
-    <?php endif; ?>
-    
-    <div class="header">
-        <h1 style="font-size: 20px; font-weight: 700;">💰 Ödeme Yönetimi</h1>
-        <?php if($selected_student): ?>
-        <span style="color: #64748b;">Öğrenci: <strong><?php echo htmlspecialchars($data['student_name']); ?></strong></span>
+    <!-- Ana içerik -->
+    <main>
+    <?php if(!$selected_student): ?>
+      <div class="odm-card p-10 text-center text-slate-400">
+        <div class="text-4xl mb-2 opacity-40">👈</div>
+        <p class="font-semibold">Soldaki listeden bir öğrenci seçin.</p>
+      </div>
+    <?php else:
+      $stats = $data['stats'];
+      $waParent = $data['parent_phone'] ?: $data['student_phone'];
+      $outstanding = (float)$stats['unpaid'] + (float)$stats['overdue'];
+    ?>
+      <!-- İstatistik + aksiyonlar -->
+      <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
+        <?php if($waParent): ?>
+          <button type="button" onclick="sendReminder()" class="odm-btn b-wa">💬 Ödeme Talebi (Veli)</button>
+        <?php else: ?>
+          <span class="text-[11px] text-slate-400 font-semibold self-center">Veli/öğrenci telefonu yok — WhatsApp kapalı</span>
         <?php endif; ?>
-    </div>
-    
-    <div class="layout">
-        <aside class="sidebar">
-            <div style="font-weight:600; margin-bottom:15px; font-size:14px; color:#64748b;">Öğrenciler (<?php echo count($student_list); ?>)</div>
-            <?php foreach($student_list as $s): ?>
-            <a href="?student_id=<?php echo $s['id']; ?>" class="student-item <?php echo $selected_student == $s['id'] ? 'active' : ''; ?>">
-                <div class="student-avatar"><?php echo mb_strtoupper(mb_substr($s['first_name'], 0, 1)); ?></div>
-                <span><?php echo htmlspecialchars($s['first_name'] . ' ' . $s['last_name']); ?></span>
-            </a>
+        <button type="button" onclick="openStatement()" class="odm-btn b-soft">📄 Ekstre (PDF)</button>
+      </div>
+
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div class="stat-tile" style="border-left-color:var(--success)"><div class="text-[11px] font-bold uppercase text-slate-400">Tahsil Edilen</div><div class="text-xl font-extrabold" style="color:var(--success)"><?= number_format($stats['paid'],0) ?>₺</div></div>
+        <div class="stat-tile" style="border-left-color:var(--warning)"><div class="text-[11px] font-bold uppercase text-slate-400">Bekleyen</div><div class="text-xl font-extrabold" style="color:var(--warning)"><?= number_format($stats['unpaid'],0) ?>₺</div></div>
+        <div class="stat-tile" style="border-left-color:var(--error)"><div class="text-[11px] font-bold uppercase text-slate-400">Gecikmiş</div><div class="text-xl font-extrabold" style="color:var(--error)"><?= number_format($stats['overdue'],0) ?>₺</div></div>
+        <div class="stat-tile" style="border-left-color:var(--atla-primary)"><div class="text-[11px] font-bold uppercase text-slate-400">Toplam Borç</div><div class="text-xl font-extrabold" style="color:var(--atla-primary)"><?= number_format($outstanding,0) ?>₺</div></div>
+      </div>
+
+      <!-- Ücret + Manuel ekle + Gelecek seanslar -->
+      <div class="grid lg:grid-cols-3 gap-4 mb-4">
+        <div class="odm-card p-4 lg:col-span-2">
+          <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <h3 class="font-extrabold text-slate-800">📅 Ödeme Atanmamış Seanslar</h3>
+            <form method="POST" class="flex items-center gap-2 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+              <input type="hidden" name="action" value="update_price">
+              <label class="text-xs font-bold text-slate-500 whitespace-nowrap">Seans Ücreti</label>
+              <input type="number" name="new_price" id="global_lesson_price" value="<?= $oh($data['lesson_price']) ?>" step="0.01" class="w-20 text-center font-bold text-sm border border-slate-200 rounded-lg px-1 py-1 outline-none focus:border-[color:var(--atla-primary)]">
+              <button type="submit" class="odm-btn b-primary b-sm">Kaydet</button>
+            </form>
+          </div>
+          <?php if(!empty($data['future_sessions'])): ?>
+            <div class="space-y-1.5 max-h-52 overflow-y-auto">
+            <?php foreach($data['future_sessions'] as $fs): ?>
+              <div class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-100">
+                <span class="text-sm font-semibold text-slate-700"><?= date('d.m.Y', strtotime($fs['appointment_date'])) ?> Tarihli Seans</span>
+                <button onclick="openAddModal('<?= $oh($fs['appointment_date']) ?>')" class="odm-btn b-soft b-sm">➕ Borç Ekle</button>
+              </div>
             <?php endforeach; ?>
-        </aside>
-        
-        <main class="main">
-            <?php if($selected_student): ?>
-                
-                <div class="print-header">
-                    <div class="print-logo">DersPROS</div>
-                    <div class="print-date"><strong>Tarih:</strong> <?php echo date('d.m.Y'); ?></div>
-                </div>
-                
-                <div class="print-info-box">
-                    <div class="print-info-col">
-                        <div class="print-label">Öğrenci</div>
-                        <div class="print-value"><?php echo htmlspecialchars($data['student_name']); ?></div>
-                    </div>
-                    <div class="print-info-col" style="text-align: right;">
-                        <div class="print-label">Öğretmen</div>
-                        <div class="print-value"><?php echo htmlspecialchars(trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''))); ?></div>
-                    </div>
-                </div>
-                
-                <div class="stats">
-                    <div class="stat-card green"><div class="stat-label">Tahsil Edilen</div><div class="stat-value"><?php echo number_format($data['stats']['paid'], 0); ?>₺</div></div>
-                    <div class="stat-card yellow"><div class="stat-label">Bekleyen</div><div class="stat-value"><?php echo number_format($data['stats']['unpaid'], 0); ?>₺</div></div>
-                    <div class="stat-card red"><div class="stat-label">Gecikmiş</div><div class="stat-value"><?php echo number_format($data['stats']['overdue'], 0); ?>₺</div></div>
-                    <div class="stat-card blue"><div class="stat-label">Toplam Kayıt</div><div class="stat-value"><?php echo number_format($data['stats']['total'], 0); ?></div></div>
-                </div>
-
-                <div class="middle-layout">
-                    
-                    <div class="card" style="margin-bottom: 0;">
-                        <div class="card-header-flex">
-                            <div class="card-title">📅 Seanslar</div>
-                            
-                            <div class="price-setter">
-                                <form method="POST">
-                                    <input type="hidden" name="action" value="update_price">
-                                    <label>Seans Ücreti:</label>
-                                    <input type="number" name="new_price" id="global_lesson_price" value="<?php echo $data['lesson_price']; ?>" step="0.01">
-                                    <button type="submit" class="btn-save-price">Kaydet</button>
-                                </form>
-                            </div>
-                        </div>
-
-                        <?php if(!empty($data['future_sessions'])): ?>
-                        <div class="table-wrapper">
-                            <table class="compact-table">
-                                <thead>
-                                    <tr>
-                                        <th>Seans Başlığı</th>
-                                        <th style="text-align:right">İşlem</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach($data['future_sessions'] as $fs): ?>
-                                    <tr>
-                                        <td><?php echo date('d.m.Y', strtotime($fs['appointment_date'])); ?> Tarihli</td>
-                                        <td style="text-align:right">
-                                            <button onclick="openAddModal('<?php echo $fs['appointment_date']; ?>')" class="btn btn-sm btn-primary">➕ Ekle</button>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                        <?php else: ?>
-                            <div class="empty" style="color:#94a3b8; font-style:italic; font-size:13px;">Ödeme atanacak gelecek seans yok.</div>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="card add-section" style="margin-bottom: 0;">
-                        <div class="card-title">➕ Manuel Ekle</div>
-                        <form method="POST" class="vertical-form">
-                            <input type="hidden" name="action" value="add_manual">
-                            <div class="form-group">
-                                <label>Açıklama</label>
-                                <input type="text" name="description" class="form-input" required placeholder="Örn: 10 Şubat Seans Ücreti">
-                            </div>
-                            <div class="form-group">
-                                <label>Tutar (₺)</label>
-                                <input type="number" step="0.01" name="amount" class="form-input" required>
-                            </div>
-                            <div class="form-group">
-                                <label>Vade</label>
-                                <input type="date" name="due_date" class="form-input" required value="<?php echo date('Y-m-d'); ?>">
-                            </div>
-                            <button type="submit" class="btn btn-primary" style="width:100%">Kaydet</button>
-                        </form>
-                    </div>
-
-                </div>
-                <div class="card">
-                    <div class="card-title">📊 Ödeme Geçmişi</div>
-                    <?php if(!empty($data['payments'])): ?>
-                    <div class="toolbar">
-                        <div class="toolbar-group">
-                            <span class="toolbar-label">Filtre:</span>
-                            <button onclick="filterStatus('all')" class="btn btn-sm active" id="btn-all">Tümü</button>
-                            <button onclick="filterStatus('odenmedi')" class="btn btn-sm" id="btn-odenmedi">Ödenmedi</button>
-                            <button onclick="filterStatus('odendi')" class="btn btn-sm" id="btn-odendi">Ödendi</button>
-                        </div>
-                        
-                        <div class="mobile-divider"></div>
-                        
-                        <div class="toolbar-group">
-                            <span class="toolbar-label">İşlem:</span>
-                            <button onclick="submitBulk('bulk_paid', 'ödendi işaretlenecek')" class="btn btn-sm btn-paid-action">✓ Öde</button>
-                            <button onclick="submitBulk('bulk_delete', 'KALICI OLARAK SİLİNECEK')" class="btn btn-sm btn-delete-action">🗑️ Sil</button>
-                            <button onclick="printSelected()" class="btn btn-sm btn-print-action">🖨️ Yazdır</button>
-                        </div>
-                    </div>
-
-                    <div class="table-wrapper">
-                        <table id="paymentsTable">
-                            <thead>
-                                <tr>
-                                    <th style="width: 30px;" class="action-btns"><input type="checkbox" onchange="toggleAll(this)"></th>
-                                    <th>Açıklama</th>
-                                    <th>Vade</th>
-                                    <th>Tutar</th>
-                                    <th>Durum</th>
-                                    <th class="action-btns">İşlem</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach($data['payments'] as $p): ?>
-                                <tr data-status="<?php echo $p['status']; ?>" data-amount="<?php echo $p['amount']; ?>" data-dueraw="<?php echo $p['due_date']; ?>">
-                                    <td class="action-btns"><input type="checkbox" class="row-check" value="<?php echo $p['id']; ?>"></td>
-                                    <td><?php echo htmlspecialchars($p['description']); ?></td>
-                                    <td><?php echo date('d.m.Y', strtotime($p['due_date'])); ?></td>
-                                    <td style="font-weight:bold; color:#2563eb;"><?php echo number_format($p['amount'], 2); ?>₺</td>
-                                    <td><span class="badge <?php echo $p['status']=='odendi'?'paid':'unpaid'; ?>"><?php echo $p['status']=='odendi'?'Ödendi':'Bekliyor'; ?></span></td>
-                                    <td class="action-btns">
-                                        <button class="icon-btn edit" onclick='edit(<?php echo json_encode($p); ?>)'>✏️</button>
-                                        <button class="icon-btn delete" onclick="del(<?php echo $p['id']; ?>)">🗑️</button>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <div class="print-summary-box">
-                        <div class="print-summary-title">Özet</div>
-                        <div class="print-summary-row">
-                            <span>Ödenen:</span>
-                            <strong id="print-sum-paid">0.00₺</strong>
-                        </div>
-                        <div class="print-summary-row">
-                            <span>Bekleyen:</span>
-                            <strong id="print-sum-unpaid">0.00₺</strong>
-                        </div>
-                        <div class="print-summary-row">
-                            <span>Gecikmiş:</span>
-                            <strong id="print-sum-overdue">0.00₺</strong>
-                        </div>
-                        <div class="print-summary-row total">
-                            <span>Toplam:</span>
-                            <strong id="print-sum-total">0.00₺</strong>
-                        </div>
-                    </div>
-                    
-                    <?php else: ?>
-                    <div class="empty">Kayıt bulunamadı.</div>
-                    <?php endif; ?>
-                </div>
-                
-            <?php else: ?>
-                <div class="card"><div class="empty">İşlem yapmak için soldaki menüden bir öğrenci seçiniz.</div></div>
-            <?php endif; ?>
-        </main>
-    </div>
-</div>
-
-<div class="modal" id="editModal">
-    <div class="modal-content">
-        <h3>Düzenle <button onclick="closeModal('editModal')" style="float:right; border:none; background:none; font-size:20px; cursor:pointer;">×</button></h3><br>
-        <form method="POST">
-            <input type="hidden" name="action" value="update">
-            <input type="hidden" name="id" id="edit_id">
-            <div class="form-group" style="margin-bottom:12px"><label style="display:block;margin-bottom:4px">Açıklama</label><input type="text" name="description" id="edit_desc" class="form-input"></div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px">
-                <div><label style="display:block;margin-bottom:4px">Tutar</label><input type="number" step="0.01" name="amount" id="edit_amount" class="form-input"></div>
-                <div><label style="display:block;margin-bottom:4px">Vade</label><input type="date" name="due_date" id="edit_due" class="form-input"></div>
             </div>
-            <div class="form-group" style="margin-bottom:12px"><label style="display:block;margin-bottom:4px">Durum</label>
-                <select name="status" id="edit_status" class="form-select">
-                    <option value="odenmedi">Ödenmedi</option>
-                    <option value="odendi">Ödendi</option>
-                </select>
-            </div>
-            <button type="submit" class="btn btn-primary" style="width:100%">Güncelle</button>
-        </form>
-    </div>
-</div>
+          <?php else: ?>
+            <p class="text-sm text-slate-400 font-medium py-4 text-center">Ödeme atanacak seans yok — tümü listelenmiş.</p>
+          <?php endif; ?>
+        </div>
 
-<div class="modal" id="addModal">
-    <div class="modal-content">
-        <h3>Seans Ödemesi Ekle <button onclick="closeModal('addModal')" style="float:right; border:none; background:none; font-size:20px; cursor:pointer;">×</button></h3><br>
-        <form method="POST">
+        <div class="odm-card p-4">
+          <h3 class="font-extrabold text-slate-800 mb-3">➕ Manuel Kayıt</h3>
+          <form method="POST" class="space-y-2.5">
             <input type="hidden" name="action" value="add_manual">
-            <div class="form-group" style="margin-bottom:12px"><label style="display:block;margin-bottom:4px">Açıklama</label><input type="text" name="description" id="add_desc" class="form-input" required></div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px">
-                <div><label style="display:block;margin-bottom:4px">Tutar</label><input type="number" step="0.01" name="amount" id="add_amount" class="form-input" required></div>
-                <div><label style="display:block;margin-bottom:4px">Vade</label><input type="date" name="due_date" id="add_due" class="form-input" required></div>
+            <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" class="odm-input" required placeholder="Örn: Şubat ek ödeme"></div>
+            <div class="grid grid-cols-2 gap-2">
+              <div><label class="text-xs font-bold text-slate-500 block mb-1">Tutar ₺</label><input type="number" step="0.01" name="amount" class="odm-input" required></div>
+              <div><label class="text-xs font-bold text-slate-500 block mb-1">Vade</label><input type="date" name="due_date" class="odm-input" required value="<?= date('Y-m-d') ?>"></div>
             </div>
-            <button type="submit" class="btn btn-primary" style="width:100%">Kaydet</button>
-        </form>
+            <button type="submit" class="odm-btn b-primary w-full">Ekle</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Ödeme geçmişi -->
+      <div class="odm-card p-4">
+        <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+          <h3 class="font-extrabold text-slate-800">📊 Ödeme Geçmişi</h3>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button onclick="filterStatus('all',this)" class="odm-btn b-primary b-sm flt" data-f="all">Tümü</button>
+            <button onclick="filterStatus('odenmedi',this)" class="odm-btn b-soft b-sm flt" data-f="odenmedi">Ödenmedi</button>
+            <button onclick="filterStatus('odendi',this)" class="odm-btn b-soft b-sm flt" data-f="odendi">Ödendi</button>
+            <span class="w-px h-6 bg-slate-200 mx-1"></span>
+            <button onclick="submitBulk('bulk_paid','ödendi işaretlenecek')" class="odm-btn b-sm" style="background:var(--success-050);color:var(--success);border:1px solid #a7f3d0">✓ Toplu Öde</button>
+            <button onclick="submitBulk('bulk_delete','KALICI SİLİNECEK')" class="odm-btn b-danger b-sm">🗑️ Toplu Sil</button>
+          </div>
+        </div>
+        <?php if(!empty($data['payments'])): ?>
+        <div class="overflow-x-auto">
+          <table class="odm-table" id="paymentsTable">
+            <thead><tr>
+              <th style="width:28px"><input type="checkbox" onchange="toggleAll(this)"></th>
+              <th>Açıklama</th><th>Not</th><th>Vade</th><th>Tutar</th><th>Durum</th><th>Dekont</th><th style="text-align:right">İşlem</th>
+            </tr></thead>
+            <tbody>
+            <?php foreach($data['payments'] as $p):
+              $isPaid = $p['status']==='odendi';
+              $isOver = (!$isPaid && strtotime($p['due_date']) < strtotime(date('Y-m-d')));
+              $badgeClass = $isPaid?'bg-paid':($isOver?'bg-over':'bg-unpaid');
+              $badgeTxt = $isPaid?'Ödendi':($isOver?'Gecikmiş':'Bekliyor');
+              $pj = $oh(json_encode($p, JSON_UNESCAPED_UNICODE));
+            ?>
+              <tr data-status="<?= $oh($p['status']) ?>">
+                <td><input type="checkbox" class="row-check" value="<?= (int)$p['id'] ?>"></td>
+                <td class="font-semibold text-slate-700"><?= $oh($p['description']) ?></td>
+                <td>
+                  <form method="POST" class="note-form" onsubmit="return true">
+                    <input type="hidden" name="action" value="save_note">
+                    <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
+                    <input type="text" name="note" value="<?= $oh($p['note'] ?? '') ?>" placeholder="not…" class="note-input"
+                           onblur="if(this.value!==this.defaultValue)this.form.submit()">
+                  </form>
+                </td>
+                <td class="whitespace-nowrap text-slate-600"><?= date('d.m.Y', strtotime($p['due_date'])) ?></td>
+                <td class="font-extrabold" style="color:var(--atla-primary)"><?= number_format($p['amount'],2) ?>₺</td>
+                <td><span class="odm-badge <?= $badgeClass ?>"><?= $badgeTxt ?></span></td>
+                <td>
+                  <?php if(!empty($p['receipt_path'])): ?>
+                    <a href="<?= $B ?>/koc/dekont.php?id=<?= (int)$p['id'] ?>" target="_blank" class="text-xs font-bold" style="color:var(--atla-primary)">📎 Gör</a>
+                  <?php else: ?>
+                    <span class="text-slate-300 text-xs">—</span>
+                  <?php endif; ?>
+                </td>
+                <td style="text-align:right;white-space:nowrap">
+                  <?php if(!$isPaid): ?>
+                    <button class="odm-btn b-sm" style="background:var(--success-050);color:var(--success);border:1px solid #a7f3d0" onclick='openPaidModal(<?= $pj ?>)' title="Ödendi + dekont">✓ Öde</button>
+                    <?php if($waParent): ?><button class="odm-btn b-soft b-sm" onclick='remindOne(<?= $pj ?>)' title="Veliye hatırlat">💬</button><?php endif; ?>
+                  <?php else: ?>
+                    <button class="odm-btn b-soft b-sm" onclick="unmarkPaid(<?= (int)$p['id'] ?>)" title="Geri al">↩︎</button>
+                  <?php endif; ?>
+                  <button class="odm-btn b-soft b-sm" onclick='editPay(<?= $pj ?>)'>✏️</button>
+                  <button class="odm-btn b-soft b-sm" onclick="delPay(<?= (int)$p['id'] ?>)">🗑️</button>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <?php else: ?>
+          <div class="text-center py-10 text-slate-400">
+            <div class="text-4xl mb-2 opacity-40">🧾</div>
+            <p class="font-semibold">Henüz ödeme kaydı yok.</p>
+            <p class="text-xs mt-1">Seanslar geçtikçe otomatik borç düşer ya da soldan manuel ekleyin.</p>
+          </div>
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
+    </main>
+  </div>
+</div>
+
+<!-- Gizli ekstre şablonu (PDF) -->
+<div id="statementSheet" style="position:fixed;left:-9999px;top:0;width:800px;background:#fff;color:#111;padding:28px;font-family:Poppins,Arial,sans-serif"></div>
+
+<!-- Ödendi + dekont modalı -->
+<div class="odm-modal" id="paidModal">
+  <div class="odm-modal-c">
+    <div class="p-4 text-white flex justify-between items-center" style="background:var(--atla-primary)">
+      <h3 class="font-extrabold">Ödeme Al</h3>
+      <button onclick="closeM('paidModal')" aria-label="Kapat" class="bg-white/20 rounded-full w-8 h-8">✕</button>
     </div>
+    <form method="POST" enctype="multipart/form-data" class="p-5 space-y-3">
+      <input type="hidden" name="action" value="mark_paid">
+      <input type="hidden" name="id" id="paid_id">
+      <p class="text-sm text-slate-600" id="paid_desc"></p>
+      <div>
+        <label class="text-xs font-bold text-slate-500 block mb-1">Dekont (isteğe bağlı — resim/PDF)</label>
+        <input type="file" name="receipt" accept="image/*,application/pdf" class="odm-input" style="padding:.4rem">
+      </div>
+      <div class="flex gap-2 pt-1">
+        <button type="button" onclick="closeM('paidModal')" class="odm-btn b-soft flex-1">Vazgeç</button>
+        <button type="submit" class="odm-btn b-primary flex-1" style="background:var(--success)">✓ Ödendi İşaretle</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Düzenle modalı -->
+<div class="odm-modal" id="editModal">
+  <div class="odm-modal-c">
+    <div class="p-4 text-white flex justify-between items-center" style="background:var(--atla-primary)">
+      <h3 class="font-extrabold">Kaydı Düzenle</h3>
+      <button onclick="closeM('editModal')" aria-label="Kapat" class="bg-white/20 rounded-full w-8 h-8">✕</button>
+    </div>
+    <form method="POST" class="p-5 space-y-3">
+      <input type="hidden" name="action" value="update"><input type="hidden" name="id" id="edit_id">
+      <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" id="edit_desc" class="odm-input"></div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="text-xs font-bold text-slate-500 block mb-1">Tutar</label><input type="number" step="0.01" name="amount" id="edit_amount" class="odm-input"></div>
+        <div><label class="text-xs font-bold text-slate-500 block mb-1">Vade</label><input type="date" name="due_date" id="edit_due" class="odm-input"></div>
+      </div>
+      <div><label class="text-xs font-bold text-slate-500 block mb-1">Durum</label>
+        <select name="status" id="edit_status" class="odm-input"><option value="odenmedi">Ödenmedi</option><option value="odendi">Ödendi</option></select>
+      </div>
+      <button type="submit" class="odm-btn b-primary w-full">Güncelle</button>
+    </form>
+  </div>
+</div>
+
+<!-- Manuel ekle modalı (gelecek seanstan) -->
+<div class="odm-modal" id="addModal">
+  <div class="odm-modal-c">
+    <div class="p-4 text-white flex justify-between items-center" style="background:var(--atla-primary)">
+      <h3 class="font-extrabold">Seans Borcu Ekle</h3>
+      <button onclick="closeM('addModal')" aria-label="Kapat" class="bg-white/20 rounded-full w-8 h-8">✕</button>
+    </div>
+    <form method="POST" class="p-5 space-y-3">
+      <input type="hidden" name="action" value="add_manual">
+      <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" id="add_desc" class="odm-input" required></div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="text-xs font-bold text-slate-500 block mb-1">Tutar</label><input type="number" step="0.01" name="amount" id="add_amount" class="odm-input" required></div>
+        <div><label class="text-xs font-bold text-slate-500 block mb-1">Vade</label><input type="date" name="due_date" id="add_due" class="odm-input" required></div>
+      </div>
+      <button type="submit" class="odm-btn b-primary w-full">Ekle</button>
+    </form>
+  </div>
 </div>
 
 <script>
-function openAddModal(dateStr) {
-    const justDate = dateStr.split(' ')[0];
-    const dateParts = justDate.split('-');
-    const formattedDate = `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`;
-    const defaultPrice = document.getElementById('global_lesson_price').value;
-    
-    document.getElementById('add_desc').value = formattedDate + ' Tarihli Seans';
-    document.getElementById('add_amount').value = defaultPrice;
-    document.getElementById('add_due').value = justDate;
-    document.getElementById('addModal').classList.add('active');
+const ODM = {
+  student: <?= json_encode($data['student_name']) ?>,
+  teacher: <?= json_encode(trim(($_SESSION['first_name']??'').' '.($_SESSION['last_name']??''))) ?>,
+  parentPhone: <?= json_encode($data['parent_phone'] ?: $data['student_phone']) ?>,
+  payments: <?= json_encode($data['payments'] ?? [], JSON_UNESCAPED_UNICODE) ?>,
+  base: <?= json_encode($B) ?>
+};
+
+function toast(type,msg,t){ const w=document.getElementById('odmToast'); if(!w)return;
+  const ic={success:'✅',info:'💬',warning:'⚠️',error:'⛔'}; const e=document.createElement('div');
+  e.className='odm-toast '+(type||'info'); e.innerHTML='<span>'+(ic[type]||'💬')+'</span><span style="flex:1">'+msg+'</span>';
+  w.appendChild(e); setTimeout(()=>{e.style.opacity='0';e.style.transition='opacity .3s';setTimeout(()=>e.remove(),300)}, t||3500);
+}
+<?php if($flash): ?>toast(<?= json_encode($flash[0]) ?>, <?= json_encode($flash[1]) ?>);<?php endif; ?>
+
+function closeM(id){ document.getElementById(id).classList.remove('active'); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.querySelectorAll('.odm-modal.active').forEach(m=>m.classList.remove('active')); });
+document.querySelectorAll('.odm-modal').forEach(m=>m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('active'); }));
+
+function openAddModal(dateStr){
+  const d=(dateStr||'').split(' ')[0], pr=document.getElementById('global_lesson_price');
+  const p=d.split('-'); const tr=p.length===3?`${p[2]}.${p[1]}.${p[0]}`:d;
+  document.getElementById('add_desc').value = tr+' Tarihli Seans';
+  document.getElementById('add_amount').value = pr?pr.value:'';
+  document.getElementById('add_due').value = d;
+  document.getElementById('addModal').classList.add('active');
+}
+function editPay(p){
+  document.getElementById('edit_id').value=p.id; document.getElementById('edit_desc').value=p.description;
+  document.getElementById('edit_amount').value=p.amount; document.getElementById('edit_due').value=p.due_date;
+  document.getElementById('edit_status').value=p.status; document.getElementById('editModal').classList.add('active');
+}
+function openPaidModal(p){
+  document.getElementById('paid_id').value=p.id;
+  document.getElementById('paid_desc').textContent=p.description+' — '+Number(p.amount).toLocaleString('tr-TR')+'₺';
+  document.getElementById('paidModal').classList.add('active');
+}
+function postAction(fields){ const f=document.createElement('form'); f.method='POST';
+  f.innerHTML=Object.entries(fields).map(([k,v])=>`<input type="hidden" name="${k}" value="${String(v).replace(/"/g,'&quot;')}">`).join('');
+  document.body.appendChild(f); f.submit(); }
+function unmarkPaid(id){ if(confirm('Ödemeyi geri almak istiyor musunuz?')) postAction({action:'unmark_paid',id}); }
+function delPay(id){ if(confirm('Bu kayıt silinsin mi?')) postAction({action:'delete',id}); }
+
+function toggleAll(cb){ document.querySelectorAll('.row-check').forEach(c=>{ if(c.closest('tr').style.display!=='none') c.checked=cb.checked; }); }
+function submitBulk(action,msg){ const ids=[...document.querySelectorAll('.row-check:checked')].map(c=>c.value);
+  if(!ids.length) return toast('warning','Lütfen en az bir kayıt seçin.');
+  if(!confirm(`${ids.length} kayıt ${msg}. Emin misiniz?`)) return;
+  const f=document.createElement('form'); f.method='POST';
+  f.innerHTML=`<input type="hidden" name="action" value="${action}">`+ids.map(i=>`<input type="hidden" name="ids[]" value="${i}">`).join('');
+  document.body.appendChild(f); f.submit();
+}
+function filterStatus(status,btn){
+  document.querySelectorAll('.flt').forEach(b=>{ b.classList.remove('b-primary'); b.classList.add('b-soft'); });
+  btn.classList.remove('b-soft'); btn.classList.add('b-primary');
+  document.querySelectorAll('#paymentsTable tbody tr').forEach(r=>{
+    r.style.display = (status==='all' || r.getAttribute('data-status')===status) ? '' : 'none';
+  });
 }
 
-function edit(data) {
-    document.getElementById('edit_id').value = data.id;
-    document.getElementById('edit_desc').value = data.description;
-    document.getElementById('edit_amount').value = data.amount;
-    document.getElementById('edit_due').value = data.due_date;
-    document.getElementById('edit_status').value = data.status;
-    document.getElementById('editModal').classList.add('active');
+/* ── WhatsApp ödeme hatırlatma ── */
+function waSend(phone,text){ window.open(`https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`,'_blank'); }
+function remindOne(p){
+  if(!ODM.parentPhone) return toast('warning','Telefon kayıtlı değil.');
+  const due=new Date(p.due_date).toLocaleDateString('tr-TR');
+  const t=`Sayın velimiz,\n${ODM.student} için ödeme hatırlatması:\n• ${p.description}\n• Tutar: ${Number(p.amount).toLocaleString('tr-TR')}₺\n• Vade: ${due}\nİlginiz için teşekkürler. — ${ODM.teacher}`;
+  waSend(ODM.parentPhone,t);
 }
-function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-
-function del(id) {
-    if(confirm('Bu kayıt silinsin mi?')) {
-        const f = document.createElement('form'); f.method='POST';
-        f.innerHTML=`<input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="${id}">`;
-        document.body.appendChild(f); f.submit();
-    }
-}
-
-function toggleAll(cb) {
-    document.querySelectorAll('.row-check').forEach(c => {
-        if(c.closest('tr').style.display !== 'none') c.checked = cb.checked;
-    });
+function sendReminder(){
+  if(!ODM.parentPhone) return toast('warning','Telefon kayıtlı değil.');
+  const unpaid=ODM.payments.filter(p=>p.status!=='odendi');
+  const total=unpaid.reduce((s,p)=>s+Number(p.amount),0);
+  if(total<=0) return toast('info','Bekleyen ödeme yok.');
+  let t=`Sayın velimiz,\n${ODM.student} için güncel ödeme durumu:\n`;
+  unpaid.slice(0,12).forEach(p=>{ t+=`• ${new Date(p.due_date).toLocaleDateString('tr-TR')} — ${Number(p.amount).toLocaleString('tr-TR')}₺\n`; });
+  t+=`\nToplam bekleyen: ${total.toLocaleString('tr-TR')}₺\nİlginiz için teşekkürler. — ${ODM.teacher}`;
+  waSend(ODM.parentPhone,t);
 }
 
-function submitBulk(action, msg) {
-    const ids = Array.from(document.querySelectorAll('.row-check:checked')).map(c => c.value);
-    if(ids.length === 0) return alert('Lütfen listeden en az bir kayıt seçin.');
-    if(!confirm(`${ids.length} adet kayıt ${msg}. Emin misiniz?`)) return;
-    
-    const f = document.createElement('form'); f.method='POST';
-    f.innerHTML=`<input type="hidden" name="action" value="${action}">`;
-    ids.forEach(id => f.innerHTML += `<input type="hidden" name="ids[]" value="${id}">`);
-    document.body.appendChild(f); f.submit();
+/* ── Ekstre (PDF): kapsam seç → indir / WhatsApp ── */
+function openStatement(){
+  const scope = confirm('Ekstre kapsamı:\n\nTAMAM = Sadece ödenmemişler\nİPTAL = Tüm kayıtlar') ? 'odenmedi' : 'all';
+  buildStatement(scope);
+  const wa = ODM.parentPhone ? '\n\nWhatsApp ile göndermek için: TAMAM' : '';
+  if(ODM.parentPhone && confirm('Ekstre hazır.'+wa+'\n\nİPTAL = sadece PDF indir')){ sendStatementWA(); }
+  else { downloadStatement(); }
 }
-
-function filterStatus(status) {
-    const rows = document.querySelectorAll('#paymentsTable tbody tr');
-    document.querySelectorAll('.toolbar .btn-sm').forEach(btn => {
-        if(btn.id.startsWith('btn-')) {
-             btn.classList.remove('active');
-             btn.style.backgroundColor = '#e2e8f0';
-             btn.style.color = '#475569';
-        }
-    });
-    const activeBtn = document.getElementById('btn-'+status);
-    activeBtn.classList.add('active');
-    activeBtn.style.backgroundColor = '#3b82f6';
-    activeBtn.style.color = 'white';
-
-    rows.forEach(row => {
-        if(status === 'all') row.style.display = '';
-        else row.style.display = (row.getAttribute('data-status') === status) ? '' : 'none';
-    });
+function buildStatement(scope){
+  const rows = ODM.payments.filter(p=> scope==='all' ? true : p.status!=='odendi');
+  let paid=0,unpaid=0;
+  ODM.payments.forEach(p=> p.status==='odendi' ? paid+=Number(p.amount) : unpaid+=Number(p.amount));
+  const body = rows.map(p=>`<tr>
+      <td style="border:1px solid #ccc;padding:6px">${p.description}</td>
+      <td style="border:1px solid #ccc;padding:6px;white-space:nowrap">${new Date(p.due_date).toLocaleDateString('tr-TR')}</td>
+      <td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700">${Number(p.amount).toLocaleString('tr-TR')}₺</td>
+      <td style="border:1px solid #ccc;padding:6px">${p.status==='odendi'?'Ödendi':'Bekliyor'}</td>
+    </tr>`).join('');
+  document.getElementById('statementSheet').innerHTML = `
+    <div style="display:flex;justify-content:space-between;border-bottom:3px solid #223488;padding-bottom:10px;margin-bottom:16px">
+      <div style="font-size:22px;font-weight:800;color:#223488">Ders<span style="color:#ec9731">PROS</span></div>
+      <div style="text-align:right;font-size:12px">Tarih: ${new Date().toLocaleDateString('tr-TR')}</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:14px;font-size:13px">
+      <div><b>Öğrenci:</b> ${ODM.student}</div><div><b>Öğretmen:</b> ${ODM.teacher}</div>
+    </div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:8px">Ödeme Ekstresi (${scope==='all'?'Tümü':'Ödenmemişler'})</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#f1f5f9">
+        <th style="border:1px solid #ccc;padding:6px;text-align:left">Açıklama</th>
+        <th style="border:1px solid #ccc;padding:6px;text-align:left">Vade</th>
+        <th style="border:1px solid #ccc;padding:6px;text-align:right">Tutar</th>
+        <th style="border:1px solid #ccc;padding:6px;text-align:left">Durum</th>
+      </tr></thead><tbody>${body||'<tr><td colspan="4" style="padding:10px;text-align:center;color:#888">Kayıt yok</td></tr>'}</tbody>
+    </table>
+    <div style="margin-top:16px;border-top:2px solid #223488;padding-top:10px;font-size:13px">
+      <div style="display:flex;justify-content:space-between"><span>Toplam Tahsil Edilen:</span><b style="color:#059669">${paid.toLocaleString('tr-TR')}₺</b></div>
+      <div style="display:flex;justify-content:space-between"><span>Toplam Bekleyen:</span><b style="color:#d97706">${unpaid.toLocaleString('tr-TR')}₺</b></div>
+    </div>`;
 }
-
-function printSelected() {
-    const checkboxes = document.querySelectorAll('.row-check:checked');
-    if(checkboxes.length === 0) {
-        alert('Yazdırmak için lütfen en az bir kayıt seçin.');
-        return;
-    }
-    
-    // Seçili satırları işaretle
-    document.querySelectorAll('tr').forEach(r => r.classList.remove('print-selected'));
-    checkboxes.forEach(cb => cb.closest('tr').classList.add('print-selected'));
-    
-    // Özet hesaplama
-    let sumPaid = 0, sumUnpaid = 0, sumOverdue = 0, sumTotal = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    checkboxes.forEach(cb => {
-        const row = cb.closest('tr');
-        const status = row.getAttribute('data-status');
-        const amount = parseFloat(row.getAttribute('data-amount'));
-        const dueRaw = row.getAttribute('data-dueraw');
-        const dueDate = new Date(dueRaw);
-        
-        sumTotal += amount;
-        if (status === 'odendi') {
-            sumPaid += amount;
-        } else {
-            if (dueDate < today) sumOverdue += amount;
-            else sumUnpaid += amount;
-        }
-    });
-    
-    // Özet güncelle
-    document.getElementById('print-sum-paid').textContent = sumPaid.toFixed(2) + '₺';
-    document.getElementById('print-sum-unpaid').textContent = sumUnpaid.toFixed(2) + '₺';
-    document.getElementById('print-sum-overdue').textContent = sumOverdue.toFixed(2) + '₺';
-    document.getElementById('print-sum-total').textContent = sumTotal.toFixed(2) + '₺';
-    
-    window.print();
+function _pdfOpt(){ return { margin:8, filename:`Ekstre_${ODM.student}.pdf`, image:{type:'jpeg',quality:.98},
+  html2canvas:{scale:2}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }; }
+function downloadStatement(){ html2pdf().set(_pdfOpt()).from(document.getElementById('statementSheet')).save(); }
+async function sendStatementWA(){
+  try{
+    const blob = await html2pdf().set(_pdfOpt()).from(document.getElementById('statementSheet')).outputPdf('blob');
+    const fd=new FormData(); fd.append('pdf', blob, `Ekstre_${ODM.student}.pdf`);
+    const r=await fetch(ODM.base+'/save_temp_pdf.php',{method:'POST',body:fd}); const j=await r.json();
+    if(!j.ok) throw new Error(j.error||'Yükleme hatası');
+    waSend(ODM.parentPhone, `📄 ${ODM.student} - Ödeme Ekstresi:\n${j.url}`);
+  }catch(e){ toast('error','Ekstre gönderilemedi: '+e.message); }
 }
-
-setTimeout(() => { const a = document.querySelector('.alert'); if(a) a.style.display='none'; }, 3000);
 </script>
-
-</body>
-</html>
+<?php include '../footer.php'; ?>
