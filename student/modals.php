@@ -312,7 +312,7 @@
             </a>
             <p id="vtNoUrl" class="hidden text-center text-xs text-slate-400 font-semibold py-2">Bu kaynak için bağlantı eklenmemiş — koçuna sorabilirsin.</p>
 
-            <!-- İzledim / İzlendi -->
+            <!-- İzledim / İzlendi (geri alınabilir — yanlış tıklamalar düzeltilebilsin) -->
             <form method="POST" id="vtForm">
                 <input type="hidden" name="update_status" value="1">
                 <input type="hidden" name="schedule_id" id="vtSchedId">
@@ -323,8 +323,20 @@
                     ✅ İzledim
                 </button>
             </form>
-            <div id="vtWatched" class="hidden w-full text-center bg-green-50 border border-green-200 text-green-700 py-3 rounded-xl font-black text-sm">
-                ✓ Bu video izlendi olarak işaretlendi
+            <div id="vtWatched" class="hidden space-y-2">
+                <div class="w-full text-center bg-green-50 border border-green-200 text-green-700 py-3 rounded-xl font-black text-sm">
+                    ✓ Bu video izlendi olarak işaretlendi
+                </div>
+                <form method="POST" id="vtUndoForm">
+                    <input type="hidden" name="update_status" value="1">
+                    <input type="hidden" name="schedule_id" id="vtUndoSchedId">
+                    <input type="hidden" name="status" value="bekliyor">
+                    <input type="hidden" name="amount" value="0">
+                    <button type="submit"
+                            class="w-full bg-white border-2 border-slate-200 hover:border-red-300 hover:text-red-600 text-slate-500 py-2.5 rounded-xl font-bold text-xs transition">
+                        ↩︎ İzlemeyi Geri Al (yanlışlıkla işaretlendiyse)
+                    </button>
+                </form>
             </div>
         </div>
     </div>
@@ -363,6 +375,7 @@ function openVideoTaskModal(item){
     else { link.classList.add('hidden'); noUrl.classList.remove('hidden'); }
 
     document.getElementById('vtSchedId').value = item.id;
+    document.getElementById('vtUndoSchedId').value = item.id;
     var done = (item.status === 'yapildi');
     document.getElementById('vtForm').classList.toggle('hidden', done);
     document.getElementById('vtWatched').classList.toggle('hidden', !done);

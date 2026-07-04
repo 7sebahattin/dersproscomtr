@@ -137,8 +137,7 @@
                 </div>
 
                 <div class="mt-4">
-                    <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Kısa Not <span class="normal-case text-slate-400 font-medium">(opsiyonel)</span></label>
-                    <input type="text" name="task_note" id="taskNoteV3" maxlength="255" placeholder="Örn: 2. bölümü mutlaka izle / dikkat: süre tut"
+                    <input type="text" name="task_note" id="taskNoteV3" maxlength="255" placeholder="Kısa Not (opsiyonel)"
                            class="w-full bg-[#fdf3e7] border border-dashed border-[#ec9731] rounded-xl text-sm p-3 font-medium text-amber-800 placeholder:text-[#ec9731]/70 focus:bg-white focus:border-[#223488] focus:border-solid outline-none transition-all">
                 </div>
 
