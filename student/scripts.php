@@ -474,11 +474,15 @@
         let unitLabel = (item.action_type === 'konu') ? 'Dakika' : 'Soru';
         document.getElementById('targetUnit').innerText = unitLabel;
 
-        // Konu tipinde doğru/yanlış alanlarını gizle
+        // Konu tipinde doğru/yanlış alanlarını (ve ipucunu) gizle
         const dogrusYanlisDiv = document.getElementById('statusCorrect').closest('.grid');
         dogrusYanlisDiv.style.display = (item.action_type === 'konu') ? 'none' : '';
+        const dyHint = document.getElementById('statusDyHint');
+        if (dyHint) dyHint.style.display = (item.action_type === 'konu') ? 'none' : '';
 
         document.getElementById('statusSelect').value = item.status || 'bekliyor';
+        // Yeni mobil arayüz: çipleri ve ilerleme çubuğunu doldurulan değerlerle senkronla
+        if (typeof syncStatusModalUI === 'function') syncStatusModalUI();
         document.getElementById('statusModal').classList.remove('hidden');
     }
 

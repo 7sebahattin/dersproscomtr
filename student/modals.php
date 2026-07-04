@@ -205,82 +205,185 @@
     </div>
 </div>
 
-<div id="statusModal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 hidden">
-    <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden relative animate-fadeIn">
-        <div class="bg-[#223488] p-4 flex justify-between items-center text-white">
-            <h3 class="font-bold text-sm tracking-wide">Görev Girişi</h3>
-            <button type="button" onclick="document.getElementById('statusModal').classList.add('hidden')" class="bg-white/20 hover:bg-white/30 rounded-full p-1.5 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
+<div id="statusModal" class="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-slate-900/70 backdrop-blur-sm p-0 sm:p-4 hidden">
+    <div class="bg-white rounded-t-[2rem] sm:rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden relative animate-fadeIn max-h-[92vh] flex flex-col">
+
+        <!-- Başlık: ders + konu doğrudan burada (mobil sheet başlığı) -->
+        <div class="relative bg-gradient-to-r from-[#223488] to-[#314595] px-5 pb-4 pt-3 text-white flex-shrink-0">
+            <div class="absolute left-0 top-0 h-full w-1.5 bg-[#ec9731]"></div>
+            <div class="sm:hidden w-10 h-1 rounded-full bg-white/30 mx-auto mb-3"></div>
+            <div class="flex justify-between items-start gap-3 pl-2">
+                <div class="min-w-0">
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/60">Görev Girişi</p>
+                    <p id="statusSubjectName" class="font-black text-xl leading-tight truncate">-</p>
+                    <p id="statusTopicName" class="text-white/80 text-xs font-semibold leading-tight mt-0.5 truncate">-</p>
+                </div>
+                <button type="button" onclick="closeStatusModal()" aria-label="Kapat" class="bg-white/15 hover:bg-white/25 rounded-full w-9 h-9 flex items-center justify-center transition flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
         </div>
-        <form method="POST" class="p-5 space-y-4">
+
+        <form method="POST" class="flex flex-col flex-1 min-h-0">
             <input type="hidden" name="update_status" value="1">
             <input type="hidden" name="schedule_id" id="statusSchedId">
 
-            <!-- Ders / Konu -->
-            <div class="grid grid-cols-1 gap-1 border-b border-slate-100 pb-3">
-                <div>
-                    <p class="text-[10px] text-slate-400 uppercase font-bold mb-0.5">DERS</p>
-                    <p id="statusSubjectName" class="font-black text-[#223488] text-lg leading-tight">-</p>
+            <div class="overflow-y-auto custom-scrollbar p-5 space-y-4 flex-1">
+
+                <!-- İlerleme: yapılan / hedef canlı çubuk -->
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                    <div class="flex items-end justify-between mb-2">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">İlerleme</span>
+                        <span class="text-sm font-black text-[#223488]"><span id="progressNow">0</span><span class="text-slate-400"> / </span><span id="displayTarget">0</span> <span id="targetUnit" class="text-[10px] text-slate-400 font-bold">Soru</span></span>
+                    </div>
+                    <div class="h-3 w-full bg-slate-200 rounded-full overflow-hidden">
+                        <div id="statusProgressBar" class="h-full rounded-full transition-all duration-500 ease-out" style="width:0%;background:linear-gradient(90deg,#223488,#ec9731)"></div>
+                    </div>
+                    <p id="statusProgressPct" class="text-right text-[10px] font-black text-slate-400 mt-1.5">%0</p>
                 </div>
+
+                <!-- Doğru / Yanlış: büyük dokunmalı sayaçlar -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-green-50 border-2 border-green-200 rounded-2xl p-3">
+                        <p class="text-[10px] font-black uppercase tracking-wider text-green-600 text-center">✓ Doğru</p>
+                        <div class="flex items-center gap-1.5 mt-2">
+                            <button type="button" onclick="stepStatusVal('statusCorrect',-1)" aria-label="Doğru azalt"
+                                    class="w-10 h-11 flex-shrink-0 rounded-xl bg-white border border-green-200 text-green-600 font-black text-xl leading-none active:scale-90 transition">−</button>
+                            <input type="number" name="correct_count" id="statusCorrect" min="0" placeholder="0" inputmode="numeric"
+                                   class="w-full min-w-0 bg-transparent text-center font-black text-2xl text-green-700 outline-none"
+                                   oninput="calcYapilan();updateStatusProgress()">
+                            <button type="button" onclick="stepStatusVal('statusCorrect',1)" aria-label="Doğru artır"
+                                    class="w-10 h-11 flex-shrink-0 rounded-xl bg-green-500 text-white font-black text-xl leading-none shadow-sm active:scale-90 transition">+</button>
+                        </div>
+                    </div>
+                    <div class="bg-red-50 border-2 border-red-200 rounded-2xl p-3">
+                        <p class="text-[10px] font-black uppercase tracking-wider text-red-500 text-center">✕ Yanlış</p>
+                        <div class="flex items-center gap-1.5 mt-2">
+                            <button type="button" onclick="stepStatusVal('statusWrong',-1)" aria-label="Yanlış azalt"
+                                    class="w-10 h-11 flex-shrink-0 rounded-xl bg-white border border-red-200 text-red-500 font-black text-xl leading-none active:scale-90 transition">−</button>
+                            <input type="number" name="wrong_count" id="statusWrong" min="0" placeholder="0" inputmode="numeric"
+                                   class="w-full min-w-0 bg-transparent text-center font-black text-2xl text-red-600 outline-none"
+                                   oninput="calcYapilan();updateStatusProgress()">
+                            <button type="button" onclick="stepStatusVal('statusWrong',1)" aria-label="Yanlış artır"
+                                    class="w-10 h-11 flex-shrink-0 rounded-xl bg-red-500 text-white font-black text-xl leading-none shadow-sm active:scale-90 transition">+</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Yapılan: büyük merkezi sayaç -->
+                <div class="bg-[#eef1fb] border-2 border-[#223488]/20 rounded-2xl p-3">
+                    <div class="flex items-center justify-between px-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-[#223488]">Yapılan</span>
+                        <span id="statusDyHint" class="text-[9px] font-bold text-slate-400">Doğru + yanlış girersen otomatik dolar</span>
+                    </div>
+                    <div class="flex items-center gap-2 mt-2">
+                        <button type="button" onclick="stepStatusVal('statusAmount',-1)" aria-label="Yapılan azalt"
+                                class="w-12 h-12 flex-shrink-0 rounded-xl bg-white border border-[#223488]/20 text-[#223488] font-black text-2xl leading-none active:scale-90 transition">−</button>
+                        <input type="number" name="amount" id="statusAmount" min="0" inputmode="numeric"
+                               class="w-full min-w-0 bg-transparent text-center font-black text-3xl text-[#223488] outline-none"
+                               oninput="clearDogrusYanlis();updateStatusProgress()">
+                        <button type="button" onclick="stepStatusVal('statusAmount',1)" aria-label="Yapılan artır"
+                                class="w-12 h-12 flex-shrink-0 rounded-xl bg-[#223488] text-white font-black text-2xl leading-none shadow-md shadow-[#223488]/30 active:scale-90 transition">+</button>
+                    </div>
+                </div>
+
+                <!-- Durum: dokunmalı çipler -->
                 <div>
-                    <p class="text-[10px] text-slate-400 uppercase font-bold mb-0.5">KONU</p>
-                    <p id="statusTopicName" class="font-medium text-slate-600 text-sm leading-tight">-</p>
+                    <label class="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-wider">Durum</label>
+                    <select name="status" id="statusSelect" class="hidden">
+                        <option value="bekliyor">⏳ Bekliyor</option>
+                        <option value="yapildi">✅ Yapıldı</option>
+                        <option value="yarim">⚠️ Yarım Kaldı</option>
+                        <option value="yapilmadi">❌ Yapılmadı</option>
+                    </select>
+                    <div class="grid grid-cols-2 gap-2" id="statusChips">
+                        <button type="button" data-st="bekliyor" onclick="setStatusChip('bekliyor',true)">⏳ Bekliyor</button>
+                        <button type="button" data-st="yapildi" onclick="setStatusChip('yapildi',true)">✅ Yapıldı</button>
+                        <button type="button" data-st="yarim" onclick="setStatusChip('yarim',true)">⚠️ Yarım</button>
+                        <button type="button" data-st="yapilmadi" onclick="setStatusChip('yapilmadi',true)">❌ Yapılmadı</button>
+                    </div>
                 </div>
             </div>
 
-            <!-- Doğru / Yanlış -->
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="flex items-center gap-1.5 text-[10px] font-black uppercase mb-1.5">
-                        <span class="text-green-500 font-black">DOĞRU</span>
-                        <svg class="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                    </label>
-                    <input type="number" name="correct_count" id="statusCorrect" min="0" placeholder="0"
-                           class="w-full border-2 border-green-200 bg-green-50 rounded-xl p-3 text-center font-black text-lg text-green-700 focus:border-green-400 focus:bg-white outline-none transition"
-                           oninput="calcYapilan()">
-                </div>
-                <div>
-                    <label class="flex items-center gap-1.5 text-[10px] font-black uppercase mb-1.5">
-                        <span class="text-red-500 font-black">YANLIŞ</span>
-                        <svg class="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                    </label>
-                    <input type="number" name="wrong_count" id="statusWrong" min="0" placeholder="0"
-                           class="w-full border-2 border-red-200 bg-red-50 rounded-xl p-3 text-center font-black text-lg text-red-600 focus:border-red-400 focus:bg-white outline-none transition"
-                           oninput="calcYapilan()">
-                </div>
+            <!-- Sabit alt eylem çubuğu (uygulama hissi) -->
+            <div class="p-4 pt-3 border-t border-slate-100 bg-white flex-shrink-0" style="padding-bottom:max(1rem,env(safe-area-inset-bottom))">
+                <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white py-3.5 rounded-2xl font-black text-sm shadow-lg shadow-green-200 transition active:scale-[0.98]">Kaydet</button>
             </div>
-
-            <!-- Hedef / Yapılan -->
-            <div class="grid grid-cols-2 gap-3">
-                <div class="bg-slate-100 p-3 rounded-xl border border-slate-200 flex flex-col justify-center text-center">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">HEDEF</span>
-                    <span id="displayTarget" class="text-2xl font-black text-slate-700 mt-1">0</span>
-                    <span class="text-[9px] text-slate-400 font-bold" id="targetUnit">Soru</span>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-black text-[#223488] mb-1.5 uppercase tracking-wider">YAPILAN</label>
-                    <input type="number" name="amount" id="statusAmount" min="0"
-                           class="w-full border-2 border-[#223488]/30 rounded-xl p-3 text-center font-black text-2xl text-[#223488] focus:border-[#ec9731] outline-none transition bg-blue-50 focus:bg-white"
-                           oninput="clearDogrusYanlis()">
-                </div>
-            </div>
-
-            <!-- Durum -->
-            <div>
-                <label class="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase">Durum</label>
-                <select name="status" id="statusSelect" class="w-full border border-slate-200 rounded-xl p-3 text-sm outline-none bg-white font-bold">
-                    <option value="bekliyor">⏳ Bekliyor</option>
-                    <option value="yapildi">✅ Yapıldı</option>
-                    <option value="yarim">⚠️ Yarım Kaldı</option>
-                    <option value="yapilmadi">❌ Yapılmadı</option>
-                </select>
-            </div>
-
-            <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white py-3.5 rounded-xl font-black text-sm shadow-lg shadow-green-200 transition active:scale-[0.98]">Kaydet</button>
         </form>
     </div>
 </div>
+
+<script>
+/* ── Görev Girişi modalı: mobil sayaç + ilerleme + durum çipleri ── */
+let _statusManual = false; // kullanıcı çipe elle dokunduysa otomatik öneri devreye girmez
+
+function stepStatusVal(id, d){
+    const el = document.getElementById(id);
+    let v = (parseInt(el.value) || 0) + d;
+    if (v < 0) v = 0;
+    el.value = v;
+    if (id === 'statusAmount') clearDogrusYanlis(); else calcYapilan();
+    updateStatusProgress();
+    if (navigator.vibrate) navigator.vibrate(8);
+}
+
+function updateStatusProgress(){
+    const t = parseInt(document.getElementById('displayTarget').innerText) || 0;
+    const a = parseInt(document.getElementById('statusAmount').value) || 0;
+    const pct = t > 0 ? Math.min(100, Math.round(a / t * 100)) : (a > 0 ? 100 : 0);
+    document.getElementById('progressNow').innerText = a;
+    document.getElementById('statusProgressBar').style.width = pct + '%';
+    document.getElementById('statusProgressPct').innerText = '%' + pct;
+    // Otomatik durum önerisi: hedefe ulaşıldıysa Yapıldı, kısmen yapıldıysa Yarım
+    if (!_statusManual) {
+        let st = document.getElementById('statusSelect').value;
+        if (a > 0 && t > 0 && a >= t) st = 'yapildi';
+        else if (a > 0 && t > 0 && a < t) st = 'yarim';
+        setStatusChip(st, false);
+    }
+}
+
+function setStatusChip(st, manual){
+    if (manual) { _statusManual = true; if (navigator.vibrate) navigator.vibrate(8); }
+    document.getElementById('statusSelect').value = st;
+    const activeCls = {
+        bekliyor:  'bg-slate-700 border-slate-700 text-white shadow-md',
+        yapildi:   'bg-green-500 border-green-500 text-white shadow-md shadow-green-200',
+        yarim:     'bg-amber-400 border-amber-400 text-white shadow-md shadow-amber-200',
+        yapilmadi: 'bg-red-500 border-red-500 text-white shadow-md shadow-red-200'
+    };
+    document.querySelectorAll('#statusChips [data-st]').forEach(b => {
+        b.className = 'h-12 rounded-xl border-2 text-xs font-black transition active:scale-95 ' +
+            (b.dataset.st === st ? activeCls[b.dataset.st] : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300');
+    });
+}
+
+/* openStatusModal (scripts.php) değerleri doldurduktan sonra arayüzü senkronlar */
+function syncStatusModalUI(){
+    _statusManual = false;
+    setStatusChip(document.getElementById('statusSelect').value || 'bekliyor', false);
+    _statusManual = false; // setStatusChip manual=false zaten; garanti olsun
+    const t = parseInt(document.getElementById('displayTarget').innerText) || 0;
+    const a = parseInt(document.getElementById('statusAmount').value) || 0;
+    const pct = t > 0 ? Math.min(100, Math.round(a / t * 100)) : (a > 0 ? 100 : 0);
+    document.getElementById('progressNow').innerText = a;
+    document.getElementById('statusProgressBar').style.width = pct + '%';
+    document.getElementById('statusProgressPct').innerText = '%' + pct;
+}
+
+function closeStatusModal(){
+    document.getElementById('statusModal').classList.add('hidden');
+}
+document.getElementById('statusModal').addEventListener('click', function(e){
+    if (e.target === this) closeStatusModal();
+});
+document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') {
+        const m = document.getElementById('statusModal');
+        if (m && !m.classList.contains('hidden')) closeStatusModal();
+    }
+});
+</script>
 <!-- ═══ VİDEO GÖREV MODALI: üstte izlenebilir YouTube, altta kaynak linki, "İzledim" ═══ -->
 <div id="videoTaskModal" class="fixed inset-0 z-[9999] items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 hidden">
     <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden relative animate-fadeIn max-h-[92vh] flex flex-col">
