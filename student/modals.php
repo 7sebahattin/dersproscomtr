@@ -437,7 +437,7 @@ document.addEventListener('keydown', function(e){
                     <input type="hidden" name="amount" value="0">
                     <button type="submit"
                             class="w-full bg-white border-2 border-slate-200 hover:border-red-300 hover:text-red-600 text-slate-500 py-2.5 rounded-xl font-bold text-xs transition">
-                        ↩︎ İzlemeyi Geri Al (yanlışlıkla işaretlendiyse)
+                        ↩︎ İzlemeyi Geri Al
                     </button>
                 </form>
             </div>
