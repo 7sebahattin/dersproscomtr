@@ -457,7 +457,7 @@ function toggleMobileMenu() {
             <div>
                 <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Kısa Konu</label>
                 <input type="text" id="fb_subject" maxlength="200" placeholder="Bildirimin kısa başlığı..."
-                       class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] focus:ring-1 focus:ring-[#223488] outline-none transition-all" required>
+                       class="js-upper w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] focus:ring-1 focus:ring-[#223488] outline-none transition-all" required>
             </div>
             <!-- Mesaj -->
             <div>
@@ -656,5 +656,32 @@ window.__VAPID_PUB__ = '<?php echo htmlspecialchars($vapidPublicKey, ENT_QUOTES)
 })();
 </script>
 <?php endif; ?>
+<script>
+// ── Genel Türkçe büyük harf dönüşümü ────────────────────────────────────────
+// Türkçe karakter (İ/I, ı/i) eşleşme sorunlarını azaltmak için, işaretlenen
+// serbest metin alanları yazılırken otomatik olarak büyük harfe çevrilir.
+// Kullanım: ilgili <input>/<textarea> öğesine class="js-upper" ekle.
+(function() {
+    'use strict';
+    function turkishUpper(el) {
+        if (!el || typeof el.value !== 'string') return;
+        var start = el.selectionStart, end = el.selectionEnd;
+        var upper = el.value.toLocaleUpperCase('tr-TR');
+        if (upper !== el.value) {
+            el.value = upper;
+            if (typeof start === 'number') {
+                try { el.setSelectionRange(start, end); } catch (e) {}
+            }
+        }
+    }
+    window.turkishUpper = turkishUpper;
+    document.addEventListener('input', function(e) {
+        var el = e.target;
+        if (el && el.classList && el.classList.contains('js-upper')) {
+            turkishUpper(el);
+        }
+    }, true);
+})();
+</script>
 
 <main class="flex-grow">

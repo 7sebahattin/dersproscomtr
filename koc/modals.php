@@ -138,7 +138,7 @@
 
                 <div class="mt-4">
                     <input type="text" name="task_note" id="taskNoteV3" maxlength="255" placeholder="Kısa Not (opsiyonel)"
-                           class="w-full bg-[#fdf3e7] border border-dashed border-[#ec9731] rounded-xl text-sm p-3 font-medium text-amber-800 placeholder:text-[#ec9731]/70 focus:bg-white focus:border-[#223488] focus:border-solid outline-none transition-all">
+                           class="js-upper w-full bg-[#fdf3e7] border border-dashed border-[#ec9731] rounded-xl text-sm p-3 font-medium text-amber-800 placeholder:text-[#ec9731]/70 focus:bg-white focus:border-[#223488] focus:border-solid outline-none transition-all">
                 </div>
 
                 <div class="mt-5">
@@ -178,8 +178,8 @@
                 <div><label class="text-[10px] font-bold text-slate-500 uppercase">Şifre</label><input type="text" name="password" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
             </div>
             <div class="grid grid-cols-2 gap-3">
-                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Ad</label><input type="text" name="first_name" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
-                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Soyad</label><input type="text" name="last_name" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Ad</label><input type="text" name="first_name" required class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Soyad</label><input type="text" name="last_name" required class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
             </div>
             <div>
                 <label class="text-[10px] font-bold text-slate-500 uppercase">Okul Seviyesi</label>
@@ -222,8 +222,8 @@
         <form method="POST" class="p-5 space-y-4">
             <input type="hidden" name="update_student_info" value="1">
             <div class="grid grid-cols-2 gap-4">
-                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Ad</label><input type="text" name="first_name" value="<?php echo $selected_student['first_name']; ?>" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
-                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Soyad</label><input type="text" name="last_name" value="<?php echo $selected_student['last_name']; ?>" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Ad</label><input type="text" name="first_name" value="<?php echo $selected_student['first_name']; ?>" class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Soyad</label><input type="text" name="last_name" value="<?php echo $selected_student['last_name']; ?>" class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div><label class="text-[10px] font-bold text-slate-500 uppercase">Öğrenci Telefon</label><input type="text" name="student_phone" value="<?php echo $selected_student['phone']; ?>" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>

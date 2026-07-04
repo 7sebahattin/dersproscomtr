@@ -114,11 +114,11 @@ $is_teacher = ($user['role'] == 'teacher');
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="block text-sm font-bold text-slate-700 mb-2">Adınız</label>
-                        <input type="text" name="first_name" value="<?php echo htmlspecialchars($user['first_name']); ?>" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white">
+                        <input type="text" name="first_name" value="<?php echo htmlspecialchars($user['first_name']); ?>" class="js-upper w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-slate-700 mb-2">Soyadınız</label>
-                        <input type="text" name="last_name" value="<?php echo htmlspecialchars($user['last_name']); ?>" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white">
+                        <input type="text" name="last_name" value="<?php echo htmlspecialchars($user['last_name']); ?>" class="js-upper w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-slate-700 mb-2">E-posta Adresi</label>

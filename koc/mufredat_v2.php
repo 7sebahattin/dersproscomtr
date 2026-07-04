@@ -192,7 +192,7 @@ $B = defined('BASE_URL') ? BASE_URL : '';
             </ul>
             <form method="post" class="mt-4">
                 <input type="hidden" name="subject_id" value="<?= $curSubj ?>">
-                <textarea name="names" required rows="3" placeholder="Yeni konu(lar) — her satıra bir konu" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300"></textarea>
+                <textarea name="names" required rows="3" placeholder="Yeni konu(lar) — her satıra bir konu" class="js-upper w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300"></textarea>
                 <button name="add_topic" class="mt-2 bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700">+ Konu Ekle</button>
             </form>
             <?php endif; ?>

@@ -981,7 +981,7 @@ include $headerPath;
 
       <div>
         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Not</label>
-        <input type="text" name="private_note" placeholder="Örn: Konu tekrarı..." class="w-full border border-amber-200 rounded-xl p-3 text-sm text-amber-700 bg-amber-50 outline-none">
+        <input type="text" name="private_note" placeholder="Örn: Konu tekrarı..." class="js-upper w-full border border-amber-200 rounded-xl p-3 text-sm text-amber-700 bg-amber-50 outline-none">
       </div>
       <label class="flex items-center gap-3 bg-[color:var(--atla-primary-050)] p-3.5 rounded-xl border border-indigo-100 cursor-pointer">
         <input type="checkbox" name="is_recurring" id="is_recurring" class="w-5 h-5 rounded border-slate-300" style="accent-color:var(--atla-primary)">
@@ -1029,7 +1029,7 @@ include $headerPath;
       </div>
       <div>
         <label class="block text-xs font-black text-slate-500 uppercase mb-1">Not</label>
-        <input type="text" name="private_note" id="edit_private_note" class="w-full border border-amber-200 rounded-2xl p-3 text-sm text-amber-700 bg-amber-50">
+        <input type="text" name="private_note" id="edit_private_note" class="js-upper w-full border border-amber-200 rounded-2xl p-3 text-sm text-amber-700 bg-amber-50">
       </div>
       <div class="pt-2 flex gap-3">
         <button type="button" onclick="closeModal('editModal')" class="flex-1 bg-slate-100 text-slate-600 py-3 rounded-2xl font-black text-sm">Vazgeç</button>

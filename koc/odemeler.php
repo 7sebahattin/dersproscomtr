@@ -328,7 +328,7 @@ if ($selected_student) {
           <h3 class="font-extrabold text-slate-800 mb-3">➕ Manuel Kayıt</h3>
           <form method="POST" class="space-y-2.5">
             <input type="hidden" name="action" value="add_manual">
-            <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" class="odm-input" required placeholder="Örn: Şubat ek ödeme"></div>
+            <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" class="odm-input js-upper" required placeholder="Örn: Şubat ek ödeme"></div>
             <div class="grid grid-cols-2 gap-2">
               <div><label class="text-xs font-bold text-slate-500 block mb-1">Tutar ₺</label><input type="number" step="0.01" name="amount" class="odm-input" required></div>
               <div><label class="text-xs font-bold text-slate-500 block mb-1">Vade</label><input type="date" name="due_date" class="odm-input" required value="<?= date('Y-m-d') ?>"></div>
@@ -373,7 +373,7 @@ if ($selected_student) {
                   <form method="POST" class="note-form" onsubmit="return true">
                     <input type="hidden" name="action" value="save_note">
                     <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
-                    <input type="text" name="note" value="<?= $oh($p['note'] ?? '') ?>" placeholder="+ not ekle" class="note-input"
+                    <input type="text" name="note" value="<?= $oh($p['note'] ?? '') ?>" placeholder="+ not ekle" class="note-input js-upper"
                            onblur="if(this.value!==this.defaultValue)this.form.submit()">
                   </form>
                 </td>
@@ -478,7 +478,7 @@ if ($selected_student) {
     </div>
     <form method="POST" class="p-5 space-y-3">
       <input type="hidden" name="action" value="update"><input type="hidden" name="id" id="edit_id">
-      <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" id="edit_desc" class="odm-input"></div>
+      <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" id="edit_desc" class="odm-input js-upper"></div>
       <div class="grid grid-cols-2 gap-2">
         <div><label class="text-xs font-bold text-slate-500 block mb-1">Tutar</label><input type="number" step="0.01" name="amount" id="edit_amount" class="odm-input"></div>
         <div><label class="text-xs font-bold text-slate-500 block mb-1">Vade</label><input type="date" name="due_date" id="edit_due" class="odm-input"></div>
@@ -500,7 +500,7 @@ if ($selected_student) {
     </div>
     <form method="POST" class="p-5 space-y-3">
       <input type="hidden" name="action" value="add_manual">
-      <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" id="add_desc" class="odm-input" required></div>
+      <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" id="add_desc" class="odm-input js-upper" required></div>
       <div class="grid grid-cols-2 gap-2">
         <div><label class="text-xs font-bold text-slate-500 block mb-1">Tutar</label><input type="number" step="0.01" name="amount" id="add_amount" class="odm-input" required></div>
         <div><label class="text-xs font-bold text-slate-500 block mb-1">Vade</label><input type="date" name="due_date" id="add_due" class="odm-input" required></div>

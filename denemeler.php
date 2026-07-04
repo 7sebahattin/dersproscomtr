@@ -161,7 +161,7 @@ if ($user_role == 'student') {
                     
                     <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Sınav Başlığı</label>
-                        <input type="text" name="title" required class="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none transition" placeholder="Örn: TYT Deneme 1 - Özdebir">
+                        <input type="text" name="title" required class="js-upper w-full border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none transition" placeholder="Örn: TYT Deneme 1 - Özdebir">
                     </div>
 
                     <div>
@@ -186,7 +186,7 @@ if ($user_role == 'student') {
                         </label>
                         <div id="answerKeyArea" class="hidden mt-4 pt-4 border-t border-yellow-200 animate-fadeIn">
                             <label class="block text-xs font-bold text-yellow-700 uppercase mb-2">Cevap Anahtarı (Bitişik Yazın)</label>
-                            <input type="text" name="answer_key" class="w-full border border-yellow-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-yellow-500 outline-none uppercase tracking-widest font-mono" placeholder="ABCDEABCDE...">
+                            <input type="text" name="answer_key" class="js-upper w-full border border-yellow-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-yellow-500 outline-none uppercase tracking-widest font-mono" placeholder="ABCDEABCDE...">
                             <p class="text-[10px] text-yellow-600 mt-2 flex items-center gap-1">Soru sayısı, girdiğiniz harf sayısına göre otomatik belirlenir.</p>
                         </div>
                     </div>

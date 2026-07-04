@@ -171,12 +171,12 @@ include 'header.php';
             <div>
                 <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Ad <span class="text-red-500">*</span></label>
                 <input type="text" name="first_name" required value="<?= htmlspecialchars($_POST['first_name'] ?? '') ?>"
-                       class="mt-1 block w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-sm focus-atla transition focus:bg-white">
+                       class="js-upper mt-1 block w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-sm focus-atla transition focus:bg-white">
             </div>
             <div>
                 <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Soyad <span class="text-red-500">*</span></label>
                 <input type="text" name="last_name" required value="<?= htmlspecialchars($_POST['last_name'] ?? '') ?>"
-                       class="mt-1 block w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-sm focus-atla transition focus:bg-white">
+                       class="js-upper mt-1 block w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-sm focus-atla transition focus:bg-white">
             </div>
         </div>
 
@@ -272,7 +272,7 @@ include 'header.php';
                         <div>
                             <input type="text" name="parent_name" placeholder="Veli Adı Soyadı"
                                    value="<?= htmlspecialchars($_POST['parent_name'] ?? '') ?>"
-                                   class="w-full border border-orange-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-300">
+                                   class="js-upper w-full border border-orange-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-300">
                         </div>
                         <div>
                             <input type="text" name="parent_phone" placeholder="Veli Telefonu"

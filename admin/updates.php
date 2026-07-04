@@ -128,7 +128,7 @@ $typeLabels = [
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wide">Başlık *</label>
                                 <input type="text" name="title" placeholder="Kısa ve açıklayıcı başlık" maxlength="255" required
-                                       class="w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none">
+                                       class="js-upper w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none">
                             </div>
 
                             <div>

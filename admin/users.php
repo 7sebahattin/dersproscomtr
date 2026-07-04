@@ -161,11 +161,11 @@ $users = $stmt_list->fetchAll(PDO::FETCH_ASSOC);
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-xs font-bold text-slate-500">Ad</label>
-                        <input type="text" name="first_name" value="<?php echo $fname_val; ?>" required class="w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
+                        <input type="text" name="first_name" value="<?php echo $fname_val; ?>" required class="js-upper w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
                     </div>
                     <div>
                         <label class="text-xs font-bold text-slate-500">Soyad</label>
-                        <input type="text" name="last_name" value="<?php echo $lname_val; ?>" required class="w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
+                        <input type="text" name="last_name" value="<?php echo $lname_val; ?>" required class="js-upper w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
                     </div>
                 </div>
 
