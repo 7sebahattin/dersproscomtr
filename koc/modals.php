@@ -96,7 +96,7 @@
                 <!-- Video görev bilgi bandı (video kaynak seçilince görünür) -->
                 <div id="videoModeInfo" class="hidden mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-red-600">
                     <span aria-hidden="true">🎬</span>
-                    <span>Video İzleme görevi — öğrenci videoyu izleyip <b>"İzledim"</b> diyecek. Miktar: 1 video.</span>
+                    <span>Video İzleme görevi</span>
                 </div>
 
                 <div class="mt-5" id="turSectionV3">
