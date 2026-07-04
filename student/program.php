@@ -37,7 +37,7 @@
             <a href="?date=<?php echo $next_week; ?>" class="px-2 md:px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm btn-nav-outline flex items-center gap-1"><span class="hidden sm:inline">Hafta</span><span class="sm:hidden">H</span> <span class="text-lg leading-none">»</span></a>
         </div>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-3 pb-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-3 xl:gap-2 pb-4">
         <?php foreach ($week_dates as $wd):
             $englishDay = date('l', strtotime($wd));
             $turkishDay = $gunlerTR[$englishDay] ?? $englishDay;
@@ -50,24 +50,24 @@
             $progress = ($totalCount > 0) ? (int)round(($doneCount / $totalCount) * 100) : 0;
         ?>
             <div class="flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-full min-h-[350px] transition-all hover:shadow-md">
-                <div class="relative bg-gradient-to-r from-[#223488] to-[#314595] text-white px-3 py-3 border-b border-[#1e2e7a]">
+                <div class="relative bg-gradient-to-r from-[#223488] to-[#314595] text-white px-3 py-3 xl:px-2.5 xl:py-2.5 border-b border-[#1e2e7a]">
                     <div class="absolute left-0 top-0 h-full w-1 bg-[#ec9731]"></div>
-                    <div class="flex items-center justify-between gap-3 relative z-10">
-                        <div class="flex items-center gap-3 min-w-0">
-                            <div class="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
-                                <span class="font-black text-xl leading-none"><?php echo date('d', strtotime($wd)); ?></span>
+                    <div class="flex items-center justify-between gap-2 relative z-10">
+                        <div class="flex items-center gap-2.5 xl:gap-2 min-w-0">
+                            <div class="w-10 h-10 xl:w-9 xl:h-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
+                                <span class="font-black text-xl xl:text-lg leading-none"><?php echo date('d', strtotime($wd)); ?></span>
                             </div>
                             <div class="min-w-0">
-                                <div class="font-black text-[13px] uppercase tracking-wide truncate"><?php echo $turkishDay; ?></div>
+                                <div class="font-black text-[13px] xl:text-[12px] uppercase tracking-wide truncate"><?php echo $turkishDay; ?></div>
                                 <div class="text-[10px] font-medium text-blue-100/80 truncate mt-0.5">Günlük Plan</div>
                             </div>
                         </div>
                         <div class="flex flex-col items-end gap-1 flex-shrink-0">
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ec9731] text-white shadow-sm border border-orange-400/50"><?php echo $totalCount; ?> Görev</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ec9731] text-white shadow-sm border border-orange-400/50 whitespace-nowrap"><?php echo $totalCount; ?> Görev</span>
                             <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/20 text-white border border-white/10">✅ <?php echo $doneCount; ?></span>
                         </div>
                     </div>
-                    <div class="mt-3">
+                    <div class="mt-2.5">
                         <div class="flex items-center justify-between text-[10px] font-bold text-blue-100 mb-1">
                             <span>İlerleme</span>
                             <span>%<?php echo $progress; ?></span>
@@ -78,7 +78,7 @@
                     </div>
                 </div>
 
-                <div class="p-2 pr-10 md:pr-2 space-y-3 flex-grow bg-slate-50 relative min-h-[150px]">
+                <div class="p-2 pr-10 md:pr-2 space-y-3 xl:space-y-2 flex-grow bg-slate-50 relative min-h-[150px]">
                     <div class="absolute top-0 bottom-0 left-6 w-px bg-slate-200 z-0"></div>
                     <?php if (empty($dayItems)): ?>
                         <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-300 opacity-60 z-0 pointer-events-none select-none">
@@ -133,7 +133,7 @@
                             $safeItem = htmlspecialchars(json_encode($item, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
                             $clickFn = $isVideoTask ? 'openVideoTaskModal' : 'openStatusModal';
                         ?>
-                            <div class="task-card group relative rounded-xl border-[3px] <?php echo $borderClass; ?> p-3 shadow-sm transition-all duration-200 cursor-pointer z-10"
+                            <div class="task-card group relative rounded-xl border-[3px] <?php echo $borderClass; ?> p-3 xl:p-2.5 shadow-sm transition-all duration-200 cursor-pointer z-10"
                                  data-item='<?php echo $safeItem; ?>'
                                  onclick='<?php echo $clickFn; ?>(JSON.parse(this.getAttribute("data-item")))'>
 
