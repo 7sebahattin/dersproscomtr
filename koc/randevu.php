@@ -512,54 +512,6 @@ foreach ($appointments as $app) {
     $week_stats['total']++;
 }
 
-/* --- STUDENT STATS --- */
-$stats_stmt = $pdo->prepare("
-    SELECT
-        u.id as student_id, u.first_name, u.last_name,
-        COUNT(a.`$APP_ID`) as total_app,
-        SUM(CASE WHEN ".app_status_expr($APP_STATUS,$APP_ISCANCEL)." = 'cancelled' THEN 1 ELSE 0 END) as cancelled_app
-    FROM appointments a
-    JOIN users u ON a.`$APP_STUDENT` = u.id
-    WHERE a.`$APP_TEACHER` = ?
-    GROUP BY a.`$APP_STUDENT`
-    ORDER BY total_app DESC
-");
-$stats_stmt->execute([$teacher_id]);
-$student_stats = $stats_stmt->fetchAll(PDO::FETCH_ASSOC);
-
-/* --- HISTORY (ALL APPS) --- */
-$all_apps_stmt = $pdo->prepare("
-    SELECT
-        a.`$APP_STUDENT` AS student_id,
-        a.`$APP_DATE` AS appointment_date,
-        a.`$APP_TIME` AS appointment_time,
-        a.`$APP_DUR`  AS duration,
-        ".app_status_expr($APP_STATUS,$APP_ISCANCEL)." AS status
-        ".($APP_PUBLIC ? ", a.`$APP_PUBLIC` AS public_note" : ", NULL AS public_note")."
-        ".($APP_PRIVATE ? ", a.`$APP_PRIVATE` AS private_note" : ", NULL AS private_note")."
-        ,
-        u.first_name, u.last_name
-    FROM appointments a
-    JOIN users u ON a.`$APP_STUDENT` = u.id
-    WHERE a.`$APP_TEACHER` = ?
-    ORDER BY a.`$APP_DATE` DESC, a.`$APP_TIME` DESC
-");
-$all_apps_stmt->execute([$teacher_id]);
-$all_apps = $all_apps_stmt->fetchAll(PDO::FETCH_ASSOC);
-
-$apps_by_student = [];
-foreach($all_apps as $ap) {
-    $sid = (int)$ap['student_id'];
-    $apps_by_student[$sid][] = [
-        'date' => date('d.m.Y', strtotime($ap['appointment_date'])),
-        'time' => date('H:i', strtotime($ap['appointment_time'])),
-        'status' => (string)($ap['status'] ?? 'active'),
-        'duration' => (int)($ap['duration'] ?? 0),
-        'public_note' => (string)($ap['public_note'] ?? ''),
-        'private_note' => (string)($ap['private_note'] ?? ''),
-    ];
-}
-
 $week_days = [];
 $dtStart = new DateTime($week_start);
 for($i=0;$i<7;$i++){ $tmp=clone $dtStart; $tmp->modify("+$i day"); $week_days[]=$tmp; }
@@ -767,49 +719,6 @@ include $headerPath;
             </div>
           <?php endif; ?>
         </div>
-
-        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 max-h-[420px] overflow-y-auto custom-scrollbar">
-          <h3 class="font-extrabold text-slate-800 mb-4 flex items-center justify-between">
-            <span class="flex items-center gap-2">📊 Karne</span>
-            <span class="text-[10px] font-semibold text-slate-400">Detay için tıkla →</span>
-          </h3>
-          <?php if (empty($student_stats)): ?>
-            <div class="text-center py-6">
-              <div class="text-3xl mb-2 opacity-40">📭</div>
-              <p class="text-xs text-slate-400 font-semibold">Henüz randevu geçmişi yok.</p>
-            </div>
-          <?php else: ?>
-            <div class="space-y-2">
-              <?php foreach ($student_stats as $stat):
-                $sId = (int)$stat['student_id'];
-                $name = $stat['first_name'].' '.$stat['last_name'];
-                $total = (int)$stat['total_app'];
-                $cancel = (int)$stat['cancelled_app'];
-                $ok = max(0,$total-$cancel);
-                $ratio = $total>0 ? (int)round(($ok/$total)*100) : 0;
-                $ringCol = $ratio>=80 ? 'var(--success)' : ($ratio>=50 ? 'var(--atla-accent)' : 'var(--error)');
-                $badge = $ratio>=80 ? '⭐' : ($ratio>=50 ? '🎯' : '');
-                $circ = 2*M_PI*18; $off = $circ*(1-$ratio/100);
-              ?>
-              <button type="button" onclick="openHistoryModal(<?php echo $sId; ?>,'<?php echo h($name); ?>')"
-                   class="w-full text-left flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition">
-                <div class="relative shrink-0" style="width:46px;height:46px">
-                  <svg width="46" height="46" viewBox="0 0 46 46">
-                    <circle cx="23" cy="23" r="18" fill="none" stroke="#e2e8f0" stroke-width="4"/>
-                    <circle cx="23" cy="23" r="18" fill="none" stroke="<?php echo $ringCol; ?>" stroke-width="4" stroke-linecap="round"
-                      stroke-dasharray="<?php echo $circ; ?>" stroke-dashoffset="<?php echo $off; ?>" transform="rotate(-90 23 23)"/>
-                  </svg>
-                  <span class="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-slate-700">%<?php echo $ratio; ?></span>
-                </div>
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-bold text-slate-800 truncate flex items-center gap-1"><?php echo h($name); ?> <span><?php echo $badge; ?></span></p>
-                  <p class="text-[11px] text-slate-500 font-semibold"><?php echo $ok; ?> tamam · <?php echo $cancel; ?> iptal</p>
-                </div>
-              </button>
-              <?php endforeach; ?>
-            </div>
-          <?php endif; ?>
-        </div>
       </div>
 
       <div class="lg:col-span-2 space-y-4">
@@ -931,19 +840,6 @@ include $headerPath;
   style="background:var(--atla-primary);box-shadow:0 10px 20px -3px rgba(34,52,136,.45)"
   onmouseover="this.style.background='var(--atla-primary-600)'" onmouseout="this.style.background='var(--atla-primary)'">＋</button>
 
-<div id="historyModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 hidden">
-  <div class="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden relative max-h-[80vh] flex flex-col">
-    <div class="bg-slate-900 p-5 flex justify-between items-center text-white flex-shrink-0">
-      <div>
-        <h3 class="font-black text-lg" id="historyModalTitle">Geçmiş</h3>
-        <p class="text-xs text-white/60 font-semibold">Tüm randevular</p>
-      </div>
-      <button onclick="closeModal('historyModal')" aria-label="Kapat" class="bg-white/15 hover:bg-white/25 rounded-full w-9 h-9 flex items-center justify-center transition">✕</button>
-    </div>
-    <div class="p-0 overflow-y-auto custom-scrollbar flex-grow bg-white" id="historyModalBody"></div>
-  </div>
-</div>
-
 <div id="addModal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
   <div class="bg-white rounded-[1.5rem] w-full max-w-lg shadow-2xl overflow-hidden relative">
     <div class="p-5 flex justify-between items-center text-white" style="background:var(--atla-primary)">
@@ -1059,8 +955,6 @@ include $headerPath;
 </div>
 
 <script>
-const appsByStudent = <?php echo json_encode($apps_by_student, JSON_UNESCAPED_UNICODE); ?>;
-
 /* ── Toast (PRG flash) ── */
 function showToast(type, text, timeout){
   const wrap = document.getElementById('toastWrap');
@@ -1185,44 +1079,15 @@ function openEditModal(data){
   showModal('editModal');
 }
 
-function openHistoryModal(studentId, studentName){
-  const body  = document.getElementById('historyModalBody');
-  document.getElementById('historyModalTitle').textContent = studentName;
-
-  const apps = appsByStudent[studentId] || [];
-  if(apps.length===0){
-    body.innerHTML = '<div class="p-10 text-center text-slate-400 text-sm font-semibold">Kayıt yok.</div>';
-  } else {
-    body.innerHTML = apps.map(a=>{
-      const isC = a.status==='cancelled';
-      const notes = ((a.public_note||'') + ' ' + (a.private_note||'')).trim();
-      return `
-        <div class="p-5 border-b border-slate-100 ${isC?'bg-red-50':'bg-white'}">
-          <div class="flex justify-between items-center">
-            <div class="font-black text-slate-900">${a.date}</div>
-            <span class="text-[10px] font-black px-2 py-1 rounded-xl border ${isC?'text-red-600 bg-red-50 border-red-100':'text-green-700 bg-green-50 border-green-100'}">
-              ${isC?'İPTAL':'AKTİF'}
-            </span>
-          </div>
-          <div class="text-xs font-bold text-indigo-700 mt-1">${a.time} <span class="text-slate-400 font-semibold">(${a.duration} dk)</span></div>
-          ${notes ? `<div class="mt-3 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-2xl p-3 break-words">${notes}</div>`:''}
-        </div>
-      `;
-    }).join('');
-  }
-  showModal('historyModal');
-}
-
 window.addEventListener('click', function(e){
   if(e.target && e.target.id === 'addModal') closeModal('addModal');
   if(e.target && e.target.id === 'editModal') closeModal('editModal');
-  if(e.target && e.target.id === 'historyModal') closeModal('historyModal');
 });
 
 /* Erişilebilirlik: Escape ile açık modalı kapat */
 document.addEventListener('keydown', function(e){
   if(e.key !== 'Escape') return;
-  ['addModal','editModal','historyModal'].forEach(id=>{
+  ['addModal','editModal'].forEach(id=>{
     const el = document.getElementById(id);
     if(el && !el.classList.contains('hidden')) closeModal(id);
   });
