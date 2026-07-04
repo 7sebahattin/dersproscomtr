@@ -189,16 +189,16 @@
                                             // Eğer hedef farklıysa ve durum "bekliyor" değilse göster
                                             if ($target != $realized && $status != 'bekliyor'): 
                                         ?>
-                                            <div class="flex flex-col items-end leading-none mr-1">
-                                                <span class="text-[9px] text-slate-400 font-bold line-through decoration-red-400 decoration-1" title="Hedeflenen">
+                                            <div class="flex items-baseline gap-1.5 mr-1">
+                                                <span class="text-xs text-slate-400 font-bold line-through decoration-red-400 decoration-1" title="Hedeflenen">
                                                     <?php echo $target; ?>
                                                 </span>
-                                                <span class="text-sm font-black text-slate-900" title="Gerçekleşen">
+                                                <span class="text-xl font-black text-slate-900" title="Gerçekleşen">
                                                     <?php echo $realized; ?>
                                                 </span>
                                             </div>
                                         <?php else: ?>
-                                            <span class="text-sm font-black text-slate-900"><?php echo $realized; ?></span>
+                                            <span class="text-xl font-black text-slate-900"><?php echo $realized; ?></span>
                                         <?php endif; ?>
                                         <span class="text-[9px] px-1.5 py-0.5 rounded font-bold <?php echo $metricClass; ?>">
                                             <?php echo $metricLabel; ?>
