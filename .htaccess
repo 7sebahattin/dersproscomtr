@@ -37,6 +37,9 @@ RewriteRule ^uploads/exams/ - [F,L]
 # Yalnızca ödemenin sahibi öğretmene koc/dekont.php üzerinden sunulur.
 RewriteRule ^uploads/receipts/ - [F,L]
 
+# Composer kütüphane dosyalarına doğrudan web erişimi gereksiz — kapat.
+RewriteRule ^vendor/ - [F,L]
+
 # LiteSpeed sunucu önbelleği (LSCache) .php sayfalarını devre dışı bırakır.
 # Site tamamen oturum tabanlı/dinamik olduğundan sayfa önbelleklenmesi
 # deploy sonrası değişikliklerin (header/footer gibi) gecikmeli görünmesine yol açar.

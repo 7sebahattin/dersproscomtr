@@ -10,15 +10,29 @@
  *  C) schedule_items.time_note eşleşen saatte → özel görev bildirimi
  */
 
-// CLI, localhost veya pseudo-cron (CRON_RUN) ile çalıştırılabilir
+// CLI, localhost, pseudo-cron (CRON_RUN) veya jetonlu harici tetikleyici ile çalıştırılabilir.
+// Harici tetikleyici (cron-job.org / UptimeRobot vb.): secrets.php içine
+//   define('CRON_TOKEN', 'uzun-rastgele-dizi');
+// ekleyin ve şu adresi 5 dakikada bir çağırtın:
+//   https://derspros.com.tr/cron_notifications.php?token=uzun-rastgele-dizi
+// Böylece bildirimler site trafiğinden bağımsız, düzenli çalışır.
 $isCli = php_sapi_name() === 'cli';
 if (!$isCli && !defined('CRON_RUN')) {
+    $secretsFile = __DIR__ . '/secrets.php';
+    if (file_exists($secretsFile)) require_once $secretsFile;
+    $tokenOk = defined('CRON_TOKEN') && CRON_TOKEN !== ''
+        && hash_equals((string)CRON_TOKEN, (string)($_GET['token'] ?? ''));
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-    if (!in_array($ip, ['127.0.0.1', '::1'])) {
+    if (!$tokenOk && !in_array($ip, ['127.0.0.1', '::1'])) {
         http_response_code(403);
         exit("Erişim yasak.\n");
     }
 }
+
+// Kaçan saat dilimlerini telafi penceresi: cron hedef saatte çalışamadıysa
+// bildirimi bu kadar saat boyunca hâlâ gönderebilir (tekrar koruması
+// push_notification_log üzerinden zaten var — aynı bildirim 2 kez gitmez).
+const NOTIF_CATCHUP_HOURS = 2;
 
 define('CRON_RUN', true);
 require_once __DIR__ . '/db.php';
@@ -290,14 +304,19 @@ foreach ($students as $student) {
     // DURUM A — Öğrenci bugün sisteme HİÇ GİRİŞ YAPMADI
     // ════════════════════════════════════════════════════════════════════════
     if (!$loggedInToday) {
-        foreach (['A_12','A_16','A_20','A_22'] as $sc) {
+        // Geç saatliden erkene bak: penceresine girilen İLK senaryo gönderilir ve
+        // döngü biter. Böylece cron saatlerce çalışamadıysa bile öğrenci tek
+        // koşuda 2-3 bildirimle spamlenmez; kaçan saat telafi penceresi içinde
+        // hâlâ yakalanır (tam saat eşleşmesi şartı kaldırıldı).
+        foreach (['A_22','A_20','A_16','A_12'] as $sc) {
             if (!notif_active($pdo, $tid, $sid, $sc)) continue;
             $h = (int)resolve_notif($pdo, $tid, $sid, $sc, 'hour', $notif_defaults);
-            if ($currentHour !== $h) continue;
+            if ($currentHour < $h || $currentHour > $h + NOTIF_CATCHUP_HOURS) continue;
             $title = resolve_notif($pdo, $tid, $sid, $sc, 'title', $notif_defaults);
             $body  = resolve_notif($pdo, $tid, $sid, $sc, 'body',  $notif_defaults);
             $body  = str_replace(['{ad}','{toplam}'], [$firstName, $totalTasks], $body);
             send_push($webPush, $pdo, $student, $sc, $today, $title, $body, BASE_URL.'/kocluk.php');
+            break;
         }
     }
 
@@ -305,29 +324,36 @@ foreach ($students as $student) {
     // DURUM B — Öğrenci giriş yaptı
     // ════════════════════════════════════════════════════════════════════════
     if ($loggedInToday) {
+        // Saat eşleşmesi: tam saat yerine telafi penceresi (kaçan dilim yakalanır,
+        // tekrar koruması aynı bildirimi ikinci kez göndermez).
+        $inWindow = function (string $sc) use ($pdo, $tid, $sid, $notif_defaults, $currentHour): bool {
+            $h = (int)resolve_notif($pdo, $tid, $sid, $sc, 'hour', $notif_defaults);
+            return $currentHour >= $h && $currentHour <= $h + NOTIF_CATCHUP_HOURS;
+        };
+
         // B_17 — Hiç görev yapmadıysa
-        if (notif_active($pdo, $tid, $sid, 'B_17') && $currentHour === (int)resolve_notif($pdo, $tid, $sid, 'B_17', 'hour', $notif_defaults) && $doneTasks === 0) {
+        if (notif_active($pdo, $tid, $sid, 'B_17') && $inWindow('B_17') && $doneTasks === 0) {
             $title = resolve_notif($pdo, $tid, $sid, 'B_17', 'title', $notif_defaults);
             $body  = resolve_notif($pdo, $tid, $sid, 'B_17', 'body',  $notif_defaults);
             send_push($webPush, $pdo, $student, 'B_17_no_tasks', $today, $title, $body, BASE_URL.'/kocluk.php');
         }
 
         // B_20 — %50'den az görev
-        if (notif_active($pdo, $tid, $sid, 'B_20') && $currentHour === (int)resolve_notif($pdo, $tid, $sid, 'B_20', 'hour', $notif_defaults) && $donePercent < 50 && $doneTasks > 0) {
+        if (notif_active($pdo, $tid, $sid, 'B_20') && $inWindow('B_20') && $donePercent < 50 && $doneTasks > 0) {
             $title = resolve_notif($pdo, $tid, $sid, 'B_20', 'title', $notif_defaults);
             $body  = str_replace('{yuzde}', round($donePercent), resolve_notif($pdo, $tid, $sid, 'B_20', 'body', $notif_defaults));
             send_push($webPush, $pdo, $student, 'B_20_below50', $today, $title, $body, BASE_URL.'/kocluk.php');
         }
 
         // B_22_no — Hiç görev yok
-        if (notif_active($pdo, $tid, $sid, 'B_22_no') && $currentHour === (int)resolve_notif($pdo, $tid, $sid, 'B_22_no', 'hour', $notif_defaults) && $doneTasks === 0) {
+        if (notif_active($pdo, $tid, $sid, 'B_22_no') && $inWindow('B_22_no') && $doneTasks === 0) {
             $title = resolve_notif($pdo, $tid, $sid, 'B_22_no', 'title', $notif_defaults);
             $body  = resolve_notif($pdo, $tid, $sid, 'B_22_no', 'body',  $notif_defaults);
             send_push($webPush, $pdo, $student, 'B_22_no_tasks', $today, $title, $body, BASE_URL.'/kocluk.php');
         }
 
         // B_22_done — Tüm görevler tamam
-        if (notif_active($pdo, $tid, $sid, 'B_22_done') && $currentHour === (int)resolve_notif($pdo, $tid, $sid, 'B_22_done', 'hour', $notif_defaults) && $allCompleted) {
+        if (notif_active($pdo, $tid, $sid, 'B_22_done') && $inWindow('B_22_done') && $allCompleted) {
             $title = resolve_notif($pdo, $tid, $sid, 'B_22_done', 'title', $notif_defaults);
             $body  = resolve_notif($pdo, $tid, $sid, 'B_22_done', 'body',  $notif_defaults);
             send_push($webPush, $pdo, $student, 'B_22_completed', $today, $title, $body, BASE_URL.'/kocluk.php');
@@ -374,11 +400,14 @@ foreach ($students as $student) {
             $taskHour = isset($tm[1]) ? (int)$tm[1] : -1;
             $taskMin  = isset($tm[2]) ? (int)$tm[2] : 0;
 
-            // Şu anki zamandan ±5 dakika penceresi içinde mi?
+            // Pencere: görev saatinden 5 dk önce → 30 dk sonra. Cron o dakikada
+            // çalışamadıysa bildirim yarım saat boyunca hâlâ yakalanır (tekrar
+            // koruması var; geç kalmış hatırlatma hiç gitmemesinden iyidir).
             $taskTotalMin = $taskHour * 60 + $taskMin;
             $nowTotalMin  = $currentHour * 60 + $currentMin;
-            cron_log("  [C] Görev #{$task['id']} time_note=$timeNote → {$taskHour}:{$taskMin} | Şu an={$currentHour}:{$currentMin} | Fark=" . abs($taskTotalMin - $nowTotalMin) . " dk");
-            if ($taskHour < 0 || abs($taskTotalMin - $nowTotalMin) > 5) {
+            $delta        = $nowTotalMin - $taskTotalMin; // pozitif = görev saati geçmiş
+            cron_log("  [C] Görev #{$task['id']} time_note=$timeNote → {$taskHour}:{$taskMin} | Şu an={$currentHour}:{$currentMin} | Fark=$delta dk");
+            if ($taskHour < 0 || $delta < -5 || $delta > 30) {
                 cron_log("  [C] Atlandı (zaman penceresi dışında)");
                 continue;
             }
@@ -402,9 +431,13 @@ foreach ($students as $student) {
 
 cron_log("\n=== Cron tamamlandı: " . (new DateTime())->format('Y-m-d H:i:s') . " ===\n");
 
-// ── Yardımcı: Log Yaz ─────────────────────────────────────────────────────────
+// ── Yardımcı: Log Yaz (2 MB'ı aşınca kendini sıfırlar) ───────────────────────
 function cron_log(string $msg): void {
+    $file = __DIR__ . '/cron_log.txt';
+    if (is_file($file) && filesize($file) > 2 * 1024 * 1024) {
+        @file_put_contents($file, '[' . date('Y-m-d H:i:s') . "] (log 2MB'ı aştı, sıfırlandı)\n");
+    }
     $line = '[' . date('H:i:s') . '] ' . $msg . PHP_EOL;
     echo $line;
-    file_put_contents(__DIR__ . '/cron_log.txt', $line, FILE_APPEND);
+    file_put_contents($file, $line, FILE_APPEND);
 }
