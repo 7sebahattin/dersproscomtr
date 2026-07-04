@@ -97,6 +97,25 @@ $settings = get_settings($pdo, $teacher_id, $filter_sid, $defaults);
         <?php else: ?>
         <p class="text-xs text-slate-400 mt-3">ℹ️ Tüm Öğrenciler seçiliyken yapılan değişiklikler, özel ayarı olmayan tüm öğrencilere uygulanır.</p>
         <?php endif; ?>
+
+        <!-- ── TEŞHİS: Anlık test bildirimi ── -->
+        <div class="mt-4 pt-4 border-t border-slate-100">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p class="text-sm font-bold text-slate-700">🧪 Test Bildirimi Gönder</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Seçili öğrenciye anında bir test bildirimi yollar; cron beklemeden pipeline'ı doğrular.</p>
+                </div>
+                <?php if ($filter_sid): ?>
+                <button id="testPushBtn" onclick="sendTestPush(<?php echo $filter_sid; ?>)"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition whitespace-nowrap">
+                    🔔 Şimdi Test Et
+                </button>
+                <?php else: ?>
+                <span class="text-xs text-slate-400 font-medium bg-slate-100 px-3 py-2 rounded-lg">Önce yukarıdan bir öğrenci seçin</span>
+                <?php endif; ?>
+            </div>
+            <div id="testPushResult" class="hidden mt-3 text-xs rounded-xl border p-3"></div>
+        </div>
     </div>
 
     <!-- DURUM A -->
@@ -323,6 +342,56 @@ document.querySelectorAll('.toggle-active').forEach(toggle => {
         if (label) label.textContent = this.checked ? 'Aktif' : 'Pasif';
     });
 });
+
+// ── Anlık test bildirimi (TEŞHİS) ──
+function sendTestPush(studentId) {
+    const btn = document.getElementById('testPushBtn');
+    const box = document.getElementById('testPushResult');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Gönderiliyor...'; }
+    box.className = 'mt-3 text-xs rounded-xl border p-3 bg-slate-50 border-slate-200 text-slate-500';
+    box.classList.remove('hidden');
+    box.textContent = 'Test bildirimi gönderiliyor...';
+
+    fetch('<?php echo $B; ?>/ajax/push_test.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ student_id: studentId })
+    })
+    .then(r => r.json())
+    .then(res => {
+        let html = '';
+        const okCls   = 'bg-green-50 border-green-200 text-green-700';
+        const failCls = 'bg-red-50 border-red-200 text-red-700';
+        box.className = 'mt-3 text-xs rounded-xl border p-3 ' + (res.ok ? okCls : failCls);
+
+        html += '<p class="font-bold mb-1">' + (res.ok ? '✅ ' : '⚠️ ') + (res.msg || '') + '</p>';
+        if (typeof res.device_count !== 'undefined') {
+            html += '<p class="text-slate-500">Kayıtlı cihaz: <b>' + res.device_count + '</b>'
+                 + ' · Tercih: <b>' + (res.pref_enabled ? 'Açık' : 'Kapalı') + '</b></p>';
+        }
+        if (res.diagnostics && res.diagnostics.length) {
+            html += '<ul class="mt-1 list-disc list-inside text-amber-700">';
+            res.diagnostics.forEach(d => html += '<li>' + d + '</li>');
+            html += '</ul>';
+        }
+        if (res.results && res.results.length) {
+            html += '<ul class="mt-1 space-y-0.5">';
+            res.results.forEach(r => {
+                html += '<li>' + (r.ok ? '✅' : '❌') + ' <b>' + r.device + '</b>'
+                     + (r.http ? ' (HTTP ' + r.http + ')' : '') + ' — ' + r.detail + '</li>';
+            });
+            html += '</ul>';
+        }
+        box.innerHTML = html;
+    })
+    .catch(() => {
+        box.className = 'mt-3 text-xs rounded-xl border p-3 bg-red-50 border-red-200 text-red-700';
+        box.textContent = 'Bağlantı hatası — test gönderilemedi.';
+    })
+    .finally(() => {
+        if (btn) { btn.disabled = false; btn.textContent = '🔔 Şimdi Test Et'; }
+    });
+}
 </script>
 
 <?php include '../footer.php'; ?>

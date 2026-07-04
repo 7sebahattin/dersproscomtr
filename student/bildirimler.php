@@ -150,6 +150,14 @@ $B = BASE_URL;
             </label>
         </div>
         <div id="pushStatusMsg" class="mt-2 text-xs font-medium hidden"></div>
+        <div class="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+            <p class="text-xs text-slate-400">Bildirimlerin çalışıp çalışmadığını hemen test et.</p>
+            <button id="selfTestBtn" type="button"
+                    class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition whitespace-nowrap">
+                🔔 Kendime Test Gönder
+            </button>
+        </div>
+        <div id="selfTestResult" class="hidden mt-2 text-xs rounded-xl border p-3"></div>
     </div>
     <style>
         .toggle-checkbox:checked { right: 0; border-color: #4f46e5; }
@@ -170,6 +178,62 @@ $B = BASE_URL;
             msgEl.className   = 'mt-2 text-xs font-medium ' + (ok ? 'text-green-600' : 'text-red-500');
             msgEl.classList.remove('hidden');
             setTimeout(() => msgEl.classList.add('hidden'), 3000);
+        }
+
+        // ── Kendime test bildirimi (TEŞHİS) ──
+        const selfTestBtn = document.getElementById('selfTestBtn');
+        const selfTestBox = document.getElementById('selfTestResult');
+        if (selfTestBtn) {
+            selfTestBtn.addEventListener('click', async function() {
+                selfTestBtn.disabled = true;
+                const oldTxt = selfTestBtn.textContent;
+                selfTestBtn.textContent = '⏳ Gönderiliyor...';
+                selfTestBox.className = 'mt-2 text-xs rounded-xl border p-3 bg-slate-50 border-slate-200 text-slate-500';
+                selfTestBox.classList.remove('hidden');
+                selfTestBox.textContent = 'Test bildirimi gönderiliyor...';
+                try {
+                    // Abonelik henüz kurulmamışsa önce kurmayı dene (izin verilmişse)
+                    if ('serviceWorker' in navigator && 'PushManager' in window && Notification.permission === 'granted') {
+                        const reg = await navigator.serviceWorker.ready;
+                        let sub = await reg.pushManager.getSubscription();
+                        if (!sub && (window.__VAPID_PUB__ || '')) {
+                            const v = window.__VAPID_PUB__;
+                            const pad = '='.repeat((4 - v.length % 4) % 4);
+                            const b64 = (v + pad).replace(/-/g,'+').replace(/_/g,'/');
+                            const raw = atob(b64);
+                            const key = Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+                            sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+                            await fetch(BASE + '/ajax/push_subscribe.php', {
+                                method:'POST', headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({ subscription: sub.toJSON(), action:'subscribe' })
+                            });
+                        }
+                    }
+                    const res = await fetch(BASE + '/ajax/push_test.php', {
+                        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})
+                    });
+                    const data = await res.json();
+                    const okCls   = 'bg-green-50 border-green-200 text-green-700';
+                    const failCls = 'bg-red-50 border-red-200 text-red-700';
+                    selfTestBox.className = 'mt-2 text-xs rounded-xl border p-3 ' + (data.ok ? okCls : failCls);
+                    let html = '<p class="font-bold">' + (data.ok ? '✅ ' : '⚠️ ') + (data.msg || '') + '</p>';
+                    if (data.results && data.results.length) {
+                        html += '<ul class="mt-1 space-y-0.5">';
+                        data.results.forEach(r => {
+                            html += '<li>' + (r.ok ? '✅' : '❌') + ' ' + r.device
+                                 + (r.http ? ' (HTTP ' + r.http + ')' : '') + ' — ' + r.detail + '</li>';
+                        });
+                        html += '</ul>';
+                    }
+                    selfTestBox.innerHTML = html;
+                } catch(e) {
+                    selfTestBox.className = 'mt-2 text-xs rounded-xl border p-3 bg-red-50 border-red-200 text-red-700';
+                    selfTestBox.textContent = 'Bağlantı hatası — test gönderilemedi.';
+                } finally {
+                    selfTestBtn.disabled = false;
+                    selfTestBtn.textContent = oldTxt;
+                }
+            });
         }
 
         toggle.addEventListener('change', async function() {
