@@ -23,23 +23,37 @@ if (file_exists(__DIR__ . '/db.php')) {
     require_once __DIR__ . '/db.php';
 }
 
-// 2b. PSEUDO-CRON — Her 5 dakikada bir cron_notifications.php'yi arka planda tetikle
-// Sunucuda crontab izni olmayan hostingler için alternatif yöntem
+// 2b. PSEUDO-CRON — cron_notifications.php'yi arka planda tetikle
+// Sunucuda crontab izni olmayan hostingler için alternatif yöntem.
+// Damga GLOBAL (dosya tabanlı): eskiden oturum bazlıydı; trafiğin az olduğu
+// saatlerde hiç çalışmıyor, yoğun saatlerde her oturum ayrı tetikliyordu.
+// Şimdi hangi kullanıcı gelirse gelsin 4 dakikada en fazla bir kez, flock
+// kilidiyle eşzamanlı çift çalıştırmaya karşı korunarak çalışır.
 if (isset($_SESSION['user_id'])) {
-    $cronInterval = 5 * 60; // 5 dakika
-    $lastRun = $_SESSION['pseudo_cron_last'] ?? 0;
+    $pseudoCronStamp = __DIR__ . '/.pseudo_cron_stamp';
+    $pseudoCronLock  = __DIR__ . '/.pseudo_cron_lock';
+    $cronInterval = 4 * 60; // 4 dk — saat başlarını kaçırmamak için 5'ten kısa
+    $lastRun = (int)@file_get_contents($pseudoCronStamp);
     if ((time() - $lastRun) >= $cronInterval) {
-        $_SESSION['pseudo_cron_last'] = time();
         $cronFile = __DIR__ . '/cron_notifications.php';
         if (file_exists($cronFile)) {
             // Sayfa yüklemesini bloklamadan, çıktıyı SAYFAYA SIZDIRMADAN arka planda çalıştır.
-            register_shutdown_function(function() use ($cronFile) {
+            register_shutdown_function(function() use ($cronFile, $pseudoCronStamp, $pseudoCronLock, $cronInterval) {
                 // Yanıtı kullanıcıya kapat (FastCGI veya LiteSpeed)
                 if (function_exists('fastcgi_finish_request')) {
                     fastcgi_finish_request();
                 } elseif (function_exists('litespeed_finish_request')) {
                     litespeed_finish_request();
                 }
+                // Kilidi al — alamazsak başka bir istek zaten çalıştırıyor demektir
+                $fp = @fopen($pseudoCronLock, 'c');
+                if (!$fp) return;
+                if (!flock($fp, LOCK_EX | LOCK_NB)) { fclose($fp); return; }
+                // Kilit beklerken başka istek damgayı tazelemiş olabilir: yeniden kontrol
+                if ((time() - (int)@file_get_contents($pseudoCronStamp)) < $cronInterval) {
+                    flock($fp, LOCK_UN); fclose($fp); return;
+                }
+                @file_put_contents($pseudoCronStamp, (string)time());
                 if (!defined('CRON_RUN')) define('CRON_RUN', true);
                 // $pdo bağlantısını cron'a aktar (shutdown kapsamında global'den al)
                 global $pdo;
@@ -51,8 +65,25 @@ if (isset($_SESSION['user_id'])) {
                     // Sessizce yut — arka plan görevi sayfayı etkilemesin
                 }
                 ob_end_clean();
+                flock($fp, LOCK_UN);
+                fclose($fp);
             });
         }
+    }
+}
+
+// 2c. SON GÖRÜLME — "bugün sisteme girdi mi" tespiti gerçek aktiviteye dayansın.
+// Oturumu günlerce açık kalan öğrenci yeniden şifre girmediği için last_login_at
+// eski kalıyor ve haksız yere "hiç girmedin" (Durum A) bildirimi alıyordu.
+// Girişli her kullanıcı için en fazla 30 dakikada bir tazelenir.
+if (isset($_SESSION['user_id']) && isset($pdo)) {
+    $lastSeenPing = (int)($_SESSION['last_seen_ping'] ?? 0);
+    if ((time() - $lastSeenPing) >= 1800) {
+        $_SESSION['last_seen_ping'] = time();
+        try {
+            $pdo->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?")
+                ->execute([(int)$_SESSION['user_id']]);
+        } catch (Throwable $e) { /* kolon yoksa sessiz geç */ }
     }
 }
 
