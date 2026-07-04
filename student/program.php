@@ -112,12 +112,12 @@
                             } elseif ($status === 'yapilmadi') {
                                 $borderClass = 'border-red-500 hover:border-red-600 bg-red-100';
                                 $statusBadge = 'bg-red-200 text-red-900';
-                                $statusIcon  = '✖';
+                                $statusIcon  = '❌';
                                 $iconBg      = 'bg-red-200 text-red-800';
                             } elseif ($status === 'yarim') {
                                 $borderClass = 'border-orange-500 hover:border-orange-600 bg-orange-100';
                                 $statusBadge = 'bg-orange-200 text-orange-900';
-                                $statusIcon  = '⚠';
+                                $statusIcon  = '⚠️';
                                 $iconBg      = 'bg-orange-200 text-orange-800';
                             }
 
@@ -156,7 +156,7 @@
                                             </span>
                                         <?php endif; ?>
                                     </div>
-                                    <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs border border-transparent <?php echo $iconBg; ?>">
+                                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-base leading-none border border-transparent <?php echo $iconBg; ?>">
                                         <?php echo $statusIcon; ?>
                                     </div>
                                 </div>
