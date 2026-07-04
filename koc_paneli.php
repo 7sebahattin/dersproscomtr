@@ -137,16 +137,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
 
             if (!$row) { echo json_encode(['ok' => false, 'error' => 'Kayıt bulunamadı.']); exit; }
 
-            $ins = $pdo->prepare("
-                INSERT INTO schedule_items
-                    (student_id, date, amount, action_type, status, topic_id, custom_subject, custom_topic, time_note, item_order)
-                VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-            ");
-            $ins->execute([
-                $sid, $toDate, $row['amount'], $row['action_type'], $row['status'],
-                $row['topic_id'], $row['custom_subject'], $row['custom_topic'], $row['time_note']
-            ]);
+            $copyCols = ['student_id','date','amount','action_type','status','topic_id','custom_subject','custom_topic','time_note'];
+            $copyVals = [$sid, $toDate, $row['amount'], $row['action_type'], $row['status'],
+                         $row['topic_id'], $row['custom_subject'], $row['custom_topic'], $row['time_note']];
+            // Müfredat/kaynak bağı ve diğer opsiyonel alanlar da kopyalansın —
+            // aksi halde kopya edu_topic_id'siz kalıp analizde "Diğer"e düşüyordu.
+            foreach (['edu_topic_id','resource_title','resource_id','task_note','target_amount','correct_count','wrong_count'] as $c) {
+                if (array_key_exists($c, $row)) { $copyCols[] = $c; $copyVals[] = $row[$c]; }
+            }
+            $copyCols[] = 'item_order'; $copyVals[] = 0;
+            $qm = implode(', ', array_fill(0, count($copyCols), '?'));
+            $ins = $pdo->prepare("INSERT INTO schedule_items (".implode(', ', $copyCols).") VALUES ($qm)");
+            $ins->execute($copyVals);
             $newId = (int)$pdo->lastInsertId();
             echo json_encode(['ok' => true, 'new_id' => $newId]); exit;
         } catch (Exception $e) { echo json_encode(['ok' => false, 'error' => 'Kopyalama hatası.']); exit; }

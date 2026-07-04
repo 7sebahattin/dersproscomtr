@@ -85,9 +85,27 @@ try {
             echo json_encode(['ok' => true, 'data' => education_get_resource_topics($pdo, $resId)], JSON_UNESCAPED_UNICODE);
             break;
 
+        case 'topic_info':
+            // Tek konunun kategori/ders kimlikleri — görev düzenlerken Müfredattan
+            // sekmesini önceden seçili doldurmak için kullanılır.
+            $topicId = (int)($_GET['topic_id'] ?? 0);
+            if ($topicId <= 0) { http_response_code(400); echo json_encode(['ok' => false, 'error' => 'topic_id gerekli.']); break; }
+            $st = $pdo->prepare("
+                SELECT t.id, t.topic_name, t.subject_id, s.lesson_name, s.category_id, c.name AS category_name
+                FROM education_topics t
+                JOIN education_subjects s ON t.subject_id = s.id
+                JOIN education_categories c ON s.category_id = c.id
+                WHERE t.id = ? LIMIT 1
+            ");
+            $st->execute([$topicId]);
+            $row = $st->fetch(PDO::FETCH_ASSOC);
+            if (!$row) { echo json_encode(['ok' => false, 'error' => 'Konu bulunamadı.']); break; }
+            echo json_encode(['ok' => true, 'data' => $row], JSON_UNESCAPED_UNICODE);
+            break;
+
         default:
             http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => 'Geçersiz action. Geçerli: categories, subjects, topics, resources, resource_topics']);
+            echo json_encode(['ok' => false, 'error' => 'Geçersiz action. Geçerli: categories, subjects, topics, resources, resource_topics, topic_info']);
     }
 } catch (Throwable $e) {
     http_response_code(500);
