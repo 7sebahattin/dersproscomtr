@@ -357,7 +357,11 @@ function sendTestPush(studentId) {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ student_id: studentId })
     })
-    .then(r => r.json())
+    .then(async r => {
+        const t = await r.text();
+        try { return JSON.parse(t); }
+        catch(e) { throw new Error('Sunucu JSON döndürmedi (HTTP ' + r.status + '). Yanıt: ' + t.slice(0, 400)); }
+    })
     .then(res => {
         let html = '';
         const okCls   = 'bg-green-50 border-green-200 text-green-700';
@@ -384,9 +388,9 @@ function sendTestPush(studentId) {
         }
         box.innerHTML = html;
     })
-    .catch(() => {
-        box.className = 'mt-3 text-xs rounded-xl border p-3 bg-red-50 border-red-200 text-red-700';
-        box.textContent = 'Bağlantı hatası — test gönderilemedi.';
+    .catch(err => {
+        box.className = 'mt-3 text-xs rounded-xl border p-3 bg-red-50 border-red-200 text-red-700 break-words';
+        box.textContent = 'Hata: ' + (err && err.message ? err.message : 'test gönderilemedi.');
     })
     .finally(() => {
         if (btn) { btn.disabled = false; btn.textContent = '🔔 Şimdi Test Et'; }

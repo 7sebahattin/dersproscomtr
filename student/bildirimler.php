@@ -191,32 +191,52 @@ $B = BASE_URL;
                 selfTestBox.className = 'mt-2 text-xs rounded-xl border p-3 bg-slate-50 border-slate-200 text-slate-500';
                 selfTestBox.classList.remove('hidden');
                 selfTestBox.textContent = 'Test bildirimi gönderiliyor...';
+                let subNote = '';
                 try {
-                    // Abonelik henüz kurulmamışsa önce kurmayı dene (izin verilmişse)
-                    if ('serviceWorker' in navigator && 'PushManager' in window && Notification.permission === 'granted') {
-                        const reg = await navigator.serviceWorker.ready;
-                        let sub = await reg.pushManager.getSubscription();
-                        if (!sub && (window.__VAPID_PUB__ || '')) {
-                            const v = window.__VAPID_PUB__;
-                            const pad = '='.repeat((4 - v.length % 4) % 4);
-                            const b64 = (v + pad).replace(/-/g,'+').replace(/_/g,'/');
-                            const raw = atob(b64);
-                            const key = Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
-                            sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-                            await fetch(BASE + '/ajax/push_subscribe.php', {
-                                method:'POST', headers:{'Content-Type':'application/json'},
-                                body: JSON.stringify({ subscription: sub.toJSON(), action:'subscribe' })
-                            });
+                    // 1) Abonelik henüz kurulmamışsa önce kurmayı dene (izin verilmişse)
+                    //    Bu adım fetch'ten AYRI try ile sarıldı ki abonelik hatası
+                    //    "bağlantı hatası" gibi görünmesin — gerçek sebebi gösterelim.
+                    try {
+                        if ('serviceWorker' in navigator && 'PushManager' in window && Notification.permission === 'granted') {
+                            const reg = await navigator.serviceWorker.ready;
+                            let sub = await reg.pushManager.getSubscription();
+                            if (!sub && (window.__VAPID_PUB__ || '')) {
+                                const v = window.__VAPID_PUB__;
+                                const pad = '='.repeat((4 - v.length % 4) % 4);
+                                const b64 = (v + pad).replace(/-/g,'+').replace(/_/g,'/');
+                                const raw = atob(b64);
+                                const key = Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+                                sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+                                await fetch(BASE + '/ajax/push_subscribe.php', {
+                                    method:'POST', headers:{'Content-Type':'application/json'},
+                                    body: JSON.stringify({ subscription: sub.toJSON(), action:'subscribe' })
+                                });
+                            }
+                        } else if (Notification.permission !== 'granted') {
+                            subNote = '⚠️ Tarayıcı bildirim izni verilmemiş (' + Notification.permission + ').';
                         }
+                    } catch (subErr) {
+                        subNote = '⚠️ Abonelik kurulamadı: ' + (subErr && subErr.message ? subErr.message : subErr)
+                                + ' (eski VAPID anahtarıyla kayıtlı abonelik olabilir).';
                     }
+
+                    // 2) Sunucudan test push'u iste — ham yanıtı yakala
                     const res = await fetch(BASE + '/ajax/push_test.php', {
                         method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})
                     });
-                    const data = await res.json();
+                    const rawText = await res.text();
+                    let data;
+                    try { data = JSON.parse(rawText); }
+                    catch(pe) { throw new Error('Sunucu JSON döndürmedi (HTTP ' + res.status + '). Yanıt: ' + rawText.slice(0, 400)); }
+
                     const okCls   = 'bg-green-50 border-green-200 text-green-700';
                     const failCls = 'bg-red-50 border-red-200 text-red-700';
-                    selfTestBox.className = 'mt-2 text-xs rounded-xl border p-3 ' + (data.ok ? okCls : failCls);
+                    selfTestBox.className = 'mt-2 text-xs rounded-xl border p-3 break-words ' + (data.ok ? okCls : failCls);
                     let html = '<p class="font-bold">' + (data.ok ? '✅ ' : '⚠️ ') + (data.msg || '') + '</p>';
+                    if (subNote) html += '<p class="text-amber-700 mt-1">' + subNote + '</p>';
+                    if (typeof data.device_count !== 'undefined') {
+                        html += '<p class="text-slate-500 mt-1">Kayıtlı cihaz: <b>' + data.device_count + '</b></p>';
+                    }
                     if (data.results && data.results.length) {
                         html += '<ul class="mt-1 space-y-0.5">';
                         data.results.forEach(r => {
@@ -227,8 +247,9 @@ $B = BASE_URL;
                     }
                     selfTestBox.innerHTML = html;
                 } catch(e) {
-                    selfTestBox.className = 'mt-2 text-xs rounded-xl border p-3 bg-red-50 border-red-200 text-red-700';
-                    selfTestBox.textContent = 'Bağlantı hatası — test gönderilemedi.';
+                    selfTestBox.className = 'mt-2 text-xs rounded-xl border p-3 bg-red-50 border-red-200 text-red-700 break-words';
+                    selfTestBox.innerHTML = '<p class="font-bold">Hata: ' + (e && e.message ? e.message : 'test gönderilemedi.') + '</p>'
+                                          + (subNote ? '<p class="text-amber-700 mt-1">' + subNote + '</p>' : '');
                 } finally {
                     selfTestBtn.disabled = false;
                     selfTestBtn.textContent = oldTxt;
