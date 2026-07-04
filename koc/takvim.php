@@ -118,7 +118,7 @@ $students = $pdo->query("SELECT id, first_name, last_name FROM users WHERE role 
 
                 <div>
                     <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Özel Notlar</label>
-                    <textarea id="modalNote" rows="3" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium placeholder-slate-400" placeholder="Bu derste ne işlendi?"></textarea>
+                    <textarea id="modalNote" rows="3" class="js-upper w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium placeholder-slate-400" placeholder="Bu derste ne işlendi?"></textarea>
                 </div>
 
                 <div>

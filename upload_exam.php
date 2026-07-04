@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <form method="POST" enctype="multipart/form-data" class="space-y-6">
             <div>
                 <label class="block text-sm font-bold text-slate-700 mb-2">Sınav Başlığı</label>
-                <input type="text" name="title" required class="w-full border p-3 rounded-xl" placeholder="Örn: TYT Deneme 1">
+                <input type="text" name="title" required class="js-upper w-full border p-3 rounded-xl" placeholder="Örn: TYT Deneme 1">
             </div>
 
             <div>
@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <div id="online_options" class="hidden space-y-4 pl-6 border-l-2 border-amber-200">
                     <div>
                         <label class="block text-xs font-bold text-slate-500 mb-1">Cevap Anahtarı (Bitişik Yazın: ADCBE...)</label>
-                        <input type="text" name="answer_key" class="w-full border p-3 rounded-xl font-mono tracking-widest uppercase" placeholder="ABCDE...">
+                        <input type="text" name="answer_key" class="js-upper w-full border p-3 rounded-xl font-mono tracking-widest uppercase" placeholder="ABCDE...">
                         <p class="text-[10px] text-slate-400 mt-1">Soru sayısı, girdiğiniz harf sayısına göre otomatik belirlenir.</p>
                     </div>
                 </div>

@@ -184,7 +184,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div class="row">
                         <div class="col-md-6 dp-form-group">
                             <label class="form-label text-muted small">Adınız Soyadınız</label>
-                            <input type="text" name="name" class="dp-input" required>
+                            <input type="text" name="name" class="dp-input js-upper" required>
                         </div>
                         <div class="col-md-6 dp-form-group">
                             <label class="form-label text-muted small">E-Posta Adresiniz</label>
@@ -193,7 +193,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
                     <div class="dp-form-group">
                         <label class="form-label text-muted small">Konu</label>
-                        <input type="text" name="subject" class="dp-input" required>
+                        <input type="text" name="subject" class="dp-input js-upper" required>
                     </div>
                     <div class="dp-form-group">
                         <label class="form-label text-muted small">Mesajınız</label>

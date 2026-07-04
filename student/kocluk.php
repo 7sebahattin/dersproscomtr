@@ -28,6 +28,23 @@ try {
     if($chk->rowCount() == 0) $pdo->exec("ALTER TABLE schedule_items ADD COLUMN wrong_count INT DEFAULT NULL");
 } catch (PDOException $e) {}
 
+// Yeni müfredat şeması + schedule_items.edu_topic_id garanti (idempotent, eski sistemi etkilemez)
+require_once __DIR__ . '/../education_lib.php';
+try {
+    education_ensure_schema($pdo);
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'edu_topic_id'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN edu_topic_id INT NULL DEFAULT NULL");
+        $pdo->exec("ALTER TABLE schedule_items ADD KEY idx_si_edu_topic (edu_topic_id)");
+    }
+    // Video görev desteği (kaynak bağı + kısa not) — sorgu JOIN'i için garanti
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'resource_id'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN resource_id INT NULL DEFAULT NULL");
+    }
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'task_note'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN task_note VARCHAR(255) NULL DEFAULT NULL");
+    }
+} catch (Throwable $e) { /* şema hazır değilse sayfa eski alanlarla çalışmaya devam eder */ }
+
 // Kullanıcı bilgisini al
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$sid]);
@@ -168,10 +185,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // 4. VERİ ÇEKME
 $sc = $pdo->prepare("
-    SELECT si.*, t.name as topic_name, s.name as subject_name, s.category as subject_category
+    SELECT si.*, t.name as topic_name, s.name as subject_name, s.category as subject_category,
+           et.topic_name AS edu_topic_name, es.lesson_name AS edu_subject_name, ec.name AS edu_category_name,
+           er.type AS resource_type, er.external_url AS resource_url
     FROM schedule_items si
+    LEFT JOIN education_topics    et ON si.edu_topic_id = et.id
+    LEFT JOIN education_subjects  es ON et.subject_id = es.id
+    LEFT JOIN education_categories ec ON es.category_id = ec.id
     LEFT JOIN coaching_topics t ON si.topic_id = t.id
     LEFT JOIN coaching_subjects s ON t.subject_id = s.id
+    LEFT JOIN education_resources er ON si.resource_id = er.id
     WHERE si.student_id = ? AND si.date BETWEEN ? AND ?
 ");
 $sc->execute([$sid, $week_dates[0], $week_dates[6]]);

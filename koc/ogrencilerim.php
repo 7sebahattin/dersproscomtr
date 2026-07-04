@@ -382,12 +382,12 @@ $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wide mb-1.5 ml-1">Ad <span class="text-red-400">*</span></label>
                     <input type="text" name="first_name" required placeholder="İsim"
-                           class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                           class="js-upper w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
                 </div>
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wide mb-1.5 ml-1">Soyad <span class="text-red-400">*</span></label>
                     <input type="text" name="last_name" required placeholder="Soyisim"
-                           class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                           class="js-upper w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
                 </div>
             </div>
 
@@ -441,7 +441,7 @@ $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <div>
                         <label class="block text-[10px] font-bold text-orange-700 mb-1 ml-1">Veli Adı Soyadı</label>
                         <input type="text" name="parent_name" placeholder="Veli Adı"
-                               class="w-full bg-white border border-orange-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-orange-400 outline-none transition-all">
+                               class="js-upper w-full bg-white border border-orange-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-orange-400 outline-none transition-all">
                     </div>
                     <div>
                         <label class="block text-[10px] font-bold text-orange-700 mb-1 ml-1">Veli Telefonu</label>
@@ -480,11 +480,11 @@ $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wide mb-1.5 ml-1">Ad</label>
-                    <input type="text" name="first_name" id="edit_name" required class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    <input type="text" name="first_name" id="edit_name" required class="js-upper w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
                 </div>
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wide mb-1.5 ml-1">Soyad</label>
-                    <input type="text" name="last_name" id="edit_lastname" required class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    <input type="text" name="last_name" id="edit_lastname" required class="js-upper w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
                 </div>
             </div>
 
@@ -508,7 +508,7 @@ $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <div>
                         <label class="block text-[10px] font-bold text-orange-700 mb-1 ml-1">Veli Adı Soyadı</label>
                         <input type="text" name="parent_name" id="edit_parent" placeholder="Veli Adı"
-                               class="w-full bg-white border border-orange-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-orange-400 outline-none transition-all">
+                               class="js-upper w-full bg-white border border-orange-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-orange-400 outline-none transition-all">
                     </div>
                     <div>
                         <label class="block text-[10px] font-bold text-orange-700 mb-1 ml-1">Veli Telefonu</label>

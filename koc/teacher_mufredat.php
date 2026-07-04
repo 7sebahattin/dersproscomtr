@@ -1,6 +1,10 @@
 <?php
-// teacher_mufredat.php
-// Türkçe Karakter Destekli, Şablon İndirmeli ve Düzenleme Özellikli
+// teacher_mufredat.php — EMEKLİYE AYRILDI (Müfredat v2)
+// Öğretmen "Eski Müfredat" sayfası yeni sistemle değiştirildi; yeni sayfaya yönlendirir.
+// (Aşağıdaki eski kod korunuyor; gerekirse bu satırlar kaldırılarak geri dönülebilir.)
+if (session_status() === PHP_SESSION_NONE) session_start();
+header("Location: mufredat_v2.php");
+exit;
 
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
@@ -287,7 +291,7 @@ function cancelEdit() {
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wide">Ders Adı</label>
-                                <input type="text" name="subject_name" placeholder="Örn: İleri Geometri" class="w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none" required>
+                                <input type="text" name="subject_name" placeholder="Örn: İleri Geometri" class="js-upper w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none" required>
                             </div>
                             <button type="submit" class="w-full bg-slate-700 text-white font-bold py-2.5 rounded-xl hover:bg-slate-800 transition text-sm">
                                 Dersi Kaydet
@@ -334,7 +338,7 @@ function cancelEdit() {
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wide">Konu Adı</label>
-                                <input type="text" name="topic_name" id="topic_name" placeholder="Örn: Üslü Sayılar" class="w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-green-300 focus:outline-none" required>
+                                <input type="text" name="topic_name" id="topic_name" placeholder="Örn: Üslü Sayılar" class="js-upper w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-green-300 focus:outline-none" required>
                             </div>
                             <button type="submit" id="save_btn" class="w-full bg-green-600 text-white font-bold py-2.5 rounded-xl hover:bg-green-700 transition text-sm">
                                 <span id="save_btn_text">Konuyu Kaydet</span>

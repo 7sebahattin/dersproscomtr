@@ -287,7 +287,7 @@ $creators = $pdo->query("SELECT DISTINCT u.id, u.first_name, u.last_name FROM co
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wide">Ders Adı</label>
-                            <input type="text" name="subject_name" placeholder="Örn: Matematik" class="w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none" required>
+                            <input type="text" name="subject_name" placeholder="Örn: Matematik" class="js-upper w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none" required>
                         </div>
                         <button type="submit" class="w-full bg-slate-700 text-white font-bold py-2.5 rounded-xl hover:bg-slate-800 transition text-sm">Dersi Kaydet</button>
                     </form>
@@ -327,7 +327,7 @@ $creators = $pdo->query("SELECT DISTINCT u.id, u.first_name, u.last_name FROM co
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wide">Konu Adı</label>
-                            <input type="text" name="topic_name" id="topic_name" placeholder="Örn: Üslü Sayılar" class="w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none" required>
+                            <input type="text" name="topic_name" id="topic_name" placeholder="Örn: Üslü Sayılar" class="js-upper w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none" required>
                         </div>
                         <button type="submit" id="saveBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl hover:bg-indigo-700 transition text-sm">Konuyu Kaydet</button>
                     </form>
@@ -392,7 +392,7 @@ $creators = $pdo->query("SELECT DISTINCT u.id, u.first_name, u.last_name FROM co
                     <div class="flex-[2] min-w-[200px]">
                         <label class="text-[10px] text-slate-500 font-bold uppercase ml-1">Konu Ara</label>
                         <div class="flex gap-2">
-                            <input type="text" name="search" value="<?= htmlspecialchars($filter_search) ?>" placeholder="Konu adı..." class="w-full text-xs border border-slate-200 rounded-lg p-2">
+                            <input type="text" name="search" value="<?= htmlspecialchars($filter_search) ?>" placeholder="Konu adı..." class="js-upper w-full text-xs border border-slate-200 rounded-lg p-2">
                             <button type="submit" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-bold">Ara</button>
                             <?php if($filter_cat || $filter_sub || $filter_creator || $filter_search): ?>
                                 <a href="mufredat.php" class="bg-red-100 text-red-600 px-3 py-2 rounded-lg text-xs font-bold flex items-center">✕</a>

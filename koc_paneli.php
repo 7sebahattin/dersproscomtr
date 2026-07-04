@@ -5,7 +5,34 @@ ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 require_once 'db.php';
+require_once 'education_lib.php';
 include 'header.php';
+
+// Yeni müfredat sistemi şeması + schedule_items.edu_topic_id garanti (idempotent)
+try {
+    education_ensure_schema($pdo);
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'edu_topic_id'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN edu_topic_id INT NULL DEFAULT NULL");
+        $pdo->exec("ALTER TABLE schedule_items ADD KEY idx_si_edu_topic (edu_topic_id)");
+    }
+    // Kaynaktan seçilen görevlerde kaynak adını kartta göstermek için (additive, silinmez)
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'resource_title'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN resource_title VARCHAR(255) NULL DEFAULT NULL");
+    }
+    // ── VİDEO GÖREV desteği (additive) ──
+    // action_type ENUM'una 'video' değeri: mevcut soru/konu verisi hiç etkilenmez
+    $atCol = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'action_type'")->fetch(PDO::FETCH_ASSOC);
+    if ($atCol && stripos($atCol['Type'] ?? '', 'video') === false) {
+        $pdo->exec("ALTER TABLE schedule_items MODIFY action_type ENUM('soru','konu','video') DEFAULT 'soru'");
+    }
+    // Kaynak bağı (video URL/tipi render'da canlı JOIN ile gelir) + görev kısa notu
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'resource_id'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN resource_id INT NULL DEFAULT NULL");
+    }
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'task_note'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN task_note VARCHAR(255) NULL DEFAULT NULL");
+    }
+} catch (Throwable $e) { /* yeni sistem yoksa eski akış çalışmaya devam eder */ }
 
 // 1. GÜVENLİK
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'teacher') {
@@ -197,18 +224,68 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
         } catch(Exception $e) {}
     }
 
-    // Görev İşlemleri
-    if (isset($_POST['save_schedule']) && $sid) {
-        $date = $_POST['date']; $amt = $_POST['amount']; $act = $_POST['action_type']; 
-        $st = $_POST['status']; $tid = !empty($_POST['topic'])?$_POST['topic']:null; 
-        $csub = $_POST['custom_subject']; $ctop = $_POST['custom_topic']; $tn = $_POST['time_note']; 
-        $id = $_POST['schedule_id'];
-        if ($id) { 
-            $pdo->prepare("UPDATE schedule_items SET amount=?, action_type=?, status=?, topic_id=?, custom_subject=?, custom_topic=?, time_note=? WHERE id=?")->execute([$amt, $act, $st, $tid, $csub, $ctop, $tn, $id]); 
-        } else { 
-            $pdo->prepare("INSERT INTO schedule_items (student_id, date, amount, action_type, status, topic_id, custom_subject, custom_topic, time_note, item_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")->execute([$sid, $date, $amt, $act, $st, $tid, $csub, $ctop, $tn]); 
+    // Durum Güncelleme (Program kartına tıklayıp "Durumu Güncelle" penceresinden — koç tarafı)
+    if (isset($_POST['update_status']) && $sid) {
+        $schedId = (int)($_POST['schedule_id'] ?? 0);
+        $newStatus = $_POST['status'] ?? 'bekliyor';
+        $newAmount = (int)($_POST['amount'] ?? 0);
+
+        $checkStmt = $pdo->prepare("SELECT amount, target_amount FROM schedule_items WHERE id = ? AND student_id = ?");
+        $checkStmt->execute([$schedId, $sid]);
+        $currentItem = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($currentItem) {
+            $finalTarget = ($currentItem['target_amount'] === null || $currentItem['target_amount'] === '')
+                ? $currentItem['amount'] : $currentItem['target_amount'];
+            $pdo->prepare("UPDATE schedule_items SET status = ?, amount = ?, target_amount = ? WHERE id = ? AND student_id = ?")
+                ->execute([$newStatus, $newAmount, $finalTarget, $schedId, $sid]);
         }
         $should_redirect = true;
+    }
+
+    // Görev İşlemleri
+    if (isset($_POST['save_schedule']) && $sid) {
+        $date = $_POST['date']; $amt = $_POST['amount']; $act = $_POST['action_type'];
+        $st = $_POST['status']; $tid = !empty($_POST['topic'])?$_POST['topic']:null;
+        $csub = $_POST['custom_subject'] ?? ''; $ctop = $_POST['custom_topic'] ?? ''; $tn = $_POST['time_note'];
+        $eduTid = !empty($_POST['edu_topic_id']) ? (int)$_POST['edu_topic_id'] : null; // YENİ müfredat konusu
+        $resTitle = trim($_POST['resource_title'] ?? '') ?: null; // Kaynaktan seçildiyse kaynak adı
+        $resId    = !empty($_POST['resource_id']) ? (int)$_POST['resource_id'] : null; // kaynak bağı (video URL/tip)
+        $taskNote = mb_substr(trim($_POST['task_note'] ?? ''), 0, 255) ?: null;        // görev kısa notu
+        if (!in_array($act, ['soru','konu','video'], true)) $act = 'soru';
+        if ($act === 'video') $amt = 1; // video görevde miktar tek video sabittir
+        $id = $_POST['schedule_id'];
+
+        // Opsiyonel kolonlar (üstteki ensure bloğu oluşturur; burada yalnızca var mı bakılır)
+        $optCols = [];
+        foreach (['edu_topic_id','resource_title','resource_id','task_note'] as $c) {
+            $optCols[$c] = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE '$c'")->rowCount() > 0;
+        }
+        $optVals = ['edu_topic_id'=>$eduTid, 'resource_title'=>$resTitle, 'resource_id'=>$resId, 'task_note'=>$taskNote];
+
+        // Sunucu tarafı güvenlik: JS doğrulaması atlanırsa bile isimsiz görev kaydedilmesin
+        if (!$eduTid && trim($csub) === '' && trim($ctop) === '') {
+            $error = "Ders adı veya konu boş olamaz. Görev kaydedilmedi.";
+        } elseif ($id) {
+            // NOT: UPDATE'te topic_id kasıtlı olarak SET edilmiyor. Bu modalde artık eski
+            // koçluk konusu seçme alanı yok (Faz 4'te kaldırıldı); topic_id'yi burada
+            // yazmaya kalkışmak onu her düzenlemede sessizce null'a düşürüp eski müfredata
+            // bağlı görevlerin bağlantısını koparırdı. Var olan değer neyse öyle kalır.
+            $set  = ['amount=?','action_type=?','status=?','custom_subject=?','custom_topic=?','time_note=?'];
+            $vals = [$amt, $act, $st, $csub, $ctop, $tn];
+            foreach ($optCols as $c => $has) { if ($has) { $set[] = "$c=?"; $vals[] = $optVals[$c]; } }
+            $vals[] = $id;
+            $pdo->prepare("UPDATE schedule_items SET ".implode(', ', $set)." WHERE id=?")->execute($vals);
+        } else {
+            $cols = ['student_id','date','amount','action_type','status','topic_id','custom_subject','custom_topic','time_note'];
+            $vals = [$sid, $date, $amt, $act, $st, $tid, $csub, $ctop, $tn];
+            foreach ($optCols as $c => $has) { if ($has) { $cols[] = $c; $vals[] = $optVals[$c]; } }
+            $cols[] = 'item_order'; $vals[] = 0;
+            $qm = implode(', ', array_fill(0, count($cols), '?'));
+            $pdo->prepare("INSERT INTO schedule_items (".implode(', ', $cols).") VALUES ($qm)")->execute($vals);
+        }
+        // Doğrulama hatası varsa yönlendirme yapılmaz, aksi halde $error kaybolur (redirect yeni GET başlatır)
+        if (empty($error)) { $should_redirect = true; }
     }
     if (isset($_POST['delete_schedule'])) { 
         $pdo->prepare("DELETE FROM schedule_items WHERE id=?")->execute([$_POST['schedule_id']]); 
@@ -260,10 +337,16 @@ if ($sid) {
 
     // PROGRAM VERİLERİ (Sıralama Düzeltildi)
     $sc = $pdo->prepare("
-        SELECT si.*, t.name as topic_name, t.subject_id as subject_id, s.name as subject_name, s.category as subject_category 
-        FROM schedule_items si 
-        LEFT JOIN coaching_topics t ON si.topic_id = t.id 
-        LEFT JOIN coaching_subjects s ON t.subject_id = s.id 
+        SELECT si.*, t.name as topic_name, t.subject_id as subject_id, s.name as subject_name, s.category as subject_category,
+               et.topic_name AS edu_topic_name, es.lesson_name AS edu_subject_name, ec.name AS edu_category_name,
+               er.type AS resource_type, er.external_url AS resource_url
+        FROM schedule_items si
+        LEFT JOIN coaching_topics t ON si.topic_id = t.id
+        LEFT JOIN coaching_subjects s ON t.subject_id = s.id
+        LEFT JOIN education_topics    et ON si.edu_topic_id = et.id
+        LEFT JOIN education_subjects  es ON et.subject_id = es.id
+        LEFT JOIN education_categories ec ON es.category_id = ec.id
+        LEFT JOIN education_resources er ON si.resource_id = er.id
         WHERE si.student_id = ? AND si.date BETWEEN ? AND ?
         ORDER BY si.date ASC, si.item_order ASC, si.id ASC
     ");
@@ -292,15 +375,34 @@ if ($sid) {
         $t_week_stmt->execute([$sid, $week_ago]); $report_stats['week_t'] = $t_week_stmt->fetchColumn() ?: 0;
 
         $topic_stats = [];
-        $completed = $pdo->prepare("SELECT si.*, t.id as topic_id, t.name as topic_name, t.subject_id FROM schedule_items si LEFT JOIN coaching_topics t ON si.topic_id = t.id WHERE si.student_id = ? AND si.status = 'yapildi' ORDER BY si.date DESC");
+        // Öncelik: YENİ müfredat (edu_topic_id) -> eski koçluk konusu (topic_id) -> manuel (custom_topic)
+        $completed = $pdo->prepare("
+            SELECT si.*, t.id as topic_id, t.name as topic_name, t.subject_id,
+                   et.topic_name AS edu_topic_name
+            FROM schedule_items si
+            LEFT JOIN coaching_topics t ON si.topic_id = t.id
+            LEFT JOIN education_topics et ON si.edu_topic_id = et.id
+            WHERE si.student_id = ? AND si.status = 'yapildi'
+            ORDER BY si.date DESC
+        ");
         $completed->execute([$sid]);
         foreach($completed->fetchAll(PDO::FETCH_ASSOC) as $item) {
-            $tid = $item['topic_id'];
-            if (!$tid && !empty($item['custom_topic'])) $tid = 'custom_' . md5($item['custom_topic']);
-            if (!$tid) continue;
-            if(!isset($topic_stats[$tid])) $topic_stats[$tid] = ['total_questions'=>0, 'total_topics'=>0, 'history'=>[], 'name'=>$item['topic_name']??$item['custom_topic']];
+            if (!empty($item['edu_topic_id'])) {
+                $tid = 'edu_' . $item['edu_topic_id'];
+                $tname = $item['edu_topic_name'];
+            } elseif (!empty($item['topic_id'])) {
+                $tid = $item['topic_id'];
+                $tname = $item['topic_name'];
+            } elseif (!empty($item['custom_topic'])) {
+                $tid = 'custom_' . md5($item['custom_topic']);
+                $tname = $item['custom_topic'];
+            } else {
+                continue;
+            }
+            if(!isset($topic_stats[$tid])) $topic_stats[$tid] = ['total_questions'=>0, 'total_topics'=>0, 'total_videos'=>0, 'history'=>[], 'name'=>$tname];
             if($item['action_type']=='soru') $topic_stats[$tid]['total_questions'] += (int)$item['amount'];
             if($item['action_type']=='konu') $topic_stats[$tid]['total_topics'] += 1;
+            if($item['action_type']=='video') $topic_stats[$tid]['total_videos'] += 1;
             $topic_stats[$tid]['history'][] = [
                 'date'          => $item['date'],
                 'type'          => $item['action_type'],
@@ -313,18 +415,44 @@ if ($sid) {
             ];
         }
 
+        // 1) ESKİ koçluk müfredatı (topic_id bazlı) — dokunulmadı
         $catFilter = ($student_level == 'Ortaokul') ? "category = 'LGS'" : "category IN ('TYT', 'AYT')";
         $subs = $pdo->query("SELECT * FROM coaching_subjects WHERE $catFilter ORDER BY category, name")->fetchAll();
         foreach($subs as $sub) {
             $tops = $pdo->prepare("SELECT * FROM coaching_topics WHERE subject_id = ?"); $tops->execute([$sub['id']]); $t_list = $tops->fetchAll();
-            $sub_data = ['subject_name'=>$sub['name'], 'name'=>$sub['name'], 'category'=>$sub['category'], 'topics'=>[], 'q_total'=>0, 't_total'=>0];
+            $sub_data = ['subject_name'=>$sub['name'], 'name'=>$sub['name'], 'category'=>$sub['category'], 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
             foreach($t_list as $t) {
-                $stats = $topic_stats[$t['id']] ?? ['total_questions'=>0, 'total_topics'=>0, 'history'=>[]];
+                $stats = $topic_stats[$t['id']] ?? ['total_questions'=>0, 'total_topics'=>0, 'total_videos'=>0, 'history'=>[]];
                 $sub_data['q_total'] += $stats['total_questions'];
                 $sub_data['t_total'] += $stats['total_topics'];
-                $sub_data['topics'][] = ['id'=>$t['id'], 'name'=>$t['name'], 'q_count'=>$stats['total_questions'], 't_count'=>$stats['total_topics'], 'history'=>$stats['history']];
+                $sub_data['v_total'] += ($stats['total_videos'] ?? 0);
+                $sub_data['topics'][] = ['id'=>$t['id'], 'name'=>$t['name'], 'q_count'=>$stats['total_questions'], 't_count'=>$stats['total_topics'], 'v_count'=>($stats['total_videos'] ?? 0), 'history'=>$stats['history']];
             }
             $progress_data[] = $sub_data;
+        }
+
+        // 2) YENİ müfredat (edu_topic_id bazlı) — TYT/AYT sekmelerinde aynı yapıda ek kartlar
+        if ($student_level !== 'Ortaokul') {
+            $eduCats = $pdo->query("SELECT id, name FROM education_categories WHERE name IN ('TYT','AYT') ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($eduCats as $eduCat) {
+                $eduSubs = $pdo->prepare("SELECT * FROM education_subjects WHERE category_id = ? ORDER BY display_order, lesson_name");
+                $eduSubs->execute([$eduCat['id']]);
+                foreach ($eduSubs->fetchAll(PDO::FETCH_ASSOC) as $esub) {
+                    $eduTops = $pdo->prepare("SELECT * FROM education_topics WHERE subject_id = ? ORDER BY display_order, topic_name");
+                    $eduTops->execute([$esub['id']]);
+                    $et_list = $eduTops->fetchAll(PDO::FETCH_ASSOC);
+                    $esub_data = ['subject_name'=>$esub['lesson_name'], 'name'=>$esub['lesson_name'], 'category'=>$eduCat['name'], 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
+                    foreach ($et_list as $et) {
+                        $key = 'edu_' . $et['id'];
+                        $stats = $topic_stats[$key] ?? ['total_questions'=>0, 'total_topics'=>0, 'total_videos'=>0, 'history'=>[]];
+                        $esub_data['q_total'] += $stats['total_questions'];
+                        $esub_data['t_total'] += $stats['total_topics'];
+                        $esub_data['v_total'] += ($stats['total_videos'] ?? 0);
+                        $esub_data['topics'][] = ['id'=>$et['id'], 'name'=>$et['topic_name'], 'q_count'=>$stats['total_questions'], 't_count'=>$stats['total_topics'], 'v_count'=>($stats['total_videos'] ?? 0), 'history'=>$stats['history']];
+                    }
+                    $progress_data[] = $esub_data;
+                }
+            }
         }
     } catch (Exception $e) {}
 
@@ -355,21 +483,31 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
         <!-- Mobil: flex-wrap | PC (md+): tek satır, tablar sağda -->
         <div class="flex flex-wrap md:flex-nowrap items-center gap-2">
 
-            <!-- Dropdown + Ekle + Bağla -->
-            <div class="flex items-center gap-2 w-full md:w-auto">
-                <div class="relative w-full md:w-52">
-                    <select onchange="window.location.href='?student_id='+this.value+'&date=<?php echo $date_param; ?>'"
-                            class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-8 py-2.5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#223488]/20 cursor-pointer">
-                        <option value="">👤 Öğrenci Seçin...</option>
-                        <?php foreach($my_students as $s): ?>
-                            <option value="<?php echo $s['id']; ?>" <?php echo ($sid == $s['id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($s['first_name'] . ' ' . $s['last_name']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <svg class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                </div>
+            <!-- Öğrenci seçici dropdown — sabit, en solda -->
+            <div class="relative w-full md:w-52 flex-shrink-0">
+                <select onchange="window.location.href='?student_id='+this.value+'&date=<?php echo $date_param; ?>'"
+                        class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-8 py-2.5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#223488]/20 cursor-pointer">
+                    <option value="">👤 Öğrenci Seçin...</option>
+                    <?php foreach($my_students as $s): ?>
+                        <option value="<?php echo $s['id']; ?>" <?php echo ($sid == $s['id']) ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($s['first_name'] . ' ' . $s['last_name']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <svg class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </div>
 
+            <?php if ($selected_student): ?>
+            <!-- Tabs — artık solda, dropdown'ın hemen yanında -->
+            <div class="hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-shrink-0">
+                <button onclick="openTab('schedule')" id="tab-schedule-desk" class="px-4 py-1.5 rounded-lg font-bold text-xs transition bg-slate-800 text-white shadow-sm flex items-center gap-2">📅 Program</button>
+                <button onclick="openTab('topics')"   id="tab-topics-desk"   class="px-4 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-2">📊 Analiz</button>
+                <button onclick="openTab('exams')"    id="tab-exams-desk"    class="px-4 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-2">📝 Denemeler</button>
+            </div>
+            <?php endif; ?>
+
+            <!-- Ekle + Bağla + Aksiyon butonları — artık sağda -->
+            <div class="flex items-center gap-2 flex-wrap ml-auto">
                 <a href="<?php echo BASE_URL; ?>/koc/ogrencilerim.php"
                    class="flex items-center gap-1.5 px-3 py-2.5 bg-[#223488] text-white text-xs font-bold rounded-xl hover:bg-[#314595] transition whitespace-nowrap flex-shrink-0">
                     ➕ Ekle
@@ -379,11 +517,8 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
                         class="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition whitespace-nowrap flex-shrink-0">
                     🔗 Bağla
                 </button>
-            </div>
 
-            <?php if ($selected_student): ?>
-            <!-- Aksiyon butonları -->
-            <div class="flex items-center gap-2 flex-wrap">
+                <?php if ($selected_student): ?>
                 <button onclick="sendWhatsappReport()"
                         class="flex items-center gap-1.5 px-3 py-2.5 bg-[#25D366] text-white text-xs font-bold rounded-xl hover:bg-[#128C7E] transition shadow-sm whitespace-nowrap">
                     <i class="fa-brands fa-whatsapp"></i> Veliye Mesaj At
@@ -398,15 +533,8 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
                         class="flex items-center gap-1.5 px-3 py-2.5 bg-[#223488] text-white text-xs font-bold rounded-xl hover:bg-[#314595] transition shadow-sm whitespace-nowrap">
                     <i class="fa-solid fa-file-pdf"></i> PDF İndir
                 </button>
+                <?php endif; ?>
             </div>
-
-            <!-- Tabs — masaüstünde üst barda sağda -->
-            <div class="ml-auto hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-shrink-0">
-                <button onclick="openTab('schedule')" id="tab-schedule-desk" class="px-4 py-1.5 rounded-lg font-bold text-xs transition bg-slate-800 text-white shadow-sm flex items-center gap-2">📅 Program</button>
-                <button onclick="openTab('topics')"   id="tab-topics-desk"   class="px-4 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-2">📊 Analiz</button>
-                <button onclick="openTab('exams')"    id="tab-exams-desk"    class="px-4 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-2">📝 Denemeler</button>
-            </div>
-            <?php endif; ?>
 
         </div>
     </div>

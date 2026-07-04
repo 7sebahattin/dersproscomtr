@@ -641,7 +641,7 @@ $week_badge = ($week_start === date('Y-m-d')) ? "BU HAFTA" : "SEÇİLİ 7 GÜN";
       <input type="hidden" name="appointment_id" id="note_appointment_id" value="">
 
       <textarea name="student_note" id="note_text" rows="5"
-        class="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold outline-none focus:border-indigo-500"
+        class="js-upper w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold outline-none focus:border-indigo-500"
         placeholder="Notunu yaz..."></textarea>
 
       <div class="flex gap-2">

@@ -6,6 +6,16 @@ error_reporting(E_ALL);
 require_once 'db.php';
 include 'header.php';
 
+// Yeni müfredat şeması + schedule_items.edu_topic_id garanti (idempotent, eski sistemi etkilemez)
+require_once __DIR__ . '/../education_lib.php';
+try {
+    education_ensure_schema($pdo);
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'edu_topic_id'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN edu_topic_id INT NULL DEFAULT NULL");
+        $pdo->exec("ALTER TABLE schedule_items ADD KEY idx_si_edu_topic (edu_topic_id)");
+    }
+} catch (Throwable $e) { /* şema hazır değilse sayfa eski alanlarla çalışmaya devam eder */ }
+
 // 1. GÜVENLİK
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'parent') {
     echo "<script>window.location.href='index.php';</script>";
@@ -50,7 +60,7 @@ if ($sid) {
         for($i=0; $i<7; $i++) { $week_dates[] = date('Y-m-d', strtotime("+$i days", strtotime($week_start))); }
         
         // Veritabanından Programı Çek
-        $sc = $pdo->prepare("SELECT si.*, t.name as topic_name, s.name as subject_name, s.category as subject_category FROM schedule_items si LEFT JOIN coaching_topics t ON si.topic_id = t.id LEFT JOIN coaching_subjects s ON t.subject_id = s.id WHERE si.student_id = ? AND si.date BETWEEN ? AND ?");
+        $sc = $pdo->prepare("SELECT si.*, t.name as topic_name, s.name as subject_name, s.category as subject_category, et.topic_name AS edu_topic_name, es.lesson_name AS edu_subject_name, ec.name AS edu_category_name FROM schedule_items si LEFT JOIN education_topics et ON si.edu_topic_id = et.id LEFT JOIN education_subjects es ON et.subject_id = es.id LEFT JOIN education_categories ec ON es.category_id = ec.id LEFT JOIN coaching_topics t ON si.topic_id = t.id LEFT JOIN coaching_subjects s ON t.subject_id = s.id WHERE si.student_id = ? AND si.date BETWEEN ? AND ?");
         $sc->execute([$sid, $week_dates[0], $week_dates[6]]); 
         $raw_items = $sc->fetchAll(PDO::FETCH_ASSOC);
         foreach($week_dates as $wd) { $schedule_items[$wd] = array_filter($raw_items, function($i) use ($wd) { return $i['date'] == $wd; }); }

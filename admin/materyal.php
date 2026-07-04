@@ -131,7 +131,7 @@ try {
 
                 <div class="md:col-span-1">
                     <label class="block text-sm font-medium text-slate-600 mb-1">Başlık</label>
-                    <input type="text" name="title" required class="w-full border border-slate-300 rounded-lg p-2" placeholder="Örn: Fizik PDF">
+                    <input type="text" name="title" required class="js-upper w-full border border-slate-300 rounded-lg p-2" placeholder="Örn: Fizik PDF">
                 </div>
 
                 <div>

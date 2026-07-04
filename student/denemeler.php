@@ -27,7 +27,7 @@
                 <div>
                     <label class="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Deneme Adı</label>
                     <input type="text" name="name" required
-                           class="w-full border border-slate-300 rounded-lg p-3 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                           class="js-upper w-full border border-slate-300 rounded-lg p-3 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
                            placeholder="Örn: Özdebir 1">
                 </div>
 
@@ -207,7 +207,7 @@ function addNewRow(name = '', d = '', y = '') {
     const div = document.createElement('div');
     div.className = 'flex items-center gap-2 animate-fadeIn lesson-row mb-2';
     div.innerHTML = `
-        <input type="text" name="lesson_name[]" value="${name}" placeholder="Ders Adı" required class="flex-1 min-w-0 border border-slate-300 rounded-lg p-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-500">
+        <input type="text" name="lesson_name[]" value="${name}" placeholder="Ders Adı" required class="js-upper flex-1 min-w-0 border border-slate-300 rounded-lg p-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-500">
         <div class="flex items-center gap-1">
             <input type="number" name="dogru[]" value="${d}" placeholder="D" min="0" step="1" oninput="calculateTotal()" class="w-12 border border-slate-300 rounded-lg p-2 text-center text-xs font-bold text-green-600 outline-none focus:border-green-500 input-d">
             <input type="number" name="yanlis[]" value="${y}" placeholder="Y" min="0" step="1" oninput="calculateTotal()" class="w-12 border border-slate-300 rounded-lg p-2 text-center text-xs font-bold text-red-500 outline-none focus:border-red-500 input-y">

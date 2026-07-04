@@ -135,7 +135,14 @@
 
                             $status   = $item['status'] ?? 'bekliyor';
                             $action   = $item['action_type'] ?? 'soru';
-                            $category = $item['subject_category'] ?? '';
+                            // YENİ müfredat verisini öncele; yoksa eski coaching; o da yoksa manuel -> "Diğer"
+                            $eduCat   = $item['edu_category_name'] ?? '';
+                            $eduSubj  = $item['edu_subject_name'] ?? '';
+                            $eduTopic = $item['edu_topic_name'] ?? '';
+                            $isManual = (empty($eduCat) && empty($item['subject_category']) && (!empty($item['custom_topic']) || !empty($item['custom_subject'])));
+                            $category = $eduCat ?: ($item['subject_category'] ?? '');
+                            if ($category === '' && $isManual) $category = 'Diğer';
+                            $resourceTitle = $item['resource_title'] ?? '';
 
                             $borderClass = 'border-slate-300 hover:border-slate-400 bg-white';
                             $statusBadge = 'bg-slate-100 text-slate-700';
@@ -160,49 +167,71 @@
                             }
 
                             $metricLabel = 'Soru';
-                            $metricClass = 'bg-[#223488] text-white'; 
+                            $metricClass = 'bg-[#223488] text-white';
                             if ($action === 'konu') {
                                 $metricLabel = 'Dakika';
-                                $metricClass = 'bg-[#ec9731] text-white'; 
+                                $metricClass = 'bg-[#ec9731] text-white';
                             }
+                            $isVideoTask = ($action === 'video');
+                            if ($isVideoTask) {
+                                $metricLabel = 'Video';
+                                $metricClass = 'bg-red-600 text-white';
+                            }
+                            $taskNote = trim((string)($item['task_note'] ?? ''));
 
-                            $title = !empty($item['topic_name']) ? ($item['subject_name'] ?? '') : ($item['custom_subject'] ?? '');
-                            $subtitle = !empty($item['topic_name']) ? ($item['topic_name'] ?? '') : ($item['custom_topic'] ?? '');
+                            $title    = $eduSubj  ?: (!empty($item['topic_name']) ? ($item['subject_name'] ?? '') : ($item['custom_subject'] ?? ''));
+                            $subtitle = $eduTopic ?: (!empty($item['topic_name']) ? ($item['topic_name'] ?? '') : ($item['custom_topic'] ?? ''));
                             $safeItem = htmlspecialchars(json_encode($item, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
                             $safeCat  = htmlspecialchars($category, ENT_QUOTES, 'UTF-8');
                         ?>
                             <div data-id="<?php echo $item['id']; ?>"
                                  data-item='<?php echo $safeItem; ?>'
                                  data-cat="<?php echo $safeCat; ?>"
-                                 class="task-card group relative rounded-xl border-[3px] <?php echo $borderClass; ?> p-3 shadow-sm transition-all duration-200 cursor-pointer"
+                                 class="task-card group relative rounded-xl border-l-4 border border-slate-200 <?php echo $borderClass; ?> p-2.5 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
                                  onclick='openEditModal(JSON.parse(this.dataset.item), this.dataset.cat)'>
 
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center gap-2">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide border border-transparent <?php echo $statusBadge; ?>">
-                                            <?php echo htmlspecialchars($category ?: 'GENEL'); ?>
+                                <div class="flex items-center justify-between mb-1.5 gap-2">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <?php if ($isVideoTask): ?>
+                                        <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-red-600 text-white shrink-0">🎬 VİDEO</span>
+                                        <?php if ($resourceTitle !== ''): ?>
+                                        <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-red-50 text-red-600 border border-red-200 shrink-0 truncate max-w-[100px]" title="Kaynak: <?php echo htmlspecialchars($resourceTitle); ?>">
+                                            <?php echo htmlspecialchars($resourceTitle); ?>
                                         </span>
+                                        <?php endif; ?>
+                                        <?php elseif ($resourceTitle !== ''): ?>
+                                        <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-red-50 text-red-600 border border-red-200 shrink-0 truncate max-w-[120px]" title="Kaynak: <?php echo htmlspecialchars($resourceTitle); ?>">
+                                            📕 <?php echo htmlspecialchars($resourceTitle); ?>
+                                        </span>
+                                        <?php else: ?>
+                                        <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-[#223488] text-white shrink-0">
+                                            <?php echo htmlspecialchars($category ?: 'Diğer'); ?>
+                                        </span>
+                                        <?php endif; ?>
                                         <?php if (!empty($item['time_note'])): ?>
-                                            <span class="text-[10px] font-bold text-slate-600 flex items-center gap-1 bg-white/60 px-1.5 py-0.5 rounded border border-slate-300/50">
-                                                ⏰ <?php echo htmlspecialchars($item['time_note']); ?>
+                                            <span class="text-[9px] font-bold text-[#ec9731] flex items-center gap-0.5 shrink-0">
+                                                ⏰<?php echo htmlspecialchars($item['time_note']); ?>
                                             </span>
                                         <?php endif; ?>
                                     </div>
-                                    <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs border border-transparent <?php echo $iconBg; ?>">
-                                        <?php echo $statusIcon; ?>
-                                    </div>
+                                    <span class="text-sm shrink-0"><?php echo $statusIcon; ?></span>
                                 </div>
 
-                                <div class="pl-1">
-                                    <div class="font-extrabold text-slate-900 text-sm leading-tight mb-0.5 truncate group-hover:text-[#223488] transition-colors">
+                                <div>
+                                    <div class="font-extrabold text-slate-900 text-[13px] leading-tight truncate group-hover:text-[#223488] transition-colors">
                                         <?php echo htmlspecialchars($title); ?>
                                     </div>
-                                    <div class="text-xs font-bold text-slate-600 truncate">
+                                    <div class="text-[11px] font-semibold text-[#314595] truncate">
                                         <?php echo htmlspecialchars($subtitle); ?>
                                     </div>
+                                    <?php if ($taskNote !== ''): ?>
+                                    <div class="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-1.5 py-0.5 mt-1 truncate" title="<?php echo htmlspecialchars($taskNote); ?>">
+                                        📝 <?php echo htmlspecialchars($taskNote); ?>
+                                    </div>
+                                    <?php endif; ?>
                                 </div>
 
-                                <div class="mt-3 pt-2 border-t border-black/10 flex items-center justify-between">
+                                <div class="mt-1.5 pt-1.5 border-t border-black/5 flex items-center justify-between">
                                     <span class="text-[7px] font-bold uppercase text-slate-500 tracking-wider">Hedef / Yapılan</span>
                                     <div class="flex items-center gap-1">
                                         <?php 

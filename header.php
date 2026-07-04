@@ -6,8 +6,16 @@ date_default_timezone_set('Europe/Istanbul');
 
 // 1. OTURUM AYARLARI (Session her yerde geçerli olsun)
 if (session_status() === PHP_SESSION_NONE) {
-    session_set_cookie_params(0, '/'); 
+    session_set_cookie_params(0, '/');
     session_start();
+}
+
+// Sunucu/CDN/tarayıcı önbelleğini devre dışı bırak — deploy sonrası değişikliklerin
+// (header/footer dahil) eski önbellek yüzünden gecikmeli görünmesini önler.
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
 }
 
 // 2. DB BAĞLANTISI (Mutlak yol ile hata önleme)
@@ -139,7 +147,7 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DersPROS | Yeni Nesil Eğitim Platformu</title>
-    <link rel="icon" type="image/png" href="<?php echo $B; ?>/assets/images/favicon.png">
+    <link rel="icon" type="image/png" href="<?php echo $B; ?>/assets/images/icon-192.png?v=2">
 
     <!-- PWA: Ana ekrana ekleme / uygulama hissi -->
     <link rel="manifest" href="<?php echo $B; ?>/manifest.json?v=2">
@@ -168,8 +176,8 @@ try {
         <div class="flex justify-between h-16 md:h-20 items-center">
 
             <a href="<?php echo $B; ?>/index.php" class="flex items-center gap-2 group flex-shrink-0">
-                <div class="h-9 w-9 md:h-12 md:w-12 rounded-full flex items-center justify-center shadow-sm border border-slate-50 bg-blue-600 text-white relative overflow-hidden transition group-hover:scale-105">
-                    <span class="font-bold text-lg md:text-xl">DP</span>
+                <div class="h-9 w-9 md:h-12 md:w-12 rounded-full flex items-center justify-center shadow-sm border border-slate-50 overflow-hidden transition group-hover:scale-105">
+                    <img src="<?php echo $B; ?>/assets/images/icon-192.png?v=2" alt="DersPROS" class="w-full h-full object-cover">
                 </div>
                 <span class="text-lg md:text-xl font-bold text-slate-800 tracking-tight flex items-center">
                     Ders<span class="text-red-600 ml-0.5">PROS</span>
@@ -220,7 +228,7 @@ try {
                                     <a href="<?php echo $B; ?>/koc/ogrencilerim.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">👥 Öğrencilerim</a>
                                     <a href="<?php echo $B; ?>/koc/bildirim_ayarlari.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🔔 Bildirim Ayarları</a>
                                     <a href="<?php echo $B; ?>/koc/odemeler.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">💰 Ödeme Yönetimi</a>
-                                    <a href="<?php echo $B; ?>/koc/teacher_mufredat.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">📝 Müfredat Yükle</a>
+                                    <a href="<?php echo $B; ?>/koc/mufredat_v2.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">📝 Müfredat Yükle</a>
                                     <button type="button" onclick="openFeedbackModal()" class="w-full text-left block px-3 py-2 rounded-lg hover:bg-orange-50 text-orange-600 font-medium text-xs transition-colors">🐛 Hata Bildir</button>
                                     <div class="h-px bg-slate-100 my-1"></div>
                                 <?php endif; ?>
@@ -361,7 +369,7 @@ try {
                 <a href="<?php echo $B; ?>/koc/odemeler.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
                     <span class="text-lg">💰</span> Ödeme Yönetimi
                 </a>
-                <a href="<?php echo $B; ?>/koc/teacher_mufredat.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
+                <a href="<?php echo $B; ?>/koc/mufredat_v2.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
                     <span class="text-lg">📝</span> Müfredat Yükle
                 </a>
                 <button type="button" onclick="closeMobileMenu(); setTimeout(openFeedbackModal,200)" class="w-full flex items-center gap-3 p-3 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-600 font-medium text-sm transition-colors">
@@ -449,7 +457,7 @@ function toggleMobileMenu() {
             <div>
                 <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Kısa Konu</label>
                 <input type="text" id="fb_subject" maxlength="200" placeholder="Bildirimin kısa başlığı..."
-                       class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] focus:ring-1 focus:ring-[#223488] outline-none transition-all" required>
+                       class="js-upper w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 focus:bg-white focus:border-[#223488] focus:ring-1 focus:ring-[#223488] outline-none transition-all" required>
             </div>
             <!-- Mesaj -->
             <div>
@@ -648,5 +656,32 @@ window.__VAPID_PUB__ = '<?php echo htmlspecialchars($vapidPublicKey, ENT_QUOTES)
 })();
 </script>
 <?php endif; ?>
+<script>
+// ── Genel Türkçe büyük harf dönüşümü ────────────────────────────────────────
+// Türkçe karakter (İ/I, ı/i) eşleşme sorunlarını azaltmak için, işaretlenen
+// serbest metin alanları yazılırken otomatik olarak büyük harfe çevrilir.
+// Kullanım: ilgili <input>/<textarea> öğesine class="js-upper" ekle.
+(function() {
+    'use strict';
+    function turkishUpper(el) {
+        if (!el || typeof el.value !== 'string') return;
+        var start = el.selectionStart, end = el.selectionEnd;
+        var upper = el.value.toLocaleUpperCase('tr-TR');
+        if (upper !== el.value) {
+            el.value = upper;
+            if (typeof start === 'number') {
+                try { el.setSelectionRange(start, end); } catch (e) {}
+            }
+        }
+    }
+    window.turkishUpper = turkishUpper;
+    document.addEventListener('input', function(e) {
+        var el = e.target;
+        if (el && el.classList && el.classList.contains('js-upper')) {
+            turkishUpper(el);
+        }
+    }, true);
+})();
+</script>
 
 <main class="flex-grow">

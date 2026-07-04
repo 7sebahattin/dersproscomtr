@@ -34,6 +34,26 @@ require_once __DIR__ . '/push_config.php';
 use Minishlink\WebPush\WebPush;
 use Minishlink\WebPush\Subscription;
 
+// Yeni müfredat şeması + schedule_items.edu_topic_id garanti (idempotent).
+// Bildirim sorgusu education_* tablolarına JOIN yaptığı için burada da hazır olmalı.
+require_once __DIR__ . '/education_lib.php';
+try {
+    education_ensure_schema($pdo);
+    if ($pdo->query("SHOW COLUMNS FROM schedule_items LIKE 'edu_topic_id'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE schedule_items ADD COLUMN edu_topic_id INT NULL DEFAULT NULL");
+        $pdo->exec("ALTER TABLE schedule_items ADD KEY idx_si_edu_topic (edu_topic_id)");
+    }
+} catch (Throwable $e) { /* şema hazır değilse bildirim eski alanlarla devam eder */ }
+
+// ── Ödeme otomasyonu: günü geçen iptal edilmemiş randevular için 'odenmedi' borç
+//    kaydı üret (tüm öğretmenler). Öğretmen sayfayı hiç açmasa da otomatik işler. ──
+try {
+    require_once __DIR__ . '/payments_lib.php';
+    payments_ensure_schema($pdo);
+    $genCount = payments_generate_due($pdo, null);
+    if ($genCount > 0) cron_log("  [ÖDEME] $genCount adet vadesi geçmiş seans borç olarak eklendi.");
+} catch (Throwable $e) { /* ödeme tablosu yoksa yok say */ }
+
 // ── Bildirim Ayarları: DB'den oku, yoksa varsayılan kullan ───────────────────
 function get_notif_setting(PDO $pdo, int $teacher_id, int $student_id, string $scenario): array {
     static $cache = [];
@@ -323,14 +343,17 @@ foreach ($students as $student) {
             SELECT
                 si.id,
                 si.time_note,
-                COALESCE(cs.name, si.custom_subject, 'Görev') AS subject_name,
-                COALESCE(ct.name, '')                          AS topic_name,
+                COALESCE(es.lesson_name, cs.name, si.custom_subject, 'Görev') AS subject_name,
+                COALESCE(et.topic_name, ct.name, si.custom_topic, '')        AS topic_name,
                 COALESCE(
                     CASE WHEN si.target_amount IS NOT NULL THEN si.target_amount ELSE si.amount END,
                     0
                 ) AS amount,
-                cs.category
+                COALESCE(ec.name, cs.category) AS category
             FROM schedule_items si
+            LEFT JOIN education_topics    et ON et.id = si.edu_topic_id
+            LEFT JOIN education_subjects  es ON es.id = et.subject_id
+            LEFT JOIN education_categories ec ON ec.id = es.category_id
             LEFT JOIN coaching_topics   ct ON ct.id = si.topic_id
             LEFT JOIN coaching_subjects cs ON cs.id = ct.subject_id
             WHERE si.student_id = :sid

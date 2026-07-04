@@ -220,7 +220,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="col-span-1 md:col-span-2">
                                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Deneme Adı</label>
-                                <input type="text" name="name" id="modalExamName" required class="w-full border border-slate-300 rounded-lg p-3 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500">
+                                <input type="text" name="name" id="modalExamName" required class="js-upper w-full border border-slate-300 rounded-lg p-3 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Tarih</label>
@@ -475,7 +475,7 @@
         const div = document.createElement('div');
         div.className = 'flex items-center gap-2 animate-fadeIn lesson-row';
         div.innerHTML = `
-            <input type="text" name="lesson_name[]" value="${name}" placeholder="Ders Adı" required class="flex-1 min-w-0 border border-slate-300 rounded-lg p-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500">
+            <input type="text" name="lesson_name[]" value="${name}" placeholder="Ders Adı" required class="js-upper flex-1 min-w-0 border border-slate-300 rounded-lg p-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500">
             <div class="flex items-center gap-1">
                 <input type="number" name="dogru[]" value="${d}" placeholder="D" min="0" step="1" oninput="calculateTotal()" class="w-12 border border-slate-300 rounded-lg p-2 text-center text-xs font-bold text-green-600 outline-none focus:border-green-500 input-d">
                 <input type="number" name="yanlis[]" value="${y}" placeholder="Y" min="0" step="1" oninput="calculateTotal()" class="w-12 border border-slate-300 rounded-lg p-2 text-center text-xs font-bold text-red-500 outline-none focus:border-red-500 input-y">
