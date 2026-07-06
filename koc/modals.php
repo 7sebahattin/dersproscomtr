@@ -17,7 +17,11 @@
                 <input type="hidden" name="schedule_id" id="scheduleIdV3">
                 <input type="hidden" name="date" id="modalDateV3">
 
-                <!-- ═══ YENİ İKİ KATMANLI KONU SEÇİCİ (Müfredattan / Kaynaktan / Manuel) ═══ -->
+                <!-- ═══ YENİ İKİ KATMANLI KONU SEÇİCİ (Müfredattan / Kaynaktan / Manuel) ═══
+                     #eduSelectorBlock: Toplu Görev modalı açılınca bu blok DOM'da oraya
+                     taşınır, kapanınca buraya geri döner. Böylece aynı seçici (ve tüm JS
+                     bağları) iki modalda da çalışır; kod kopyalanmaz, ID çakışması olmaz. -->
+                <div id="eduSelectorBlock">
                 <input type="hidden" name="edu_topic_id" id="eduTopicIdV3">
                 <!-- Seçilen konunun okunur adları (görünürlük + eski uyumluluk için) -->
                 <input type="hidden" name="custom_subject" id="customSubjectV3">
@@ -98,6 +102,7 @@
                     <span aria-hidden="true">🎬</span>
                     <span>Video İzleme görevi</span>
                 </div>
+                </div><!-- /eduSelectorBlock -->
 
                 <div class="mt-5" id="turSectionV3">
                     <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-2 ml-1">Tür</label>
@@ -668,5 +673,257 @@ if (!empty($sid)) {
     };
 
     loadCats(); // ilk açılış için hazırla
+})();
+</script>
+
+<?php
+// ═══ TOPLU GÖREV MODALI — PC odaklı hızlı çoklu giriş ═══
+// Sol: (taşınan) akıllı konu seçici + gün çipleri + tür/miktar/saat/not.
+// Sağ: sepet listesi. "Sepete Ekle" hiçbir alanı SIFIRLAMAZ (son değerler
+// hatırlanır) — koç yalnızca konuyu/günü değiştirip hızla ilerler.
+$bulkDays = isset($week_dates) && is_array($week_dates) ? $week_dates : [];
+$bulkGunler = $gunlerTR ?? [];
+?>
+<div id="bulkModalV3" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-[#223488]/30 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl w-full max-w-5xl shadow-2xl shadow-[#223488]/20 border border-slate-100 flex flex-col max-h-[92vh] overflow-hidden">
+
+        <div class="relative bg-gradient-to-r from-[#223488] to-[#314595] p-5 flex justify-between items-center text-white flex-shrink-0">
+            <div class="absolute left-0 top-0 h-full w-1.5 bg-[#ec9731]"></div>
+            <div class="pl-2">
+                <h3 class="font-black text-lg tracking-wide">📋 TOPLU GÖREV EKLE</h3>
+                <p class="text-[11px] text-blue-100/80 font-medium mt-0.5">Görevi kur → günleri işaretle → sepete ekle → hepsini tek seferde kaydet. Alanlar sıfırlanmaz; sadece değişeni değiştir.</p>
+            </div>
+            <button type="button" onclick="closeBulkModalV3()" class="bg-white/10 hover:bg-white/20 text-white rounded-full p-1.5 transition duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+
+        <div class="flex-grow overflow-y-auto custom-scrollbar p-5">
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+
+                <!-- SOL: Görev kurulumu -->
+                <div class="lg:col-span-3 space-y-4">
+                    <!-- Akıllı konu seçici buraya taşınır -->
+                    <div id="bulkSelectorSlot"></div>
+
+                    <!-- Günler (çoklu seçim) -->
+                    <div>
+                        <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-2 ml-1">Günler <span class="text-slate-400 normal-case font-medium">(birden fazla seçilebilir)</span></label>
+                        <div class="grid grid-cols-7 gap-1.5" id="bulkDayChips">
+                            <?php foreach ($bulkDays as $bd):
+                                $dayName = mb_substr($bulkGunler[date('l', strtotime($bd))] ?? '', 0, 3, 'UTF-8');
+                                $isToday = ($bd === date('Y-m-d'));
+                            ?>
+                            <button type="button" data-date="<?php echo $bd; ?>"
+                                class="bulk-day h-14 rounded-xl border-2 flex flex-col items-center justify-center leading-none transition select-none <?php echo $isToday ? 'border-[#ec9731]/60' : 'border-slate-200'; ?> bg-white text-slate-500 hover:border-[#223488]/50">
+                                <span class="text-[9px] font-black uppercase"><?php echo htmlspecialchars($dayName); ?></span>
+                                <span class="text-sm font-black mt-1"><?php echo date('d', strtotime($bd)); ?></span>
+                                <?php if ($isToday): ?><span class="text-[7px] font-bold text-[#ec9731] mt-0.5">BUGÜN</span><?php endif; ?>
+                            </button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Tür + Miktar -->
+                    <div class="grid grid-cols-2 gap-3" id="bulkTurMiktar">
+                        <div>
+                            <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Tür</label>
+                            <div class="flex gap-2">
+                                <label class="cursor-pointer flex-1"><input type="radio" name="bulk_action_type" value="soru" class="peer sr-only" checked>
+                                    <div class="bg-white border-2 border-slate-200 rounded-xl py-2.5 text-center text-xs font-bold text-slate-500 peer-checked:bg-[#223488] peer-checked:text-white peer-checked:border-[#223488] transition-all">❓ Soru</div></label>
+                                <label class="cursor-pointer flex-1"><input type="radio" name="bulk_action_type" value="konu" class="peer sr-only">
+                                    <div class="bg-white border-2 border-slate-200 rounded-xl py-2.5 text-center text-xs font-bold text-slate-500 peer-checked:bg-[#ec9731] peer-checked:text-white peer-checked:border-[#ec9731] transition-all">📖 Konu</div></label>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Miktar</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="bulkAmount" value="20" min="1" class="w-20 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-black text-slate-800 text-center h-10 focus:bg-white focus:border-[#ec9731] outline-none">
+                                <div class="flex gap-1">
+                                    <?php foreach ([10,20,30,40,50] as $q): ?>
+                                    <button type="button" onclick="document.getElementById('bulkAmount').value=<?php echo $q; ?>" class="w-8 h-8 rounded-lg bg-[#223488]/10 hover:bg-[#223488] hover:text-white text-[#223488] text-[11px] font-black transition"><?php echo $q; ?></button>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Saat + Not -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Zaman <span class="text-slate-400 normal-case font-medium">(ops.)</span></label>
+                            <input type="time" id="bulkTime" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm text-center h-10 font-bold text-slate-600 focus:bg-white focus:border-[#223488] outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Kısa Not <span class="text-slate-400 normal-case font-medium">(ops.)</span></label>
+                            <input type="text" id="bulkNote" maxlength="255" placeholder="Örn: SADECE PARAGRAF" class="js-upper w-full bg-[#fdf3e7] border border-dashed border-[#ec9731] rounded-xl text-sm px-3 h-10 font-medium text-amber-800 placeholder:text-[#ec9731]/60 focus:bg-white focus:border-solid focus:border-[#223488] outline-none">
+                        </div>
+                    </div>
+
+                    <div id="bulkFormError" class="hidden bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl px-3 py-2.5"></div>
+
+                    <button type="button" onclick="bulkAddToCart()" id="bulkAddBtn"
+                        class="w-full bg-[#ec9731] hover:bg-[#d68625] text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-orange-200 transition active:scale-[0.98]">
+                        ➕ Sepete Ekle
+                    </button>
+                </div>
+
+                <!-- SAĞ: Sepet -->
+                <div class="lg:col-span-2 flex flex-col bg-slate-50 rounded-2xl border border-slate-200 min-h-[300px] overflow-hidden">
+                    <div class="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+                        <span class="text-xs font-black text-slate-700 uppercase tracking-wide">🧺 Eklenecekler <span id="bulkCount" class="text-[#ec9731]">(0)</span></span>
+                        <button type="button" onclick="bulkClearCart()" class="text-[10px] font-bold text-slate-400 hover:text-red-500 transition">🗑 Temizle</button>
+                    </div>
+                    <div id="bulkCartList" class="flex-grow overflow-y-auto custom-scrollbar p-2.5 space-y-2">
+                        <p id="bulkEmptyHint" class="text-center text-xs text-slate-400 font-medium py-10">Henüz görev eklenmedi.<br>Soldan kur, "Sepete Ekle" de.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alt eylem çubuğu -->
+        <div class="p-4 border-t border-slate-100 bg-white flex items-center justify-between gap-3 flex-shrink-0">
+            <button type="button" onclick="closeBulkModalV3()" class="px-5 py-3 rounded-xl bg-white border border-slate-200 text-slate-500 font-bold text-sm hover:bg-slate-50 transition">Vazgeç</button>
+            <button type="button" onclick="bulkSaveAll()" id="bulkSaveBtn" disabled
+                class="flex-1 sm:flex-none sm:min-w-[260px] bg-[#223488] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#314595] text-white py-3 px-6 rounded-xl font-black text-sm shadow-lg shadow-[#223488]/20 transition active:scale-[0.98]">
+                💾 Tümünü Kaydet <span id="bulkSaveCount"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var bulkCart = [];
+    var modal = document.getElementById('bulkModalV3');
+    if (!modal) return;
+    var slot  = document.getElementById('bulkSelectorSlot');
+    var block = document.getElementById('eduSelectorBlock');
+    var blockHome = block ? block.parentNode : null;         // addModalV3 içindeki asıl yeri
+    var blockNext = block ? block.nextSibling : null;         // geri koyarken konum referansı
+
+    function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+    // ── Aç / Kapat: konu seçici bloğunu taşı (sticky — hiçbir alan sıfırlanmaz) ──
+    window.openBulkModalV3 = function () {
+        if (block && slot && block.parentNode !== slot) slot.appendChild(block);
+        modal.classList.remove('hidden'); modal.classList.add('flex');
+    };
+    window.closeBulkModalV3 = function () {
+        modal.classList.add('hidden'); modal.classList.remove('flex');
+        // Seçiciyi tek-görev modalındaki yerine iade et (form POST'u için şart)
+        if (block && blockHome && block.parentNode !== blockHome) blockHome.insertBefore(block, blockNext);
+    };
+    modal.addEventListener('click', function(e){ if (e.target === modal) closeBulkModalV3(); });
+    document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeBulkModalV3();
+    });
+
+    // ── Gün çipleri (çoklu) ──
+    document.querySelectorAll('#bulkDayChips .bulk-day').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var on = btn.classList.toggle('bulk-day-on');
+            btn.classList.toggle('bg-[#223488]', on);
+            btn.classList.toggle('text-white', on);
+            btn.classList.toggle('border-[#223488]', on);
+            btn.classList.toggle('bg-white', !on);
+            btn.classList.toggle('text-slate-500', !on);
+        });
+    });
+
+    function showBulkError(msg) {
+        var el = document.getElementById('bulkFormError');
+        el.textContent = '⚠️ ' + msg;
+        el.classList.remove('hidden');
+        setTimeout(function(){ el.classList.add('hidden'); }, 3500);
+    }
+
+    // ── Sepete ekle (STICKY: alanlar bilerek sıfırlanmaz) ──
+    window.bulkAddToCart = function () {
+        var eduId = (document.getElementById('eduTopicIdV3') || {}).value || '';
+        var subj  = (document.getElementById('customSubjectV3') || {}).value || '';
+        var top   = (document.getElementById('customTopicV3') || {}).value || '';
+        var resT  = (document.getElementById('resourceTitleV3') || {}).value || '';
+        var resId = (document.getElementById('resourceIdV3') || {}).value || '';
+        var isVideo = !!(document.getElementById('videoRadioV3') || {}).checked;
+
+        if (!eduId && !subj.trim() && !top.trim()) { showBulkError('Önce bir konu seçin (Müfredattan/Kaynaktan/Manuel).'); return; }
+        var days = [].slice.call(document.querySelectorAll('#bulkDayChips .bulk-day-on'));
+        if (!days.length) { showBulkError('En az bir gün işaretleyin.'); return; }
+
+        var act = isVideo ? 'video' : (document.querySelector('input[name="bulk_action_type"]:checked') || {value:'soru'}).value;
+        var amt = isVideo ? 1 : Math.max(1, parseInt(document.getElementById('bulkAmount').value, 10) || 0);
+        if (!isVideo && amt < 1) { showBulkError('Miktar en az 1 olmalı.'); return; }
+        var tNote = document.getElementById('bulkTime').value || '';
+        var kNote = document.getElementById('bulkNote').value.trim();
+
+        days.forEach(function (d) {
+            bulkCart.push({
+                date: d.dataset.date,
+                day_label: d.textContent.trim().replace(/\s+/g,' '),
+                edu_topic_id: eduId, custom_subject: subj, custom_topic: top,
+                resource_title: resT, resource_id: resId,
+                action_type: act, amount: amt, time_note: tNote, task_note: kNote
+            });
+        });
+        renderBulkCart();
+        // STICKY: konu/tür/miktar/saat/not olduğu gibi kalır — koç sadece değişeni değiştirir.
+    };
+
+    function renderBulkCart() {
+        var list = document.getElementById('bulkCartList');
+        var hint = document.getElementById('bulkEmptyHint');
+        var actMeta = { soru: ['Soru','bg-[#223488]'], konu: ['Dakika','bg-[#ec9731]'], video: ['Video','bg-red-600'] };
+        list.querySelectorAll('.bulk-cart-item').forEach(function(n){ n.remove(); });
+        hint.style.display = bulkCart.length ? 'none' : '';
+        bulkCart.forEach(function (it, i) {
+            var m = actMeta[it.action_type] || actMeta.soru;
+            var title = (it.custom_subject ? it.custom_subject : '') + (it.custom_topic ? ' › ' + it.custom_topic : '');
+            var row = document.createElement('div');
+            row.className = 'bulk-cart-item bg-white border border-slate-200 rounded-xl p-2.5 flex items-center gap-2 animate-fadeIn';
+            row.innerHTML =
+                '<span class="shrink-0 w-14 text-center text-[9px] font-black uppercase bg-slate-100 text-slate-600 rounded-lg py-1.5 leading-tight">' + esc(it.day_label) + '</span>' +
+                '<div class="min-w-0 flex-1">' +
+                    '<p class="text-[11px] font-extrabold text-slate-800 truncate">' + esc(title || 'Görev') + '</p>' +
+                    '<p class="text-[10px] font-semibold text-slate-400 truncate">' +
+                        '<span class="' + m[1] + ' text-white rounded px-1 py-[1px] text-[8px] font-black mr-1">' + it.amount + ' ' + m[0] + '</span>' +
+                        (it.time_note ? '⏰' + esc(it.time_note) + ' ' : '') + (it.task_note ? '📝' + esc(it.task_note) : '') +
+                    '</p>' +
+                '</div>' +
+                '<button type="button" data-i="' + i + '" class="bulk-del shrink-0 w-7 h-7 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition font-black">✕</button>';
+            list.appendChild(row);
+        });
+        list.querySelectorAll('.bulk-del').forEach(function (b) {
+            b.addEventListener('click', function () { bulkCart.splice(parseInt(b.dataset.i, 10), 1); renderBulkCart(); });
+        });
+        document.getElementById('bulkCount').textContent = '(' + bulkCart.length + ')';
+        document.getElementById('bulkSaveCount').textContent = bulkCart.length ? '(' + bulkCart.length + ')' : '';
+        document.getElementById('bulkSaveBtn').disabled = bulkCart.length === 0;
+    }
+
+    window.bulkClearCart = function () { bulkCart = []; renderBulkCart(); };
+
+    // ── Tümünü kaydet: tek istek, tek transaction; başarıda tablo yenilenir ──
+    window.bulkSaveAll = function () {
+        if (!bulkCart.length) return;
+        var btn = document.getElementById('bulkSaveBtn');
+        btn.disabled = true; var old = btn.innerHTML; btn.innerHTML = '⏳ Kaydediliyor...';
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: new URLSearchParams({ ajax: 'bulk_add_schedule', items: JSON.stringify(bulkCart) })
+        })
+        .then(function(r){ return r.text(); })
+        .then(function(t){
+            var j; try { j = JSON.parse(t); } catch(e) { throw new Error('Sunucu yanıtı okunamadı'); }
+            if (!j.ok) throw new Error(j.error || 'Kaydedilemedi');
+            btn.innerHTML = '✅ ' + j.added + ' görev eklendi';
+            setTimeout(function(){ window.location.reload(); }, 600);
+        })
+        .catch(function(err){
+            btn.disabled = false; btn.innerHTML = old;
+            showBulkError(err.message || 'Kayıt hatası.');
+        });
+    };
 })();
 </script>

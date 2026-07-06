@@ -50,13 +50,19 @@
             </a>
         </div>
 
-        <div class="flex items-center justify-center gap-3">
+        <div class="flex items-center justify-center gap-2 md:gap-3">
             <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $today_date; ?>"
                class="px-4 md:px-6 py-2 rounded-xl text-xs font-bold transition shadow-md shadow-orange-100 btn-today flex items-center gap-2 transform active:scale-95 whitespace-nowrap">
-                <span>📅</span> 
+                <span>📅</span>
                 <span>Bugün</span>
             </a>
-            <span class="font-bold text-[#223488] text-sm hidden md:block border-l pl-3 border-slate-200 whitespace-nowrap">
+            <button type="button" onclick="openBulkModalV3()"
+               class="px-4 md:px-6 py-2 rounded-xl text-xs font-bold transition shadow-md shadow-blue-100 btn-nav-blue flex items-center gap-2 transform active:scale-95 whitespace-nowrap">
+                <span>📋</span>
+                <span class="hidden sm:inline">Toplu Görev</span>
+                <span class="sm:hidden">Toplu</span>
+            </button>
+            <span class="font-bold text-[#223488] text-sm hidden lg:block border-l pl-3 border-slate-200 whitespace-nowrap">
                 <?php echo date('d.m.Y', strtotime($week_start)); ?> Başlangıçlı
             </span>
         </div>
