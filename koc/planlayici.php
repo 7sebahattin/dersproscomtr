@@ -108,35 +108,35 @@ foreach (($raw_items ?? []) as $it) {
 
             <!-- ═══ AKTİF KALEM (sticky preset) ═══ -->
             <div class="border-t-2 border-[#ec9731]/40 bg-[#fdf3e7]/60 p-2.5 space-y-2 flex-shrink-0">
-                <div class="flex items-center justify-between">
-                    <span class="text-[9px] font-black text-[#d68625] uppercase tracking-wider">🖊 Aktif Kalem — bırakılan her kart bu ayarla oluşur</span>
+                <span class="text-[9px] font-black text-[#d68625] uppercase tracking-wider block">🖊 Aktif Kalem — bırakılan her kart bu ayarla oluşur</span>
+
+                <!-- Tür: tam genişlik, tek-görev modalındaki gibi -->
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button type="button" id="psPresetSoru" onclick="psSetPresetType('soru')" class="py-2 rounded-lg text-xs font-black transition bg-[#223488] text-white">❓ Soru</button>
+                    <button type="button" id="psPresetKonu" onclick="psSetPresetType('konu')" class="py-2 rounded-lg text-xs font-black transition bg-white border-2 border-slate-200 text-slate-500">📖 Konu</button>
                 </div>
-                <div class="flex gap-1.5 items-center">
-                    <div class="flex rounded-lg overflow-hidden border border-slate-200 bg-white">
-                        <button type="button" id="psPresetSoru" onclick="psSetPresetType('soru')" class="px-2.5 py-1.5 text-[10px] font-black bg-[#223488] text-white transition">❓ Soru</button>
-                        <button type="button" id="psPresetKonu" onclick="psSetPresetType('konu')" class="px-2.5 py-1.5 text-[10px] font-black text-slate-500 transition">📖 Konu</button>
+
+                <!-- Hızlı miktar çipleri -->
+                <div class="flex flex-wrap gap-1">
+                    <?php foreach ([10,15,20,25,30,50,75] as $q): ?>
+                    <button type="button" data-amt-chip="<?php echo $q; ?>" onclick="psSetPresetAmount(<?php echo $q; ?>)" class="ps-amt-chip w-8 h-8 rounded-full bg-white border-2 border-slate-200 hover:border-[#223488] text-slate-600 text-[10px] font-black transition"><?php echo $q; ?></button>
+                    <?php endforeach; ?>
+                </div>
+
+                <!-- Miktar + Zaman -->
+                <div class="grid grid-cols-2 gap-1.5">
+                    <div>
+                        <label class="block text-[8px] font-bold text-slate-400 uppercase mb-0.5">Miktar</label>
+                        <input type="number" id="psPresetAmount" min="1" value="20" class="w-full bg-white border border-slate-200 rounded-lg text-[12px] font-black text-slate-800 text-center py-1.5 outline-none focus:border-[#ec9731]">
                     </div>
-                    <input type="number" id="psPresetAmount" min="1" value="20" class="w-14 bg-white border border-slate-200 rounded-lg text-[12px] font-black text-slate-800 text-center py-1.5 outline-none focus:border-[#ec9731]">
-                    <div class="flex gap-1">
-                        <?php foreach ([10,20,30,40] as $q): ?>
-                        <button type="button" onclick="psSetPresetAmount(<?php echo $q; ?>)" class="w-7 h-7 rounded-md bg-white border border-slate-200 hover:bg-[#223488] hover:text-white text-slate-600 text-[10px] font-black transition"><?php echo $q; ?></button>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-                <div class="flex gap-1.5">
-                    <input type="time" id="psPresetTime" class="w-[92px] bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 text-center py-1.5 outline-none focus:border-[#223488]" title="Saat (opsiyonel)">
-                    <input type="text" id="psPresetNote" maxlength="255" placeholder="Kısa not (ops.)" class="js-upper flex-1 min-w-0 bg-white border border-dashed border-[#ec9731]/60 rounded-lg text-[10px] font-medium text-amber-800 px-2 py-1.5 outline-none focus:border-solid focus:border-[#223488]">
-                </div>
-                <!-- Chip tepsisi: karta sürükleyerek istisna uygula -->
-                <div class="pt-1.5 border-t border-[#ec9731]/20">
-                    <p class="text-[8px] font-bold text-slate-400 uppercase mb-1">İstisna için çipi kartın üstüne sürükle:</p>
-                    <div class="flex flex-wrap gap-1">
-                        <span draggable="true" data-chip="tur-soru" class="ps-chip cursor-grab select-none text-[9px] font-black px-2 py-1 rounded-md bg-[#223488] text-white">❓ Soru</span>
-                        <span draggable="true" data-chip="tur-konu" class="ps-chip cursor-grab select-none text-[9px] font-black px-2 py-1 rounded-md bg-[#ec9731] text-white">📖 Konu</span>
-                        <span draggable="true" data-chip="saat" class="ps-chip cursor-grab select-none text-[9px] font-black px-2 py-1 rounded-md bg-slate-600 text-white">⏰ Saat</span>
-                        <span draggable="true" data-chip="not" class="ps-chip cursor-grab select-none text-[9px] font-black px-2 py-1 rounded-md bg-amber-500 text-white">📝 Not</span>
+                    <div>
+                        <label class="block text-[8px] font-bold text-slate-400 uppercase mb-0.5">Zaman</label>
+                        <input type="time" id="psPresetTime" class="w-full bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 text-center py-1.5 outline-none focus:border-[#223488]" title="Saat (opsiyonel)">
                     </div>
                 </div>
+
+                <!-- Kısa Not -->
+                <input type="text" id="psPresetNote" maxlength="255" placeholder="Kısa not (ops.)" class="js-upper w-full bg-white border border-dashed border-[#ec9731]/60 rounded-lg text-[10px] font-medium text-amber-800 px-2 py-1.5 outline-none focus:border-solid focus:border-[#223488]">
             </div>
         </div>
 
@@ -161,9 +161,6 @@ foreach (($raw_items ?? []) as $it) {
             </div>
         </div>
     </div>
-
-    <!-- Chip baloncuğu (tek yeniden kullanılabilir popover) -->
-    <div id="psBubble" class="hidden fixed z-[9999] bg-white rounded-xl shadow-2xl border border-slate-200 p-2.5 w-56"></div>
 </div>
 
 <script>
@@ -193,16 +190,20 @@ foreach (($raw_items ?? []) as $it) {
     var preset = { action_type:'soru', amount:20, time_note:'', task_note:'' };
     try { var pp = JSON.parse(localStorage.getItem(PRESET_KEY)||''); if (pp && pp.action_type) preset = pp; } catch(e){}
     function syncPresetUI(){
-        document.getElementById('psPresetSoru').className = 'px-2.5 py-1.5 text-[10px] font-black transition ' + (preset.action_type==='soru' ? 'bg-[#223488] text-white' : 'text-slate-500 bg-white');
-        document.getElementById('psPresetKonu').className = 'px-2.5 py-1.5 text-[10px] font-black transition ' + (preset.action_type==='konu' ? 'bg-[#ec9731] text-white' : 'text-slate-500 bg-white');
+        document.getElementById('psPresetSoru').className = 'py-2 rounded-lg text-xs font-black transition ' + (preset.action_type==='soru' ? 'bg-[#223488] text-white' : 'bg-white border-2 border-slate-200 text-slate-500');
+        document.getElementById('psPresetKonu').className = 'py-2 rounded-lg text-xs font-black transition ' + (preset.action_type==='konu' ? 'bg-[#ec9731] text-white' : 'bg-white border-2 border-slate-200 text-slate-500');
         document.getElementById('psPresetAmount').value = preset.amount;
         document.getElementById('psPresetTime').value = preset.time_note || '';
         document.getElementById('psPresetNote').value = preset.task_note || '';
+        document.querySelectorAll('#plannerStudio .ps-amt-chip').forEach(function(b){
+            var on = parseInt(b.dataset.amtChip,10) === preset.amount;
+            b.className = 'ps-amt-chip w-8 h-8 rounded-full text-[10px] font-black transition ' + (on ? 'bg-[#223488] border-2 border-[#223488] text-white' : 'bg-white border-2 border-slate-200 hover:border-[#223488] text-slate-600');
+        });
     }
     function savePreset(){ try { localStorage.setItem(PRESET_KEY, JSON.stringify(preset)); } catch(e){} }
     window.psSetPresetType = function(t){ preset.action_type = t; savePreset(); syncPresetUI(); };
     window.psSetPresetAmount = function(a){ preset.amount = a; savePreset(); syncPresetUI(); };
-    document.getElementById('psPresetAmount').addEventListener('input', function(){ preset.amount = Math.max(1, parseInt(this.value,10)||1); savePreset(); });
+    document.getElementById('psPresetAmount').addEventListener('input', function(){ preset.amount = Math.max(1, parseInt(this.value,10)||1); savePreset(); syncPresetUI(); });
     document.getElementById('psPresetTime').addEventListener('input', function(){ preset.time_note = this.value; savePreset(); });
     document.getElementById('psPresetNote').addEventListener('input', function(){ preset.task_note = trUp(this.value.trim()); savePreset(); });
 
@@ -214,11 +215,11 @@ foreach (($raw_items ?? []) as $it) {
         loadCats();
     };
     window.closePlannerStudio = function () {
-        hideBubble(); studio.classList.add('hidden'); studio.classList.remove('flex');
+        studio.classList.add('hidden'); studio.classList.remove('flex');
         document.body.style.overflow = '';
     };
     document.addEventListener('keydown', function(e){
-        if (e.key === 'Escape' && !studio.classList.contains('hidden')) { hideBubble(); if (openEditor) { openEditor = null; renderBoard(); } else closePlannerStudio(); }
+        if (e.key === 'Escape' && !studio.classList.contains('hidden')) { if (openEditor) { openEditor = null; renderBoard(); } else closePlannerStudio(); }
     });
 
     // Sayfa yüklenince: kaydetme sonrası stüdyoyu otomatik yeniden aç (akış kesilmesin)
@@ -350,23 +351,11 @@ foreach (($raw_items ?? []) as $it) {
             ev.dataTransfer.setData('text/ps-card', c.uid);
             ev.dataTransfer.effectAllowed = 'move';
         });
-        // Chip bırakma hedefi
-        el.addEventListener('dragover', function(ev){
-            if (ev.dataTransfer.types.indexOf('text/ps-chip') !== -1) { ev.preventDefault(); el.classList.add('ring-2','ring-[#ec9731]'); }
-        });
-        el.addEventListener('dragleave', function(){ el.classList.remove('ring-2','ring-[#ec9731]'); });
-        el.addEventListener('drop', function(ev){
-            var chip = ev.dataTransfer.getData('text/ps-chip');
-            if (!chip) return;
-            ev.preventDefault(); ev.stopPropagation();
-            el.classList.remove('ring-2','ring-[#ec9731]');
-            openBubble(chip, c, el);
-        });
         // Tıkla → yerinde düzenleyici
         el.addEventListener('click', function(ev){
             if (ev.target.closest('.ps-editor') || ev.target.closest('button')) return;
             openEditor = (openEditor === c.uid) ? null : c.uid;
-            hideBubble(); renderBoard();
+            renderBoard();
         });
         if (openEditor === c.uid) bindEditor(el, c);
         return el;
@@ -406,68 +395,6 @@ foreach (($raw_items ?? []) as $it) {
         q('ok').addEventListener('click', function(){ openEditor = null; renderBoard(); });
     }
     function openEditorKeep(c){ openEditor = c.uid; renderBoard(); }
-
-    // ── Chip baloncuğu ──
-    var bubble = document.getElementById('psBubble');
-    var bubbleCard = null;
-    function openBubble(chip, c, anchorEl){
-        if ((chip === 'tur-soru' || chip === 'tur-konu') && c.action_type === 'video') { flashBubble(anchorEl, '🎬 Video görevde tür değişmez.'); return; }
-        bubbleCard = c;
-        var html = '';
-        if (chip === 'tur-soru' || chip === 'tur-konu') {
-            var t = (chip === 'tur-soru') ? 'soru' : 'konu';
-            var unit = t === 'soru' ? 'Soru' : 'Dakika';
-            html = '<p class="text-[9px] font-black text-slate-500 uppercase mb-1.5">' + (t==='soru'?'❓ Soru':'📖 Konu') + ' — Miktar (' + unit + ')</p>' +
-                '<div class="flex flex-wrap gap-1 mb-1.5">' + [10,20,30,40,50,60].map(function(a){ return '<button type="button" data-bb-amt="'+a+'" data-bb-type="'+t+'" class="w-9 h-8 rounded-md bg-slate-100 hover:bg-[#223488] hover:text-white text-slate-700 text-[11px] font-black transition">'+a+'</button>'; }).join('') + '</div>' +
-                '<div class="flex gap-1"><input type="number" min="1" id="psBubbleAmt" placeholder="Özel" class="flex-1 bg-slate-50 border border-slate-200 rounded-md text-[12px] font-black text-center py-1.5 outline-none focus:border-[#ec9731]">' +
-                '<button type="button" data-bb-ok="'+t+'" class="px-3 rounded-md bg-[#223488] text-white text-[10px] font-black">✓</button></div>';
-        } else if (chip === 'saat') {
-            html = '<p class="text-[9px] font-black text-slate-500 uppercase mb-1.5">⏰ Saat</p>' +
-                '<div class="flex gap-1"><input type="time" id="psBubbleTime" value="' + esc(c.time_note||'') + '" class="flex-1 bg-slate-50 border border-slate-200 rounded-md text-[12px] font-bold text-center py-1.5 outline-none">' +
-                '<button type="button" data-bb-time="1" class="px-3 rounded-md bg-[#223488] text-white text-[10px] font-black">✓</button></div>';
-        } else if (chip === 'not') {
-            html = '<p class="text-[9px] font-black text-slate-500 uppercase mb-1.5">📝 Kısa Not</p>' +
-                '<div class="flex gap-1"><input type="text" id="psBubbleNote" maxlength="255" value="' + esc(c.task_note||'') + '" class="flex-1 bg-slate-50 border border-slate-200 rounded-md text-[11px] font-medium px-2 py-1.5 outline-none uppercase">' +
-                '<button type="button" data-bb-note="1" class="px-3 rounded-md bg-[#223488] text-white text-[10px] font-black">✓</button></div>';
-        }
-        bubble.innerHTML = html;
-        positionBubble(anchorEl);
-        bubble.classList.remove('hidden');
-        bubble.querySelectorAll('[data-bb-amt]').forEach(function(b){
-            b.addEventListener('click', function(){ bubbleCard.action_type = b.dataset.bbType; bubbleCard.amount = parseInt(b.dataset.bbAmt,10); hideBubble(); renderBoard(); });
-        });
-        var okBtn = bubble.querySelector('[data-bb-ok]');
-        if (okBtn) okBtn.addEventListener('click', function(){
-            var v = parseInt(document.getElementById('psBubbleAmt').value,10);
-            if (v >= 1) { bubbleCard.action_type = okBtn.dataset.bbOk; bubbleCard.amount = v; }
-            hideBubble(); renderBoard();
-        });
-        var tBtn = bubble.querySelector('[data-bb-time]');
-        if (tBtn) tBtn.addEventListener('click', function(){ bubbleCard.time_note = document.getElementById('psBubbleTime').value; hideBubble(); renderBoard(); });
-        var nBtn = bubble.querySelector('[data-bb-note]');
-        if (nBtn) nBtn.addEventListener('click', function(){ bubbleCard.task_note = trUp(document.getElementById('psBubbleNote').value.trim()); hideBubble(); renderBoard(); });
-    }
-    function positionBubble(anchorEl){
-        var r = anchorEl.getBoundingClientRect();
-        var left = Math.min(Math.max(8, r.left), window.innerWidth - 232);
-        var top  = (r.bottom + 234 < window.innerHeight) ? r.bottom + 6 : r.top - 6 - 160;
-        bubble.style.left = left + 'px'; bubble.style.top = Math.max(8, top) + 'px';
-    }
-    function hideBubble(){ bubble.classList.add('hidden'); bubbleCard = null; }
-    function flashBubble(anchorEl, msg){
-        bubble.innerHTML = '<p class="text-[10px] font-bold text-red-600">' + msg + '</p>';
-        positionBubble(anchorEl); bubble.classList.remove('hidden');
-        setTimeout(hideBubble, 1800);
-    }
-    document.addEventListener('click', function(e){ if (!bubble.contains(e.target) && !bubble.classList.contains('hidden')) hideBubble(); }, true);
-
-    // ── Chip sürükleme kaynağı ──
-    document.querySelectorAll('#plannerStudio .ps-chip').forEach(function(chip){
-        chip.addEventListener('dragstart', function(ev){
-            ev.dataTransfer.setData('text/ps-chip', chip.dataset.chip);
-            ev.dataTransfer.effectAllowed = 'copy';
-        });
-    });
 
     // ── Gün sütunlarına bırakma (konu → yeni kart, kart → gün değişimi) ──
     document.querySelectorAll('#plannerStudio .ps-drop').forEach(function(zone){
