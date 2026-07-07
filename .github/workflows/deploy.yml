@@ -12,7 +12,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: FTP Deploy
+      # Hosting'in FTPS kontrol soketi aralıklı olarak "Timeout (control socket)"
+      # veriyor (sunucu/ağ dalgalanması, kodla ilgisi yok). Deploy adımı otomatik
+      # yeniden denenir: biri başarılıysa job GEÇER, üçü de başarısızsa job düşer.
+
+      - name: FTP Deploy — 1. deneme
+        id: d1
+        continue-on-error: true
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -20,6 +26,53 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           port: 21
+          timeout: 60000
+          local-dir: ./
+          server-dir: public_html/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github
+            **/.github/**
+
+      - name: 2. denemeden önce bekle
+        if: steps.d1.outcome == 'failure'
+        run: sleep 20
+
+      - name: FTP Deploy — 2. deneme
+        id: d2
+        if: steps.d1.outcome == 'failure'
+        continue-on-error: true
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          timeout: 60000
+          local-dir: ./
+          server-dir: public_html/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github
+            **/.github/**
+
+      - name: 3. denemeden önce bekle
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
+        run: sleep 30
+
+      - name: FTP Deploy — 3. deneme (son)
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          timeout: 60000
           local-dir: ./
           server-dir: public_html/
           exclude: |
