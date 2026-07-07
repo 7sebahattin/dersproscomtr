@@ -56,11 +56,11 @@
                 <span>📅</span>
                 <span>Bugün</span>
             </a>
-            <button type="button" onclick="openBulkModalV3()"
+            <button type="button" onclick="openPlannerStudio()"
                class="px-4 md:px-6 py-2 rounded-xl text-xs font-bold transition shadow-md shadow-blue-100 btn-nav-blue flex items-center gap-2 transform active:scale-95 whitespace-nowrap">
-                <span>📋</span>
-                <span class="hidden sm:inline">Toplu Görev</span>
-                <span class="sm:hidden">Toplu</span>
+                <span>🗓️</span>
+                <span class="hidden sm:inline">Planlama Stüdyosu</span>
+                <span class="sm:hidden">Stüdyo</span>
             </button>
             <span class="font-bold text-[#223488] text-sm hidden lg:block border-l pl-3 border-slate-200 whitespace-nowrap">
                 <?php echo date('d.m.Y', strtotime($week_start)); ?> Başlangıçlı

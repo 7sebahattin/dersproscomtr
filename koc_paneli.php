@@ -154,13 +154,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
         } catch (Exception $e) { echo json_encode(['ok' => false, 'error' => 'Kopyalama hatası.']); exit; }
     }
 
-    // B2. TOPLU EKLEME — "Toplu Görev" modalı: tek istekte çok satır, tek transaction.
-    //     Her öğe tek-görev kaydıyla aynı alanları taşır; hepsi ya birlikte yazılır
-    //     ya da hiçbiri (yarım kayıt kalmaz).
-    if ($action === 'bulk_add_schedule') {
-        $items = json_decode((string)($_POST['items'] ?? '[]'), true);
-        if (!is_array($items) || count($items) === 0) { echo json_encode(['ok' => false, 'error' => 'Eklenecek görev yok.']); exit; }
-        if (count($items) > 300) { echo json_encode(['ok' => false, 'error' => 'Tek seferde en fazla 300 görev eklenebilir.']); exit; }
+    // B2. PLANLAYICI YAYINLAMA — Planlama Stüdyosu'nun "Haftayı Kaydet" ucu.
+    //     Taslakta biriken TÜM değişiklikler (ekle / güncelle / sil) tek istekte,
+    //     tek TRANSACTION içinde uygulanır: hata olursa hiçbiri yazılmaz.
+    if ($action === 'plan_apply') {
+        $ops = json_decode((string)($_POST['ops'] ?? ''), true);
+        if (!is_array($ops)) { echo json_encode(['ok' => false, 'error' => 'Geçersiz veri.']); exit; }
+        $create = is_array($ops['create'] ?? null) ? $ops['create'] : [];
+        $update = is_array($ops['update'] ?? null) ? $ops['update'] : [];
+        $delete = is_array($ops['delete'] ?? null) ? $ops['delete'] : [];
+        if (!count($create) && !count($update) && !count($delete)) { echo json_encode(['ok' => false, 'error' => 'Kaydedilecek değişiklik yok.']); exit; }
+        if (count($create) > 300 || count($update) > 500 || count($delete) > 500) { echo json_encode(['ok' => false, 'error' => 'Tek seferde çok fazla değişiklik.']); exit; }
 
         $optCols = [];
         foreach (['edu_topic_id','resource_title','resource_id','task_note'] as $c) {
@@ -168,45 +172,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
             catch (Throwable $e) { $optCols[$c] = false; }
         }
 
-        $cols = ['student_id','date','amount','action_type','status','topic_id','custom_subject','custom_topic','time_note'];
-        foreach ($optCols as $c => $has) if ($has) $cols[] = $c;
-        $cols[] = 'item_order';
-        $qm  = implode(', ', array_fill(0, count($cols), '?'));
-        $ins = $pdo->prepare("INSERT INTO schedule_items (".implode(', ', $cols).") VALUES ($qm)");
-
-        $added = 0; $skipped = 0;
-        try {
-            $pdo->beginTransaction();
-            foreach ($items as $it) {
-                if (!is_array($it)) { $skipped++; continue; }
-                $date = (string)($it['date'] ?? '');
-                if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) { $skipped++; continue; }
-                $act = in_array(($it['action_type'] ?? ''), ['soru','konu','video'], true) ? $it['action_type'] : 'soru';
-                $amt = max(1, (int)($it['amount'] ?? 0));
-                if ($act === 'video') $amt = 1; // video görevde miktar tek video sabittir
-                $eduTid = !empty($it['edu_topic_id']) ? (int)$it['edu_topic_id'] : null;
-                $csub = trim((string)($it['custom_subject'] ?? ''));
-                $ctop = trim((string)($it['custom_topic'] ?? ''));
-                if (!$eduTid && $csub === '' && $ctop === '') { $skipped++; continue; } // isimsiz görev engeli
-                $tn = trim((string)($it['time_note'] ?? '')) ?: null;
-
-                $vals = [$sid, $date, $amt, $act, 'bekliyor', null, $csub, $ctop, $tn];
-                $optVals = [
+        // Ortak doğrulama: tek-görev kaydıyla (save_schedule) birebir aynı kurallar.
+        $normalize = function (array $it) use ($optCols): ?array {
+            $date = (string)($it['date'] ?? '');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) return null;
+            $act = in_array(($it['action_type'] ?? ''), ['soru','konu','video'], true) ? $it['action_type'] : 'soru';
+            $amt = max(1, (int)($it['amount'] ?? 0));
+            if ($act === 'video') $amt = 1; // video görevde miktar tek video sabittir
+            $eduTid = !empty($it['edu_topic_id']) ? (int)$it['edu_topic_id'] : null;
+            $csub = trim((string)($it['custom_subject'] ?? ''));
+            $ctop = trim((string)($it['custom_topic'] ?? ''));
+            if (!$eduTid && $csub === '' && $ctop === '') return null; // isimsiz görev engeli
+            return [
+                'date' => $date, 'action_type' => $act, 'amount' => $amt,
+                'custom_subject' => $csub, 'custom_topic' => $ctop,
+                'time_note' => (trim((string)($it['time_note'] ?? '')) ?: null),
+                'opt' => [
                     'edu_topic_id'   => $eduTid,
                     'resource_title' => (trim((string)($it['resource_title'] ?? '')) ?: null),
                     'resource_id'    => (!empty($it['resource_id']) ? (int)$it['resource_id'] : null),
                     'task_note'      => (mb_substr(trim((string)($it['task_note'] ?? '')), 0, 255) ?: null),
-                ];
-                foreach ($optCols as $c => $has) if ($has) $vals[] = $optVals[$c];
+                ],
+            ];
+        };
+
+        $insCols = ['student_id','date','amount','action_type','status','topic_id','custom_subject','custom_topic','time_note'];
+        foreach ($optCols as $c => $has) if ($has) $insCols[] = $c;
+        $insCols[] = 'item_order';
+        $qm  = implode(', ', array_fill(0, count($insCols), '?'));
+        $ins = $pdo->prepare("INSERT INTO schedule_items (".implode(', ', $insCols).") VALUES ($qm)");
+
+        // UPDATE: status ve topic_id bilerek dokunulmaz (save_schedule ile aynı;
+        // topic_id'yi yazmak eski müfredat bağını sessizce koparırdı).
+        $updSet = ['date=?','amount=?','action_type=?','custom_subject=?','custom_topic=?','time_note=?'];
+        foreach ($optCols as $c => $has) if ($has) $updSet[] = "$c=?";
+        $upd = $pdo->prepare("UPDATE schedule_items SET ".implode(', ', $updSet)." WHERE id=? AND student_id=?");
+
+        $del = $pdo->prepare("DELETE FROM schedule_items WHERE id=? AND student_id=?");
+
+        $nCre = 0; $nUpd = 0; $nDel = 0; $skipped = 0;
+        try {
+            $pdo->beginTransaction();
+            foreach ($create as $it) {
+                $n = is_array($it) ? $normalize($it) : null;
+                if (!$n) { $skipped++; continue; }
+                $vals = [$sid, $n['date'], $n['amount'], $n['action_type'], 'bekliyor', null, $n['custom_subject'], $n['custom_topic'], $n['time_note']];
+                foreach ($optCols as $c => $has) if ($has) $vals[] = $n['opt'][$c];
                 $vals[] = 0;
                 $ins->execute($vals);
-                $added++;
+                $nCre++;
+            }
+            foreach ($update as $it) {
+                $id = is_array($it) ? (int)($it['id'] ?? 0) : 0;
+                $n  = ($id > 0 && is_array($it)) ? $normalize($it) : null;
+                if (!$n) { $skipped++; continue; }
+                $vals = [$n['date'], $n['amount'], $n['action_type'], $n['custom_subject'], $n['custom_topic'], $n['time_note']];
+                foreach ($optCols as $c => $has) if ($has) $vals[] = $n['opt'][$c];
+                $vals[] = $id; $vals[] = $sid; // sahiplik koşulu WHERE'de
+                $upd->execute($vals);
+                $nUpd += $upd->rowCount() > 0 ? 1 : 0;
+            }
+            foreach ($delete as $id) {
+                $id = (int)$id;
+                if ($id <= 0) { $skipped++; continue; }
+                $del->execute([$id, $sid]); // sahiplik koşulu WHERE'de
+                $nDel += $del->rowCount() > 0 ? 1 : 0;
             }
             $pdo->commit();
-            echo json_encode(['ok' => true, 'added' => $added, 'skipped' => $skipped]); exit;
+            echo json_encode(['ok' => true, 'created' => $nCre, 'updated' => $nUpd, 'deleted' => $nDel, 'skipped' => $skipped]); exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            echo json_encode(['ok' => false, 'error' => 'Toplu ekleme hatası: kayıtlar geri alındı.']); exit;
+            echo json_encode(['ok' => false, 'error' => 'Kaydetme hatası: tüm değişiklikler geri alındı.']); exit;
         }
     }
 
@@ -630,5 +666,6 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
 </div>
 
 <?php include 'koc/modals.php'; ?>
+<?php include 'koc/planlayici.php'; // Planlama Stüdyosu (window.eduTopicStats için modals'tan sonra) ?>
 <?php include 'koc/scripts.php'; ?>
 <?php ob_end_flush(); ?>
