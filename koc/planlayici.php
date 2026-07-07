@@ -98,17 +98,11 @@ foreach (($raw_items ?? []) as $it) {
                     </div>
                     <p class="text-[9px] text-slate-400 mt-1">Oluşan hap sürüklenebilir; tekrar tekrar kullan.</p>
                 </div>
-                <input id="psSearch" type="search" placeholder="🔍 Konu ara..." class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 p-2 outline-none focus:border-[#223488]">
             </div>
 
-            <!-- Sürüklenebilir konu listesi -->
-            <div id="psTopicList" class="flex-grow overflow-y-auto custom-scrollbar p-2 space-y-1 min-h-0">
-                <p class="ps-list-hint text-center text-[10px] text-slate-400 font-medium py-8">Alan ve ders seçince<br>konular burada listelenir.<br><b>Konuyu güne sürükle.</b></p>
-            </div>
-
-            <!-- ═══ AKTİF KALEM (sticky preset) ═══ -->
-            <div class="border-t-2 border-[#ec9731]/40 bg-[#fdf3e7]/60 p-2.5 space-y-2 flex-shrink-0">
-                <span class="text-[9px] font-black text-[#d68625] uppercase tracking-wider block">🖊 Aktif Kalem — bırakılan her kart bu ayarla oluşur</span>
+            <!-- ═══ AKTİF KALEM (sticky preset) — Alan/Ders seçimi ile Konu Ara arasında ═══ -->
+            <div id="psPresetBox" class="border-t-2 border-b border-[#223488]/30 bg-[#223488]/5 p-2.5 space-y-2 flex-shrink-0">
+                <span id="psPresetLabel" class="text-[9px] font-black text-[#223488] uppercase tracking-wider block">🖊 Aktif Kalem — bırakılan her kart bu ayarla oluşur</span>
 
                 <!-- Tür: tam genişlik, tek-görev modalındaki gibi -->
                 <div class="grid grid-cols-2 gap-1.5">
@@ -116,12 +110,8 @@ foreach (($raw_items ?? []) as $it) {
                     <button type="button" id="psPresetKonu" onclick="psSetPresetType('konu')" class="py-2 rounded-lg text-xs font-black transition bg-white border-2 border-slate-200 text-slate-500">📖 Konu</button>
                 </div>
 
-                <!-- Hızlı miktar çipleri -->
-                <div class="flex flex-wrap gap-1">
-                    <?php foreach ([10,15,20,25,30,50,75] as $q): ?>
-                    <button type="button" data-amt-chip="<?php echo $q; ?>" onclick="psSetPresetAmount(<?php echo $q; ?>)" class="ps-amt-chip w-8 h-8 rounded-full bg-white border-2 border-slate-200 hover:border-[#223488] text-slate-600 text-[10px] font-black transition"><?php echo $q; ?></button>
-                    <?php endforeach; ?>
-                </div>
+                <!-- Hızlı miktar çipleri (Soru/Konu için ayrı setler — JS ile üretilir) -->
+                <div id="psAmountChips" class="flex flex-wrap gap-1"></div>
 
                 <!-- Miktar + Zaman -->
                 <div class="grid grid-cols-2 gap-1.5">
@@ -131,12 +121,22 @@ foreach (($raw_items ?? []) as $it) {
                     </div>
                     <div>
                         <label class="block text-[8px] font-bold text-slate-400 uppercase mb-0.5">Zaman</label>
-                        <input type="time" id="psPresetTime" class="w-full bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 text-center py-1.5 outline-none focus:border-[#223488]" title="Saat (opsiyonel)">
+                        <input type="time" id="psPresetTime" class="w-full bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 text-center py-1.5 outline-none focus:border-[#223488]" title="Saat (opsiyonel) — kart eklendiğinde otomatik sıfırlanır">
                     </div>
                 </div>
 
                 <!-- Kısa Not -->
-                <input type="text" id="psPresetNote" maxlength="255" placeholder="Kısa not (ops.)" class="js-upper w-full bg-white border border-dashed border-[#ec9731]/60 rounded-lg text-[10px] font-medium text-amber-800 px-2 py-1.5 outline-none focus:border-solid focus:border-[#223488]">
+                <input type="text" id="psPresetNote" maxlength="255" placeholder="Kısa not (ops. — kart eklendiğinde sıfırlanır)" class="js-upper w-full bg-white border border-dashed border-[#ec9731]/60 rounded-lg text-[10px] font-medium text-amber-800 px-2 py-1.5 outline-none focus:border-solid focus:border-[#223488]">
+            </div>
+
+            <!-- Konu ara -->
+            <div class="p-2.5 pb-1.5 flex-shrink-0">
+                <input id="psSearch" type="search" placeholder="🔍 Konu ara..." class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 p-2 outline-none focus:border-[#223488]">
+            </div>
+
+            <!-- Sürüklenebilir konu listesi -->
+            <div id="psTopicList" class="flex-grow overflow-y-auto custom-scrollbar p-2 space-y-1 min-h-0">
+                <p class="ps-list-hint text-center text-[10px] text-slate-400 font-medium py-8">Alan ve ders seçince<br>konular burada listelenir.<br><b>Konuyu güne sürükle.</b></p>
             </div>
         </div>
 
@@ -187,18 +187,38 @@ foreach (($raw_items ?? []) as $it) {
     function trUp(s){ return String(s||'').toLocaleUpperCase('tr-TR'); }
 
     // ── Kalem (sticky preset — oturumlar arası hatırlanır) ──
+    // Tür/Miktar bilerek hatırlanır (peş peşe aynı ayarla eklemeyi hızlandırır);
+    // Zaman/Not her kart eklendiğinde SIFIRLANIR (bkz. drop handler) — aksi halde
+    // 2-3 konu peş peşe sürüklenince hepsine aynı saat/not yapışırdı.
     var preset = { action_type:'soru', amount:20, time_note:'', task_note:'' };
     try { var pp = JSON.parse(localStorage.getItem(PRESET_KEY)||''); if (pp && pp.action_type) preset = pp; } catch(e){}
+    // Tek-görev modalındaki (koc/scripts.php updateQuickButtons) ile BİREBİR aynı setler.
+    var AMOUNT_SETS = { soru: [10,15,20,25,30,50,75], konu: [20,30,40,50,60,75,90] };
+    function renderAmountChips(){
+        var list = AMOUNT_SETS[preset.action_type] || AMOUNT_SETS.soru;
+        var isKonu = preset.action_type === 'konu';
+        var activeCls = isKonu ? 'bg-[#ec9731] border-[#ec9731] text-white' : 'bg-[#223488] border-[#223488] text-white';
+        var hoverCls  = isKonu ? 'hover:border-[#ec9731]' : 'hover:border-[#223488]';
+        document.getElementById('psAmountChips').innerHTML = list.map(function(q){
+            var on = q === preset.amount;
+            return '<button type="button" onclick="psSetPresetAmount(' + q + ')" class="ps-amt-chip w-8 h-8 rounded-full border-2 text-[10px] font-black transition ' +
+                (on ? activeCls : ('bg-white border-slate-200 ' + hoverCls + ' text-slate-600')) + '">' + q + '</button>';
+        }).join('');
+    }
+    function syncPresetBoxColor(){
+        var isKonu = preset.action_type === 'konu';
+        document.getElementById('psPresetBox').className = 'border-t-2 border-b p-2.5 space-y-2 flex-shrink-0 ' +
+            (isKonu ? 'border-[#ec9731]/40 bg-[#fdf3e7]/60' : 'border-[#223488]/30 bg-[#223488]/5');
+        document.getElementById('psPresetLabel').className = 'text-[9px] font-black uppercase tracking-wider block ' + (isKonu ? 'text-[#d68625]' : 'text-[#223488]');
+    }
     function syncPresetUI(){
         document.getElementById('psPresetSoru').className = 'py-2 rounded-lg text-xs font-black transition ' + (preset.action_type==='soru' ? 'bg-[#223488] text-white' : 'bg-white border-2 border-slate-200 text-slate-500');
         document.getElementById('psPresetKonu').className = 'py-2 rounded-lg text-xs font-black transition ' + (preset.action_type==='konu' ? 'bg-[#ec9731] text-white' : 'bg-white border-2 border-slate-200 text-slate-500');
         document.getElementById('psPresetAmount').value = preset.amount;
         document.getElementById('psPresetTime').value = preset.time_note || '';
         document.getElementById('psPresetNote').value = preset.task_note || '';
-        document.querySelectorAll('#plannerStudio .ps-amt-chip').forEach(function(b){
-            var on = parseInt(b.dataset.amtChip,10) === preset.amount;
-            b.className = 'ps-amt-chip w-8 h-8 rounded-full text-[10px] font-black transition ' + (on ? 'bg-[#223488] border-2 border-[#223488] text-white' : 'bg-white border-2 border-slate-200 hover:border-[#223488] text-slate-600');
-        });
+        renderAmountChips();
+        syncPresetBoxColor();
     }
     function savePreset(){ try { localStorage.setItem(PRESET_KEY, JSON.stringify(preset)); } catch(e){} }
     window.psSetPresetType = function(t){ preset.action_type = t; savePreset(); syncPresetUI(); };
@@ -433,6 +453,10 @@ foreach (($raw_items ?? []) as $it) {
                 time_note: preset.time_note || '', task_note: preset.task_note || '',
                 status: 'bekliyor', deleted: false
             });
+            // Zaman/Not yalnızca BU kart için kullanılsın — peş peşe sürüklemede
+            // bir sonraki karta yapışmasın. Tür/Miktar bilerek sıfırlanmaz (sticky).
+            preset.time_note = ''; preset.task_note = '';
+            savePreset(); syncPresetUI();
             renderBoard();
         });
     });
