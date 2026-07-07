@@ -79,29 +79,8 @@ foreach (($raw_items ?? []) as $it) {
                 <button type="button" data-pstab="manuel"   class="ps-tab flex-1 py-2 rounded-lg text-slate-500 hover:text-[#223488] transition">✏️ MANUEL</button>
             </div>
 
-            <!-- Sekme içerikleri -->
-            <div class="p-2.5 space-y-2 border-b border-slate-100 flex-shrink-0">
-                <div class="ps-pane" data-pspane="mufredat">
-                    <div class="grid grid-cols-2 gap-1.5 mb-1.5">
-                        <select id="psCat" class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488]"><option value="" disabled selected>Alan...</option></select>
-                        <select id="psSubj" disabled class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488] disabled:opacity-50"><option value="" disabled selected>Ders...</option></select>
-                    </div>
-                </div>
-                <div class="ps-pane hidden" data-pspane="kaynak">
-                    <select id="psRes" class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488]"><option value="" disabled selected>Kaynak seçiniz...</option></select>
-                </div>
-                <div class="ps-pane hidden" data-pspane="manuel">
-                    <input id="psManSubj" placeholder="DERS ADI (ÖRN: GEOMETRİ)" class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488] mb-1.5 uppercase">
-                    <div class="flex gap-1.5">
-                        <input id="psManTopic" placeholder="KONU / NOT" class="js-upper flex-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488] uppercase">
-                        <button type="button" onclick="psAddPill()" class="px-3 rounded-lg bg-[#223488] text-white text-[11px] font-black hover:bg-[#314595] transition">＋</button>
-                    </div>
-                    <p class="text-[9px] text-slate-400 mt-1">Oluşan hap sürüklenebilir; tekrar tekrar kullan.</p>
-                </div>
-            </div>
-
-            <!-- ═══ AKTİF KALEM (sticky preset) — Alan/Ders seçimi ile Konu Ara arasında ═══ -->
-            <div id="psPresetBox" class="border-t-2 border-b border-[#223488]/30 bg-[#223488]/5 p-2.5 space-y-2 flex-shrink-0">
+            <!-- ═══ AKTİF KALEM (sticky preset) — sekmelerin altında, Alan/Ders seçiminin üstünde ═══ -->
+            <div id="psPresetBox" class="border-b border-[#223488]/30 bg-[#223488]/5 p-2.5 space-y-2 flex-shrink-0">
                 <span id="psPresetLabel" class="text-[9px] font-black text-[#223488] uppercase tracking-wider block">🖊 Aktif Kalem — bırakılan her kart bu ayarla oluşur</span>
 
                 <!-- Tür: tam genişlik, tek-görev modalındaki gibi -->
@@ -126,7 +105,28 @@ foreach (($raw_items ?? []) as $it) {
                 </div>
 
                 <!-- Kısa Not -->
-                <input type="text" id="psPresetNote" maxlength="255" placeholder="Kısa not (ops. — kart eklendiğinde sıfırlanır)" class="js-upper w-full bg-white border border-dashed border-[#ec9731]/60 rounded-lg text-[10px] font-medium text-amber-800 px-2 py-1.5 outline-none focus:border-solid focus:border-[#223488]">
+                <input type="text" id="psPresetNote" maxlength="255" placeholder="Not..." class="js-upper w-full bg-white border border-dashed border-[#ec9731]/60 rounded-lg text-[10px] font-medium text-amber-800 px-2 py-1.5 outline-none focus:border-solid focus:border-[#223488]">
+            </div>
+
+            <!-- Sekme içerikleri: Alan/Ders (veya Kaynak/Manuel) -->
+            <div class="p-2.5 space-y-2 border-b border-slate-100 flex-shrink-0">
+                <div class="ps-pane" data-pspane="mufredat">
+                    <div class="grid grid-cols-2 gap-1.5 mb-1.5">
+                        <select id="psCat" class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488]"><option value="" disabled selected>Alan...</option></select>
+                        <select id="psSubj" disabled class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488] disabled:opacity-50"><option value="" disabled selected>Ders...</option></select>
+                    </div>
+                </div>
+                <div class="ps-pane hidden" data-pspane="kaynak">
+                    <select id="psRes" class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488]"><option value="" disabled selected>Kaynak seçiniz...</option></select>
+                </div>
+                <div class="ps-pane hidden" data-pspane="manuel">
+                    <input id="psManSubj" placeholder="DERS ADI (ÖRN: GEOMETRİ)" class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488] mb-1.5 uppercase">
+                    <div class="flex gap-1.5">
+                        <input id="psManTopic" placeholder="KONU / NOT" class="js-upper flex-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488] uppercase">
+                        <button type="button" onclick="psAddPill()" class="px-3 rounded-lg bg-[#223488] text-white text-[11px] font-black hover:bg-[#314595] transition">＋</button>
+                    </div>
+                    <p class="text-[9px] text-slate-400 mt-1">Oluşan hap sürüklenebilir; tekrar tekrar kullan.</p>
+                </div>
             </div>
 
             <!-- Konu ara -->
@@ -207,7 +207,7 @@ foreach (($raw_items ?? []) as $it) {
     }
     function syncPresetBoxColor(){
         var isKonu = preset.action_type === 'konu';
-        document.getElementById('psPresetBox').className = 'border-t-2 border-b p-2.5 space-y-2 flex-shrink-0 ' +
+        document.getElementById('psPresetBox').className = 'border-b p-2.5 space-y-2 flex-shrink-0 ' +
             (isKonu ? 'border-[#ec9731]/40 bg-[#fdf3e7]/60' : 'border-[#223488]/30 bg-[#223488]/5');
         document.getElementById('psPresetLabel').className = 'text-[9px] font-black uppercase tracking-wider block ' + (isKonu ? 'text-[#d68625]' : 'text-[#223488]');
     }
@@ -369,7 +369,7 @@ foreach (($raw_items ?? []) as $it) {
         // Sürükleme (gün değiştirme)
         el.addEventListener('dragstart', function(ev){
             ev.dataTransfer.setData('text/ps-card', c.uid);
-            ev.dataTransfer.effectAllowed = 'move';
+            ev.dataTransfer.effectAllowed = 'copyMove';
         });
         // Tıkla → yerinde düzenleyici
         el.addEventListener('click', function(ev){
@@ -416,13 +416,16 @@ foreach (($raw_items ?? []) as $it) {
     }
     function openEditorKeep(c){ openEditor = c.uid; renderBoard(); }
 
-    // ── Gün sütunlarına bırakma (konu → yeni kart, kart → gün değişimi) ──
+    // ── Gün sütunlarına bırakma (konu → yeni kart, kart → gün değişimi/Ctrl+kopyalama) ──
+    // Ana program sayfasıyla (koc/scripts.php Sortable clone) aynı davranış:
+    // Ctrl basılıyken bırakılırsa kart KOPYALANIR, değilse taşınır.
     document.querySelectorAll('#plannerStudio .ps-drop').forEach(function(zone){
         zone.addEventListener('dragover', function(ev){
             var t = ev.dataTransfer.types;
             if (t.indexOf('text/ps-topic') !== -1 || t.indexOf('text/ps-card') !== -1) {
                 ev.preventDefault();
                 zone.classList.add('bg-indigo-50');
+                if (t.indexOf('text/ps-card') !== -1) ev.dataTransfer.dropEffect = ev.ctrlKey ? 'copy' : 'move';
             }
         });
         zone.addEventListener('dragleave', function(){ zone.classList.remove('bg-indigo-50'); });
@@ -432,7 +435,17 @@ foreach (($raw_items ?? []) as $it) {
             if (cardUid) {
                 ev.preventDefault();
                 var c = cards.find(function(x){ return x.uid === cardUid; });
-                if (c && !c.deleted) { c.date = zone.dataset.date; renderBoard(); }
+                if (c && !c.deleted) {
+                    if (ev.ctrlKey) {
+                        var copy = JSON.parse(JSON.stringify(c));
+                        copy.uid = 'n'+(uidSeq++); copy.id = null; copy.status = 'bekliyor'; copy.deleted = false;
+                        copy.date = zone.dataset.date;
+                        cards.push(copy);
+                    } else {
+                        c.date = zone.dataset.date;
+                    }
+                    renderBoard();
+                }
                 return;
             }
             var raw = ev.dataTransfer.getData('text/ps-topic');
