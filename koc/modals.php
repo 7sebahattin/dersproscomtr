@@ -17,7 +17,11 @@
                 <input type="hidden" name="schedule_id" id="scheduleIdV3">
                 <input type="hidden" name="date" id="modalDateV3">
 
-                <!-- ═══ YENİ İKİ KATMANLI KONU SEÇİCİ (Müfredattan / Kaynaktan / Manuel) ═══ -->
+                <!-- ═══ YENİ İKİ KATMANLI KONU SEÇİCİ (Müfredattan / Kaynaktan / Manuel) ═══
+                     #eduSelectorBlock: Toplu Görev modalı açılınca bu blok DOM'da oraya
+                     taşınır, kapanınca buraya geri döner. Böylece aynı seçici (ve tüm JS
+                     bağları) iki modalda da çalışır; kod kopyalanmaz, ID çakışması olmaz. -->
+                <div id="eduSelectorBlock">
                 <input type="hidden" name="edu_topic_id" id="eduTopicIdV3">
                 <!-- Seçilen konunun okunur adları (görünürlük + eski uyumluluk için) -->
                 <input type="hidden" name="custom_subject" id="customSubjectV3">
@@ -98,6 +102,7 @@
                     <span aria-hidden="true">🎬</span>
                     <span>Video İzleme görevi</span>
                 </div>
+                </div><!-- /eduSelectorBlock -->
 
                 <div class="mt-5" id="turSectionV3">
                     <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-2 ml-1">Tür</label>

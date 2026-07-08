@@ -154,6 +154,98 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
         } catch (Exception $e) { echo json_encode(['ok' => false, 'error' => 'Kopyalama hatası.']); exit; }
     }
 
+    // B2. PLANLAYICI YAYINLAMA — Planlama Stüdyosu'nun "Haftayı Kaydet" ucu.
+    //     Taslakta biriken TÜM değişiklikler (ekle / güncelle / sil) tek istekte,
+    //     tek TRANSACTION içinde uygulanır: hata olursa hiçbiri yazılmaz.
+    if ($action === 'plan_apply') {
+        $ops = json_decode((string)($_POST['ops'] ?? ''), true);
+        if (!is_array($ops)) { echo json_encode(['ok' => false, 'error' => 'Geçersiz veri.']); exit; }
+        $create = is_array($ops['create'] ?? null) ? $ops['create'] : [];
+        $update = is_array($ops['update'] ?? null) ? $ops['update'] : [];
+        $delete = is_array($ops['delete'] ?? null) ? $ops['delete'] : [];
+        if (!count($create) && !count($update) && !count($delete)) { echo json_encode(['ok' => false, 'error' => 'Kaydedilecek değişiklik yok.']); exit; }
+        if (count($create) > 300 || count($update) > 500 || count($delete) > 500) { echo json_encode(['ok' => false, 'error' => 'Tek seferde çok fazla değişiklik.']); exit; }
+
+        $optCols = [];
+        foreach (['edu_topic_id','resource_title','resource_id','task_note'] as $c) {
+            try { $optCols[$c] = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE '$c'")->rowCount() > 0; }
+            catch (Throwable $e) { $optCols[$c] = false; }
+        }
+
+        // Ortak doğrulama: tek-görev kaydıyla (save_schedule) birebir aynı kurallar.
+        $normalize = function (array $it) use ($optCols): ?array {
+            $date = (string)($it['date'] ?? '');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) return null;
+            $act = in_array(($it['action_type'] ?? ''), ['soru','konu','video'], true) ? $it['action_type'] : 'soru';
+            $amt = max(1, (int)($it['amount'] ?? 0));
+            if ($act === 'video') $amt = 1; // video görevde miktar tek video sabittir
+            $eduTid = !empty($it['edu_topic_id']) ? (int)$it['edu_topic_id'] : null;
+            $csub = trim((string)($it['custom_subject'] ?? ''));
+            $ctop = trim((string)($it['custom_topic'] ?? ''));
+            if (!$eduTid && $csub === '' && $ctop === '') return null; // isimsiz görev engeli
+            return [
+                'date' => $date, 'action_type' => $act, 'amount' => $amt,
+                'custom_subject' => $csub, 'custom_topic' => $ctop,
+                'time_note' => (trim((string)($it['time_note'] ?? '')) ?: null),
+                'opt' => [
+                    'edu_topic_id'   => $eduTid,
+                    'resource_title' => (trim((string)($it['resource_title'] ?? '')) ?: null),
+                    'resource_id'    => (!empty($it['resource_id']) ? (int)$it['resource_id'] : null),
+                    'task_note'      => (mb_substr(trim((string)($it['task_note'] ?? '')), 0, 255) ?: null),
+                ],
+            ];
+        };
+
+        $insCols = ['student_id','date','amount','action_type','status','topic_id','custom_subject','custom_topic','time_note'];
+        foreach ($optCols as $c => $has) if ($has) $insCols[] = $c;
+        $insCols[] = 'item_order';
+        $qm  = implode(', ', array_fill(0, count($insCols), '?'));
+        $ins = $pdo->prepare("INSERT INTO schedule_items (".implode(', ', $insCols).") VALUES ($qm)");
+
+        // UPDATE: status ve topic_id bilerek dokunulmaz (save_schedule ile aynı;
+        // topic_id'yi yazmak eski müfredat bağını sessizce koparırdı).
+        $updSet = ['date=?','amount=?','action_type=?','custom_subject=?','custom_topic=?','time_note=?'];
+        foreach ($optCols as $c => $has) if ($has) $updSet[] = "$c=?";
+        $upd = $pdo->prepare("UPDATE schedule_items SET ".implode(', ', $updSet)." WHERE id=? AND student_id=?");
+
+        $del = $pdo->prepare("DELETE FROM schedule_items WHERE id=? AND student_id=?");
+
+        $nCre = 0; $nUpd = 0; $nDel = 0; $skipped = 0;
+        try {
+            $pdo->beginTransaction();
+            foreach ($create as $it) {
+                $n = is_array($it) ? $normalize($it) : null;
+                if (!$n) { $skipped++; continue; }
+                $vals = [$sid, $n['date'], $n['amount'], $n['action_type'], 'bekliyor', null, $n['custom_subject'], $n['custom_topic'], $n['time_note']];
+                foreach ($optCols as $c => $has) if ($has) $vals[] = $n['opt'][$c];
+                $vals[] = 0;
+                $ins->execute($vals);
+                $nCre++;
+            }
+            foreach ($update as $it) {
+                $id = is_array($it) ? (int)($it['id'] ?? 0) : 0;
+                $n  = ($id > 0 && is_array($it)) ? $normalize($it) : null;
+                if (!$n) { $skipped++; continue; }
+                $vals = [$n['date'], $n['amount'], $n['action_type'], $n['custom_subject'], $n['custom_topic'], $n['time_note']];
+                foreach ($optCols as $c => $has) if ($has) $vals[] = $n['opt'][$c];
+                $vals[] = $id; $vals[] = $sid; // sahiplik koşulu WHERE'de
+                $upd->execute($vals);
+                $nUpd += $upd->rowCount() > 0 ? 1 : 0;
+            }
+            foreach ($delete as $id) {
+                $id = (int)$id;
+                if ($id <= 0) { $skipped++; continue; }
+                $del->execute([$id, $sid]); // sahiplik koşulu WHERE'de
+                $nDel += $del->rowCount() > 0 ? 1 : 0;
+            }
+            $pdo->commit();
+            echo json_encode(['ok' => true, 'created' => $nCre, 'updated' => $nUpd, 'deleted' => $nDel, 'skipped' => $skipped]); exit;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            echo json_encode(['ok' => false, 'error' => 'Kaydetme hatası: tüm değişiklikler geri alındı.']); exit;
+        }
+    }
+
     // C. SIRALAMA GÜNCELLEME
     if ($action === 'reorder_schedule') {
         $orderList = $_POST['order'] ?? [];
@@ -480,13 +572,14 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
         <div class="bg-red-50 text-red-700 p-3 rounded-lg mb-3 border border-red-200 text-sm">⚠️ <?php echo $error; ?></div>
     <?php endif; ?>
 
-    <!-- ÜST BAR: Öğrenci Seçici + Aksiyonlar -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-3 mb-4">
-        <!-- Mobil: flex-wrap | PC (md+): tek satır, tablar sağda -->
+    <!-- ÜST BAR: Öğrenci Seçici + Sekmeler + (masaüstü) Hafta/Gün Nav + Aksiyonlar
+         id=kocTopBar: masaüstünde gömülü Planlama Stüdyosu bu barın altından başlar. -->
+    <div id="kocTopBar" class="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-3 mb-4 relative z-[45]">
+        <!-- Mobil: flex-wrap | PC (md+): tek satır -->
         <div class="flex flex-wrap md:flex-nowrap items-center gap-2">
 
             <!-- Öğrenci seçici dropdown — sabit, en solda -->
-            <div class="relative w-full md:w-52 flex-shrink-0">
+            <div class="relative w-full md:w-48 flex-shrink-0">
                 <select onchange="window.location.href='?student_id='+this.value+'&date=<?php echo $date_param; ?>'"
                         class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-8 py-2.5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#223488]/20 cursor-pointer">
                     <option value="">👤 Öğrenci Seçin...</option>
@@ -500,46 +593,62 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
             </div>
 
             <?php if ($selected_student): ?>
-            <!-- Tabs — artık solda, dropdown'ın hemen yanında -->
+            <!-- 3-nokta: Veliye/Öğrenciye Mesaj + PDF — öğrenci adının hemen yanında -->
+            <div class="relative flex-shrink-0">
+                <button type="button" onclick="event.stopPropagation(); document.getElementById('kocMoreMenu').classList.toggle('hidden');"
+                        class="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition" title="Diğer işlemler">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                </button>
+                <div id="kocMoreMenu" class="hidden absolute left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 z-[60]">
+                    <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendWhatsappReport();"
+                            class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-green-50 transition">
+                        <span class="w-7 h-7 rounded-lg bg-[#25D366] text-white flex items-center justify-center"><i class="fa-brands fa-whatsapp"></i></span> Veliye Mesaj At</button>
+                    <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendStudentMessage();"
+                            class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-amber-50 transition">
+                        <span class="w-7 h-7 rounded-lg bg-[#ec9731] text-white flex items-center justify-center"><i class="fa-regular fa-paper-plane"></i></span> Öğrenciye Mesaj At</button>
+                    <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); downloadPdfProgram();"
+                            class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-slate-50 transition">
+                        <span class="w-7 h-7 rounded-lg bg-[#223488] text-white flex items-center justify-center"><i class="fa-solid fa-file-pdf"></i></span> PDF İndir</button>
+                </div>
+            </div>
+
+            <!-- Tabs — dropdown'ın hemen yanında (md+) -->
             <div class="hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-shrink-0">
-                <button onclick="openTab('schedule')" id="tab-schedule-desk" class="px-4 py-1.5 rounded-lg font-bold text-xs transition bg-slate-800 text-white shadow-sm flex items-center gap-2">📅 Program</button>
-                <button onclick="openTab('topics')"   id="tab-topics-desk"   class="px-4 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-2">📊 Analiz</button>
-                <button onclick="openTab('exams')"    id="tab-exams-desk"    class="px-4 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-2">📝 Denemeler</button>
+                <button onclick="openTab('schedule')" id="tab-schedule-desk" class="px-3 py-1.5 rounded-lg font-bold text-xs transition bg-slate-800 text-white shadow-sm flex items-center gap-1.5">📅 Program</button>
+                <button onclick="openTab('topics')"   id="tab-topics-desk"   class="px-3 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-1.5">📊 Analiz</button>
+                <button onclick="openTab('exams')"    id="tab-exams-desk"    class="px-3 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-1.5">📝 Denemeler</button>
+            </div>
+
+            <!-- Masaüstü Hafta/Gün navigasyonu (yalnızca lg+; yalnızca Program sekmesinde) -->
+            <div class="ps-progbar hidden lg:flex items-center gap-1 flex-shrink-0">
+                <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $prev_week; ?>" title="Önceki hafta" class="px-2 py-2 rounded-lg text-xs font-bold bg-slate-50 border border-slate-200 text-[#223488] hover:bg-slate-100 transition">«</a>
+                <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $prev_day; ?>" title="Önceki gün" class="px-2 py-2 rounded-lg text-xs font-bold bg-[#223488] text-white hover:bg-[#314595] transition">‹</a>
+                <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $today_date; ?>" class="px-3 py-2 rounded-lg text-xs font-bold bg-[#ec9731] text-white hover:bg-[#d68625] transition whitespace-nowrap">📅 Bugün</a>
+                <span class="text-[11px] font-bold text-slate-500 px-1 whitespace-nowrap"><?php echo date('d.m', strtotime($week_dates[0])); ?>–<?php echo date('d.m', strtotime($week_dates[6])); ?></span>
+                <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $next_day; ?>" title="Sonraki gün" class="px-2 py-2 rounded-lg text-xs font-bold bg-[#223488] text-white hover:bg-[#314595] transition">›</a>
+                <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $next_week; ?>" title="Sonraki hafta" class="px-2 py-2 rounded-lg text-xs font-bold bg-slate-50 border border-slate-200 text-[#223488] hover:bg-slate-100 transition">»</a>
             </div>
             <?php endif; ?>
 
-            <!-- Ekle + Bağla + Aksiyon butonları — artık sağda -->
-            <div class="flex items-center gap-2 flex-wrap ml-auto">
-                <a href="<?php echo BASE_URL; ?>/koc/ogrencilerim.php"
-                   class="flex items-center gap-1.5 px-3 py-2.5 bg-[#223488] text-white text-xs font-bold rounded-xl hover:bg-[#314595] transition whitespace-nowrap flex-shrink-0">
-                    ➕ Ekle
-                </a>
-
-                <button onclick="openModal('linkStudentModal')"
-                        class="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition whitespace-nowrap flex-shrink-0">
-                    🔗 Bağla
-                </button>
-
-                <?php if ($selected_student): ?>
-                <button onclick="sendWhatsappReport()"
-                        class="flex items-center gap-1.5 px-3 py-2.5 bg-[#25D366] text-white text-xs font-bold rounded-xl hover:bg-[#128C7E] transition shadow-sm whitespace-nowrap">
-                    <i class="fa-brands fa-whatsapp"></i> Veliye Mesaj At
-                </button>
-
-                <button onclick="sendStudentMessage()"
-                        class="flex items-center gap-1.5 px-3 py-2.5 bg-[#ec9731] text-white text-xs font-bold rounded-xl hover:bg-[#d68625] transition shadow-sm whitespace-nowrap">
-                    <i class="fa-regular fa-paper-plane"></i> Öğrenciye Mesaj At
-                </button>
-
-                <button onclick="downloadPdfProgram()"
-                        class="flex items-center gap-1.5 px-3 py-2.5 bg-[#223488] text-white text-xs font-bold rounded-xl hover:bg-[#314595] transition shadow-sm whitespace-nowrap">
-                    <i class="fa-solid fa-file-pdf"></i> PDF İndir
-                </button>
-                <?php endif; ?>
+            <?php if ($selected_student): ?>
+            <!-- Taslak durumu + Sıfırla + Kaydet — üst-barın sağ köşesi; yalnızca Program sekmesinde (masaüstü) -->
+            <div class="ps-progbar hidden lg:flex items-center gap-2 ml-auto flex-shrink-0">
+                <span id="psDraftStatus" class="hidden lg:inline-flex items-center gap-1.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg px-2.5 py-1.5 whitespace-nowrap">✓ Hazır</span>
+                <button type="button" onclick="psResetDraft()" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-2 transition whitespace-nowrap" title="Kaydedilmemiş tüm değişiklikleri at, tabloya dön">↺ Taslağı Sıfırla</button>
+                <button type="button" id="psSaveBtn" onclick="psSaveWeek()" disabled
+                    class="text-xs font-black text-white bg-[#ec9731] hover:bg-[#d68625] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-4 py-2 shadow-sm transition whitespace-nowrap">💾 Haftayı Kaydet <span id="psSaveCount"></span></button>
             </div>
+            <?php endif; ?>
 
         </div>
     </div>
+    <script>
+    // 3-nokta menüyü dışarı tıklayınca kapat
+    document.addEventListener('click', function(e){
+        var m = document.getElementById('kocMoreMenu');
+        if (m && !m.classList.contains('hidden') && !m.parentElement.contains(e.target)) m.classList.add('hidden');
+    });
+    </script>
 
     <!-- ANA İÇERİK -->
     <div>
@@ -574,5 +683,6 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
 </div>
 
 <?php include 'koc/modals.php'; ?>
+<?php include 'koc/planlayici.php'; // Planlama Stüdyosu (window.eduTopicStats için modals'tan sonra) ?>
 <?php include 'koc/scripts.php'; ?>
 <?php ob_end_flush(); ?>
