@@ -429,6 +429,9 @@ $week_end   = date('Y-m-d', strtotime("$week_start +6 days"));
 $prev_week  = date('Y-m-d', strtotime('-7 days', strtotime($week_start)));
 $next_week  = date('Y-m-d', strtotime('+7 days', strtotime($week_start)));
 $gunlerTR = ['Monday'=>'Pazartesi','Tuesday'=>'Salı','Wednesday'=>'Çarşamba','Thursday'=>'Perşembe','Friday'=>'Cuma','Saturday'=>'Cumartesi','Sunday'=>'Pazar'];
+// Türkçe ay kısaltmaları (İngilizce "Jul" yerine "Tem" göstermek için)
+$aylarKisaTR = [1=>'Oca',2=>'Şub',3=>'Mar',4=>'Nis',5=>'May',6=>'Haz',7=>'Tem',8=>'Ağu',9=>'Eyl',10=>'Eki',11=>'Kas',12=>'Ara'];
+$trTarihKisa = function($ts) use ($aylarKisaTR){ return date('d', $ts) . ' ' . $aylarKisaTR[(int)date('n', $ts)]; };
 
 $sqlApps = "
   SELECT
@@ -612,7 +615,7 @@ include $headerPath;
              class="w-11 h-11 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition text-lg font-black">‹</a>
           <div class="text-center px-3 min-w-[7rem]">
             <span class="block text-[11px] font-extrabold uppercase tracking-wide"><?php echo h($week_badge); ?></span>
-            <span class="block text-[11px] text-white/70 font-semibold"><?php echo h(date('d M', strtotime($week_start))); ?> – <?php echo h(date('d M', strtotime($week_end))); ?></span>
+            <span class="block text-[11px] text-white/70 font-semibold"><?php echo h($trTarihKisa(strtotime($week_start))); ?> – <?php echo h($trTarihKisa(strtotime($week_end))); ?></span>
           </div>
           <a href="?date=<?php echo h($next_week); ?>" aria-label="Sonraki hafta"
              class="w-11 h-11 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition text-lg font-black">›</a>
