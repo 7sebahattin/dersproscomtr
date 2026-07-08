@@ -57,21 +57,7 @@ foreach (($raw_items ?? []) as $it) {
      Mobilde hiç gösterilmez (eski tablo kullanılır). -->
 <div id="plannerStudio" class="fixed left-0 right-0 bottom-0 z-[40] flex-col bg-slate-100" style="font-family:'Poppins',sans-serif;top:0;display:none">
 
-    <!-- ═══ İNCE EYLEM ŞERİDİ (başlık/öğrenci/nav artık paylaşılan üst barda) ═══ -->
-    <div class="relative bg-gradient-to-r from-[#223488] to-[#314595] text-white px-4 py-1.5 flex items-center justify-between gap-3 flex-shrink-0 shadow">
-        <div class="absolute left-0 top-0 h-full w-1.5 bg-[#ec9731]"></div>
-        <div class="flex items-center gap-2 min-w-0 pl-2">
-            <span class="text-sm">🗓️</span>
-            <span class="text-[11px] font-black tracking-wide">PLANLAMA STÜDYOSU</span>
-            <span id="psDraftStatus" class="inline-flex items-center gap-1.5 text-[10px] font-bold bg-white/10 border border-white/15 rounded-lg px-2.5 py-1 whitespace-nowrap">✓ Hazır</span>
-        </div>
-        <div class="flex items-center gap-2 flex-shrink-0">
-            <button type="button" onclick="psResetDraft()" class="text-[10px] font-bold text-blue-100/70 hover:text-white bg-white/5 hover:bg-white/15 border border-white/10 rounded-lg px-2.5 py-1 transition whitespace-nowrap" title="Kaydedilmemiş tüm değişiklikleri at, tabloya dön">↺ Taslağı Sıfırla</button>
-            <button type="button" id="psSaveBtn" onclick="psSaveWeek()" disabled
-                class="text-xs font-black bg-[#ec9731] hover:bg-[#d68625] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-4 py-1 shadow transition whitespace-nowrap">💾 Haftayı Kaydet <span id="psSaveCount"></span></button>
-        </div>
-    </div>
-
+    <!-- (Başlık/öğrenci/nav ve Taslak durumu + Sıfırla + Kaydet artık paylaşılan üst barda) -->
     <div class="flex flex-grow min-h-0">
 
         <!-- ═══ SOL PALET ═══ -->
@@ -86,7 +72,7 @@ foreach (($raw_items ?? []) as $it) {
 
             <!-- ═══ AKTİF KALEM (sticky preset) — sekmelerin altında, Alan/Ders seçiminin üstünde ═══ -->
             <div id="psPresetBox" class="border-b border-[#223488]/30 bg-[#223488]/5 p-2.5 space-y-2 flex-shrink-0">
-                <span id="psPresetLabel" class="text-[9px] font-black text-[#223488] uppercase tracking-wider block">🖊 Aktif Kalem — bırakılan her kart bu ayarla oluşur</span>
+                <span id="psPresetLabel" class="text-[9px] font-black text-[#223488] uppercase tracking-wider block">🖊 Aktif Kalem</span>
 
                 <!-- Tür: tam genişlik, tek-görev modalındaki gibi -->
                 <div class="grid grid-cols-2 gap-1.5">
@@ -242,8 +228,17 @@ foreach (($raw_items ?? []) as $it) {
         studio.style.top = Math.max(0, top) + 'px';
     }
     function studioVisible(){ return studio.style.display !== 'none'; }
+    // Üst-bardaki Program'a özel öğeler (takvim navigasyonu + taslak/kaydet):
+    // yalnızca Program sekmesinde görünür. Program'da → sınıflara bırak (mobilde
+    // 'hidden', masaüstünde 'lg:flex'); diğer sekmelerde → inline 'none' ile gizle.
+    function syncProgramBar(onProgram){
+        document.querySelectorAll('.ps-progbar').forEach(function(el){
+            el.style.display = onProgram ? '' : 'none';
+        });
+    }
     // scripts.php openTab() bunu çağırır: Program sekmesi masaüstünde stüdyoyu gösterir
     window.psShowStudio = function(show){
+        syncProgramBar(!!show);
         if (show && DESKTOP()) {
             if (!built) { buildState(); loadCats(); built = true; }
             positionStudio();
@@ -266,10 +261,11 @@ foreach (($raw_items ?? []) as $it) {
         if (e.key === 'Escape' && openEditor && studioVisible()) { openEditor = null; renderBoard(); }
     });
 
-    // Açılışta masaüstü + Program sekmesi ise stüdyoyu göster
+    // Açılışta: Program sekmesi ise üst-bar araçlarını göster; masaüstünde stüdyoyu aç
     window.addEventListener('DOMContentLoaded', function(){
         var sched = document.getElementById('content-schedule');
         var active = sched && !sched.classList.contains('hidden');
+        syncProgramBar(!!active);
         if (DESKTOP() && active) window.psShowStudio(true);
     });
 
@@ -331,13 +327,18 @@ foreach (($raw_items ?? []) as $it) {
     }
     function setStatus(txt, cls){
         var el = document.getElementById('psDraftStatus');
+        if (!el) return;
+        var tone = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        if (cls && cls.indexOf('red') !== -1)        tone = 'bg-red-50 text-red-600 border-red-200';
+        else if (cls && cls.indexOf('amber') !== -1) tone = 'bg-amber-50 text-amber-700 border-amber-200';
         el.textContent = txt;
-        el.className = 'hidden md:inline-flex items-center gap-1.5 text-[10px] font-bold border border-white/15 rounded-lg px-2.5 py-1.5 whitespace-nowrap ' + cls;
+        el.className = 'hidden lg:inline-flex items-center gap-1.5 text-[10px] font-bold border rounded-lg px-2.5 py-1.5 whitespace-nowrap ' + tone;
     }
     function updateSaveBtn(n){
         var b = document.getElementById('psSaveBtn');
-        b.disabled = !n;
-        document.getElementById('psSaveCount').textContent = n ? '('+n+')' : '';
+        if (b) b.disabled = !n;
+        var c = document.getElementById('psSaveCount');
+        if (c) c.textContent = n ? '('+n+')' : '';
     }
     window.psResetDraft = function(){
         if (!confirm('Kaydedilmemiş tüm değişiklikler atılacak ve tablo sunucudaki haline dönecek. Emin misin?')) return;

@@ -202,7 +202,7 @@ try {
 </head>
 <body class="bg-indigo-50 text-slate-700 flex flex-col min-h-screen <?php echo $isLoggedIn ? 'pb-20' : ''; ?> lg:pb-0"> 
 
-<nav class="bg-white/95 backdrop-blur-md sticky top-0 z-40 shadow-sm border-b border-indigo-100">
+<nav class="bg-white/95 backdrop-blur-md sticky top-0 z-50 shadow-sm border-b border-indigo-100">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-16 md:h-20 items-center">
 

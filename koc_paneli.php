@@ -593,6 +593,25 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
             </div>
 
             <?php if ($selected_student): ?>
+            <!-- 3-nokta: Veliye/Öğrenciye Mesaj + PDF — öğrenci adının hemen yanında -->
+            <div class="relative flex-shrink-0">
+                <button type="button" onclick="event.stopPropagation(); document.getElementById('kocMoreMenu').classList.toggle('hidden');"
+                        class="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition" title="Diğer işlemler">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                </button>
+                <div id="kocMoreMenu" class="hidden absolute left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 z-[60]">
+                    <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendWhatsappReport();"
+                            class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-green-50 transition">
+                        <span class="w-7 h-7 rounded-lg bg-[#25D366] text-white flex items-center justify-center"><i class="fa-brands fa-whatsapp"></i></span> Veliye Mesaj At</button>
+                    <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendStudentMessage();"
+                            class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-amber-50 transition">
+                        <span class="w-7 h-7 rounded-lg bg-[#ec9731] text-white flex items-center justify-center"><i class="fa-regular fa-paper-plane"></i></span> Öğrenciye Mesaj At</button>
+                    <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); downloadPdfProgram();"
+                            class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-slate-50 transition">
+                        <span class="w-7 h-7 rounded-lg bg-[#223488] text-white flex items-center justify-center"><i class="fa-solid fa-file-pdf"></i></span> PDF İndir</button>
+                </div>
+            </div>
+
             <!-- Tabs — dropdown'ın hemen yanında (md+) -->
             <div class="hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-shrink-0">
                 <button onclick="openTab('schedule')" id="tab-schedule-desk" class="px-3 py-1.5 rounded-lg font-bold text-xs transition bg-slate-800 text-white shadow-sm flex items-center gap-1.5">📅 Program</button>
@@ -600,8 +619,8 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
                 <button onclick="openTab('exams')"    id="tab-exams-desk"    class="px-3 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-1.5">📝 Denemeler</button>
             </div>
 
-            <!-- Masaüstü Hafta/Gün navigasyonu (yalnızca lg+; stüdyo için) -->
-            <div class="hidden lg:flex items-center gap-1 flex-shrink-0">
+            <!-- Masaüstü Hafta/Gün navigasyonu (yalnızca lg+; yalnızca Program sekmesinde) -->
+            <div class="ps-progbar hidden lg:flex items-center gap-1 flex-shrink-0">
                 <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $prev_week; ?>" title="Önceki hafta" class="px-2 py-2 rounded-lg text-xs font-bold bg-slate-50 border border-slate-200 text-[#223488] hover:bg-slate-100 transition">«</a>
                 <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $prev_day; ?>" title="Önceki gün" class="px-2 py-2 rounded-lg text-xs font-bold bg-[#223488] text-white hover:bg-[#314595] transition">‹</a>
                 <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $today_date; ?>" class="px-3 py-2 rounded-lg text-xs font-bold bg-[#ec9731] text-white hover:bg-[#d68625] transition whitespace-nowrap">📅 Bugün</a>
@@ -611,35 +630,15 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
             </div>
             <?php endif; ?>
 
-            <!-- Ekle + Bağla + 3-nokta menü — sağda -->
-            <div class="flex items-center gap-2 flex-wrap ml-auto">
-                <a href="<?php echo BASE_URL; ?>/koc/ogrencilerim.php"
-                   class="flex items-center gap-1.5 px-3 py-2.5 bg-[#223488] text-white text-xs font-bold rounded-xl hover:bg-[#314595] transition whitespace-nowrap flex-shrink-0">➕ Ekle</a>
-
-                <button onclick="openModal('linkStudentModal')"
-                        class="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition whitespace-nowrap flex-shrink-0">🔗 Bağla</button>
-
-                <?php if ($selected_student): ?>
-                <!-- 3-nokta: Veliye/Öğrenciye Mesaj + PDF -->
-                <div class="relative flex-shrink-0">
-                    <button type="button" onclick="event.stopPropagation(); document.getElementById('kocMoreMenu').classList.toggle('hidden');"
-                            class="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition" title="Diğer işlemler">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
-                    </button>
-                    <div id="kocMoreMenu" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 z-[60]">
-                        <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendWhatsappReport();"
-                                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-green-50 transition">
-                            <span class="w-7 h-7 rounded-lg bg-[#25D366] text-white flex items-center justify-center"><i class="fa-brands fa-whatsapp"></i></span> Veliye Mesaj At</button>
-                        <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendStudentMessage();"
-                                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-amber-50 transition">
-                            <span class="w-7 h-7 rounded-lg bg-[#ec9731] text-white flex items-center justify-center"><i class="fa-regular fa-paper-plane"></i></span> Öğrenciye Mesaj At</button>
-                        <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); downloadPdfProgram();"
-                                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-slate-50 transition">
-                            <span class="w-7 h-7 rounded-lg bg-[#223488] text-white flex items-center justify-center"><i class="fa-solid fa-file-pdf"></i></span> PDF İndir</button>
-                    </div>
-                </div>
-                <?php endif; ?>
+            <?php if ($selected_student): ?>
+            <!-- Taslak durumu + Sıfırla + Kaydet — üst-barın sağ köşesi; yalnızca Program sekmesinde (masaüstü) -->
+            <div class="ps-progbar hidden lg:flex items-center gap-2 ml-auto flex-shrink-0">
+                <span id="psDraftStatus" class="hidden lg:inline-flex items-center gap-1.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg px-2.5 py-1.5 whitespace-nowrap">✓ Hazır</span>
+                <button type="button" onclick="psResetDraft()" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-2 transition whitespace-nowrap" title="Kaydedilmemiş tüm değişiklikleri at, tabloya dön">↺ Taslağı Sıfırla</button>
+                <button type="button" id="psSaveBtn" onclick="psSaveWeek()" disabled
+                    class="text-xs font-black text-white bg-[#ec9731] hover:bg-[#d68625] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-4 py-2 shadow-sm transition whitespace-nowrap">💾 Haftayı Kaydet <span id="psSaveCount"></span></button>
             </div>
+            <?php endif; ?>
 
         </div>
     </div>
