@@ -60,12 +60,6 @@
                 <span>📅</span>
                 <span>Bugün</span>
             </a>
-            <button type="button" onclick="openPlannerStudio()"
-               class="px-4 md:px-6 py-2 rounded-xl text-xs font-bold transition shadow-md shadow-blue-100 btn-nav-blue flex items-center gap-2 transform active:scale-95 whitespace-nowrap">
-                <span>🗓️</span>
-                <span class="hidden sm:inline">Planlama Stüdyosu</span>
-                <span class="sm:hidden">Stüdyo</span>
-            </button>
             <span class="font-bold text-[#223488] text-sm hidden lg:block border-l pl-3 border-slate-200 whitespace-nowrap">
                 <?php echo date('d.m.Y', strtotime($week_start)); ?> Başlangıçlı
             </span>
@@ -135,7 +129,7 @@
                     </div>
                 </div>
 
-                <div class="p-2 pr-10 md:pr-2 space-y-3 flex-grow bg-slate-50 relative flex flex-col">
+                <div class="p-2 space-y-3 flex-grow bg-slate-50 relative flex flex-col">
                     
                     <div id="day-<?php echo $wd; ?>" 
                          data-date="<?php echo $wd; ?>"
