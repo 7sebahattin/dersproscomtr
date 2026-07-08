@@ -578,8 +578,8 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
         <!-- Mobil: flex-wrap | PC (md+): tek satır -->
         <div class="flex flex-wrap md:flex-nowrap items-center gap-2">
 
-            <!-- Öğrenci seçici dropdown — sabit, en solda -->
-            <div class="relative w-full md:w-48 flex-shrink-0">
+            <!-- Öğrenci seçici dropdown — mobilde 3-nokta ile aynı satırı paylaşır -->
+            <div class="relative flex-1 min-w-0 md:w-48 md:flex-none">
                 <select onchange="window.location.href='?student_id='+this.value+'&date=<?php echo $date_param; ?>'"
                         class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-8 py-2.5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#223488]/20 cursor-pointer">
                     <option value="">👤 Öğrenci Seçin...</option>

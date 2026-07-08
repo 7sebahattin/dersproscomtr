@@ -73,7 +73,10 @@
         }
 
         // 2. SÜRÜKLE BIRAK (SORTABLE) AYARLARI
-        const isDesktopPointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+        // "Gerçek fare" tespiti: dokunmatik cihazları (kalemli/S-Pen dahil) dışla.
+        // (pointer: fine) tek başına bazı stylus'lu telefonlarda true dönebiliyor;
+        // (hover: hover) eklenince yalnızca fare/işaretçi olan masaüstü eşleşir.
+        const isDesktopPointer = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
         let ctrlDown = false;
         if (isDesktopPointer) {
             window.addEventListener('keydown', (e) => { if (e.key === 'Control') ctrlDown = true; });
