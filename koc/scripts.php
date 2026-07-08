@@ -112,7 +112,10 @@
             }
         };
 
-        document.querySelectorAll('.sortable-list').forEach(listEl => {
+        // Eski tablo artık yalnızca mobil/tablette görünüyor; oradaki dokunmatik
+        // sürükle-bırak sorun çıkardığı için Sortable YALNIZCA masaüstü işaretçide
+        // (fine pointer) etkin. Masaüstünde asıl arayüz zaten Planlama Stüdyosu.
+        if (isDesktopPointer) document.querySelectorAll('.sortable-list').forEach(listEl => {
             new Sortable(listEl, {
                 group: {
                     name: 'shared',
@@ -362,6 +365,8 @@
             const el = document.getElementById(id2);
             if(el) el.className = active;
         });
+        // Masaüstü: Program sekmesi gömülü Planlama Stüdyosunu gösterir; diğer sekmeler gizler
+        if(typeof window.psShowStudio === 'function') window.psShowStudio(id === 'schedule');
         if(id === 'exams') {
             const defaultType = (studentLevel === 'Ortaokul') ? 'LGS' : 'TYT';
             setTimeout(() => { if(typeof initChart === 'function') initChart(defaultType); }, 100);

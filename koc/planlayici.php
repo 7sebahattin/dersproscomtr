@@ -44,26 +44,31 @@ foreach (($raw_items ?? []) as $it) {
     ];
 }
 ?>
-<div id="plannerStudio" class="fixed inset-0 z-[9998] hidden flex-col bg-slate-100" style="font-family:'Poppins',sans-serif">
+<style>
+/* Hafta tahtasının yatay kaydırma çubuğu — daha belirgin */
+#plannerStudio .ps-board-scroll{ scrollbar-width:auto; scrollbar-color:#223488 #e2e8f0; }
+#plannerStudio .ps-board-scroll::-webkit-scrollbar{ height:14px; }
+#plannerStudio .ps-board-scroll::-webkit-scrollbar-track{ background:#e2e8f0; border-radius:999px; }
+#plannerStudio .ps-board-scroll::-webkit-scrollbar-thumb{ background:#223488; border-radius:999px; border:3px solid #e2e8f0; }
+#plannerStudio .ps-board-scroll::-webkit-scrollbar-thumb:hover{ background:#314595; }
+</style>
+<!-- Masaüstünde üst-barın altına sabitlenen gömülü panel (görünürlük tamamen JS
+     style.display ile kontrol edilir; hidden/lg:flex çakışmasından kaçınmak için).
+     Mobilde hiç gösterilmez (eski tablo kullanılır). -->
+<div id="plannerStudio" class="fixed left-0 right-0 bottom-0 z-[40] flex-col bg-slate-100" style="font-family:'Poppins',sans-serif;top:0;display:none">
 
-    <!-- ═══ ÜST ÇUBUK ═══ -->
-    <div class="relative bg-gradient-to-r from-[#223488] to-[#314595] text-white px-4 py-2.5 flex items-center justify-between gap-3 flex-shrink-0 shadow-lg">
+    <!-- ═══ İNCE EYLEM ŞERİDİ (başlık/öğrenci/nav artık paylaşılan üst barda) ═══ -->
+    <div class="relative bg-gradient-to-r from-[#223488] to-[#314595] text-white px-4 py-1.5 flex items-center justify-between gap-3 flex-shrink-0 shadow">
         <div class="absolute left-0 top-0 h-full w-1.5 bg-[#ec9731]"></div>
-        <div class="flex items-center gap-3 min-w-0 pl-2">
-            <span class="text-xl">🗓️</span>
-            <div class="min-w-0">
-                <h2 class="font-black text-sm tracking-wide leading-tight truncate">PLANLAMA STÜDYOSU
-                    <span class="font-bold text-blue-100/80">· <?php echo htmlspecialchars(($selected_student['first_name'] ?? '').' '.($selected_student['last_name'] ?? '')); ?></span>
-                </h2>
-                <p class="text-[10px] text-blue-100/70 leading-tight"><?php echo date('d.m.Y', strtotime($week_dates[0])); ?> – <?php echo date('d.m.Y', strtotime($week_dates[6])); ?> · Konuyu güne sürükle, kalem gerisini halleder.</p>
-            </div>
+        <div class="flex items-center gap-2 min-w-0 pl-2">
+            <span class="text-sm">🗓️</span>
+            <span class="text-[11px] font-black tracking-wide">PLANLAMA STÜDYOSU</span>
+            <span id="psDraftStatus" class="inline-flex items-center gap-1.5 text-[10px] font-bold bg-white/10 border border-white/15 rounded-lg px-2.5 py-1 whitespace-nowrap">✓ Hazır</span>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
-            <span id="psDraftStatus" class="hidden md:inline-flex items-center gap-1.5 text-[10px] font-bold bg-white/10 border border-white/15 rounded-lg px-2.5 py-1.5 whitespace-nowrap">✓ Hazır</span>
-            <button type="button" onclick="psResetDraft()" class="text-[10px] font-bold text-blue-100/70 hover:text-white bg-white/5 hover:bg-white/15 border border-white/10 rounded-lg px-2.5 py-1.5 transition whitespace-nowrap" title="Kaydedilmemiş tüm değişiklikleri at, tabloya dön">↺ Taslağı Sıfırla</button>
-            <button type="button" onclick="closePlannerStudio()" class="text-xs font-bold bg-white/10 hover:bg-white/20 border border-white/15 rounded-lg px-3 py-1.5 transition whitespace-nowrap">Kapat</button>
+            <button type="button" onclick="psResetDraft()" class="text-[10px] font-bold text-blue-100/70 hover:text-white bg-white/5 hover:bg-white/15 border border-white/10 rounded-lg px-2.5 py-1 transition whitespace-nowrap" title="Kaydedilmemiş tüm değişiklikleri at, tabloya dön">↺ Taslağı Sıfırla</button>
             <button type="button" id="psSaveBtn" onclick="psSaveWeek()" disabled
-                class="text-xs font-black bg-[#ec9731] hover:bg-[#d68625] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-4 py-1.5 shadow-lg shadow-black/20 transition whitespace-nowrap">💾 Haftayı Kaydet <span id="psSaveCount"></span></button>
+                class="text-xs font-black bg-[#ec9731] hover:bg-[#d68625] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-4 py-1 shadow transition whitespace-nowrap">💾 Haftayı Kaydet <span id="psSaveCount"></span></button>
         </div>
     </div>
 
@@ -112,8 +117,8 @@ foreach (($raw_items ?? []) as $it) {
             <div class="p-2.5 space-y-2 border-b border-slate-100 flex-shrink-0">
                 <div class="ps-pane" data-pspane="mufredat">
                     <div class="grid grid-cols-2 gap-1.5 mb-1.5">
-                        <select id="psCat" class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488]"><option value="" disabled selected>Alan...</option></select>
-                        <select id="psSubj" disabled class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488] disabled:opacity-50"><option value="" disabled selected>Ders...</option></select>
+                        <select id="psCat" class="w-full bg-white border border-red-300 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-red-500"><option value="" disabled selected>Alan...</option></select>
+                        <select id="psSubj" disabled class="w-full bg-white border border-red-300 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-red-500 disabled:opacity-50"><option value="" disabled selected>Ders...</option></select>
                     </div>
                 </div>
                 <div class="ps-pane hidden" data-pspane="kaynak">
@@ -141,7 +146,7 @@ foreach (($raw_items ?? []) as $it) {
         </div>
 
         <!-- ═══ HAFTA TAHTASI ═══ -->
-        <div class="flex-grow overflow-x-auto overflow-y-hidden min-w-0">
+        <div class="flex-grow overflow-x-auto overflow-y-hidden min-w-0 ps-board-scroll">
             <div class="flex gap-2 p-3 h-full min-w-max">
                 <?php foreach ($week_dates as $wd):
                     $dayName = $gunlerTR[date('l', strtotime($wd))] ?? '';
@@ -227,23 +232,46 @@ foreach (($raw_items ?? []) as $it) {
     document.getElementById('psPresetTime').addEventListener('input', function(){ preset.time_note = this.value; savePreset(); });
     document.getElementById('psPresetNote').addEventListener('input', function(){ preset.task_note = trUp(this.value.trim()); savePreset(); });
 
-    // ── Aç / Kapat ──
-    window.openPlannerStudio = function () {
-        buildState();
-        studio.classList.remove('hidden'); studio.classList.add('flex');
-        document.body.style.overflow = 'hidden';
-        loadCats();
+    // ── Gömülü panel: masaüstünde üst-barın altına yerleşir, Program sekmesinde görünür ──
+    var DESKTOP = function(){ return window.matchMedia('(min-width:1024px)').matches; };
+    var built = false;
+    function positionStudio(){
+        // Paylaşılan üst bar (öğrenci/tab/nav) altından başlasın
+        var anchor = document.getElementById('kocTopBar');
+        var top = anchor ? Math.round(anchor.getBoundingClientRect().bottom) : 96;
+        studio.style.top = Math.max(0, top) + 'px';
+    }
+    function studioVisible(){ return studio.style.display !== 'none'; }
+    // scripts.php openTab() bunu çağırır: Program sekmesi masaüstünde stüdyoyu gösterir
+    window.psShowStudio = function(show){
+        if (show && DESKTOP()) {
+            if (!built) { buildState(); loadCats(); built = true; }
+            positionStudio();
+            studio.style.display = 'flex';
+        } else {
+            studio.style.display = 'none';
+        }
     };
-    window.closePlannerStudio = function () {
-        studio.classList.add('hidden'); studio.classList.remove('flex');
-        document.body.style.overflow = '';
-    };
+    // Eski buton API'si korunur (mobilde çağrılmaz; masaüstünde göster)
+    window.openPlannerStudio = function(){ window.psShowStudio(true); };
+    window.closePlannerStudio = function(){ window.psShowStudio(false); };
+
+    // Konum güncelle (kaydırma/yeniden boyutlanma); mobile küçülünce gizle
+    window.addEventListener('resize', function(){
+        if (!DESKTOP()) { studio.style.display = 'none'; return; }
+        if (studioVisible()) positionStudio();
+    });
+    window.addEventListener('scroll', function(){ if (studioVisible()) positionStudio(); }, {passive:true});
     document.addEventListener('keydown', function(e){
-        if (e.key === 'Escape' && !studio.classList.contains('hidden')) { if (openEditor) { openEditor = null; renderBoard(); } else closePlannerStudio(); }
+        if (e.key === 'Escape' && openEditor && studioVisible()) { openEditor = null; renderBoard(); }
     });
 
-    // Sayfa yüklenince: kaydetme sonrası stüdyoyu otomatik yeniden aç (akış kesilmesin)
-    if (sessionStorage.getItem('psReopen') === '1') { sessionStorage.removeItem('psReopen'); setTimeout(function(){ openPlannerStudio(); }, 150); }
+    // Açılışta masaüstü + Program sekmesi ise stüdyoyu göster
+    window.addEventListener('DOMContentLoaded', function(){
+        var sched = document.getElementById('content-schedule');
+        var active = sched && !sched.classList.contains('hidden');
+        if (DESKTOP() && active) window.psShowStudio(true);
+    });
 
     // ── Durumu kur: sunucu hali + varsa taslak ──
     function buildState(){
@@ -356,7 +384,10 @@ foreach (($raw_items ?? []) as $it) {
                 '<span class="text-[8px] font-black uppercase px-1.5 py-0.5 rounded ' + (c.resource_title ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-[#223488] text-white') + ' truncate max-w-[110px]">' + esc(c.resource_title || c.category || 'Diğer') + '</span>' +
                 '<span class="flex items-center gap-1 shrink-0">' +
                     (isNew ? '<span class="text-[7px] font-black text-indigo-500 bg-indigo-50 rounded px-1 py-0.5">YENİ</span>' : (isMod ? '<span class="text-[7px] font-black text-amber-600 bg-amber-50 rounded px-1 py-0.5">DEĞİŞTİ</span>' : '')) +
-                    '<span class="text-[11px]">' + sm[0] + '</span></span>' +
+                    (c.id
+                        ? '<button type="button" class="ps-status-btn text-[13px] leading-none hover:scale-125 transition" title="Durumu/görevi eski pencerede düzenle">' + sm[0] + '</button>'
+                        : '<span class="text-[11px]">' + sm[0] + '</span>') +
+                '</span>' +
             '</div>' +
             '<p class="text-[11px] font-extrabold text-slate-900 leading-tight truncate">' + esc(c.subject || '-') + '</p>' +
             '<p class="text-[10px] font-semibold text-[#314595] leading-tight truncate">' + esc(c.topic || '-') + '</p>' +
@@ -370,6 +401,22 @@ foreach (($raw_items ?? []) as $it) {
         el.addEventListener('dragstart', function(ev){
             ev.dataTransfer.setData('text/ps-card', c.uid);
             ev.dataTransfer.effectAllowed = 'copyMove';
+        });
+        // ⏳ durum ikonu → ESKİ düzenleme penceresi (durum/görev; öğrenci tarafındaki
+        // gibi). Yalnızca kayıtlı kartlarda; kartın gövdesine tıklama yerinde
+        // düzenleyiciyi açmaya devam eder (o davranış bilerek korundu).
+        var stBtn = el.querySelector('.ps-status-btn');
+        if (stBtn) stBtn.addEventListener('click', function(ev){
+            ev.stopPropagation();
+            if (typeof window.openEditModal !== 'function') return;
+            window.openEditModal({
+                id: c.id, date: c.date, amount: c.amount, status: c.status,
+                time_note: c.time_note, action_type: c.action_type, task_note: c.task_note,
+                edu_topic_id: c.edu_topic_id,
+                custom_subject: c.custom_subject || c.subject, custom_topic: c.custom_topic || c.topic,
+                edu_subject_name: c.subject, edu_topic_name: c.topic,
+                resource_id: c.resource_id, resource_title: c.resource_title, resource_type: c.resource_type
+            }, c.category || '');
         });
         // Tıkla → yerinde düzenleyici
         el.addEventListener('click', function(ev){
@@ -553,7 +600,8 @@ foreach (($raw_items ?? []) as $it) {
     document.getElementById('psManTopic').addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); psAddPill(); } });
 
     // ── Palet: konu listesi render (sürüklenebilir satırlar) ──
-    var STATS = window.eduTopicStats || {};
+    // STATS lazy okunur (modals.php window.eduTopicStats'ı bu dosyadan SONRA
+    // tanımlayabilir; render anında okuyunca sıralama sorunu olmaz).
     document.getElementById('psSearch').addEventListener('input', function(){ renderTopicList(); });
     function renderTopicList(loading){
         var list = document.getElementById('psTopicList');
@@ -568,6 +616,7 @@ foreach (($raw_items ?? []) as $it) {
                  tab === 'kaynak' ? 'Kaynak seçince konuları<br>burada listelenir.' : 'Ders + konu yazıp ＋ ile<br>sürüklenebilir hap oluştur.') + '</p>';
             return;
         }
+        var STATS = window.eduTopicStats || {};
         rows.forEach(function(t){
             if (q && trUp(t.topic).indexOf(q) === -1 && trUp(t.subject).indexOf(q) === -1) return;
             var st = t.edu_topic_id ? STATS[t.edu_topic_id] : null;
@@ -616,7 +665,7 @@ foreach (($raw_items ?? []) as $it) {
             if (!j.ok) throw new Error(j.error || 'Kaydedilemedi');
             localStorage.removeItem(DRAFT_KEY);
             btn.innerHTML = '✅ Kaydedildi (' + (j.created + j.updated + j.deleted) + ')';
-            sessionStorage.setItem('psReopen', '1');
+            // Reload sonrası masaüstünde stüdyo Program sekmesinde otomatik açılır.
             setTimeout(function(){ window.location.reload(); }, 500);
         })
         .catch(function(err){

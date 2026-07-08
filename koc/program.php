@@ -35,8 +35,12 @@
         }
     </style>
 
+    <!-- Masaüstünde (lg+) bu eski tablo gizlenir; yerini gömülü Planlama Stüdyosu alır.
+         Mobil/tablette eski tek-tek ekleme tablosu aynen kullanılır. -->
+    <div class="lg:hidden">
+
     <div class="flex flex-row justify-between items-center mb-6 bg-white p-2 md:p-3 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 gap-1 md:gap-3">
-        
+
         <div class="flex gap-1 md:gap-2">
             <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $prev_week; ?>"
                class="px-2 md:px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm btn-nav-outline flex items-center justify-center gap-1 min-w-[35px] md:min-w-0">
@@ -286,4 +290,6 @@
             </div>
         <?php endforeach; ?>
     </div>
+
+    </div><!-- /lg:hidden (eski tablo) -->
 </div>

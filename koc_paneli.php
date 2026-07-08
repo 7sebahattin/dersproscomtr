@@ -572,13 +572,14 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
         <div class="bg-red-50 text-red-700 p-3 rounded-lg mb-3 border border-red-200 text-sm">⚠️ <?php echo $error; ?></div>
     <?php endif; ?>
 
-    <!-- ÜST BAR: Öğrenci Seçici + Aksiyonlar -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-3 mb-4">
-        <!-- Mobil: flex-wrap | PC (md+): tek satır, tablar sağda -->
+    <!-- ÜST BAR: Öğrenci Seçici + Sekmeler + (masaüstü) Hafta/Gün Nav + Aksiyonlar
+         id=kocTopBar: masaüstünde gömülü Planlama Stüdyosu bu barın altından başlar. -->
+    <div id="kocTopBar" class="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-3 mb-4 relative z-[45]">
+        <!-- Mobil: flex-wrap | PC (md+): tek satır -->
         <div class="flex flex-wrap md:flex-nowrap items-center gap-2">
 
             <!-- Öğrenci seçici dropdown — sabit, en solda -->
-            <div class="relative w-full md:w-52 flex-shrink-0">
+            <div class="relative w-full md:w-48 flex-shrink-0">
                 <select onchange="window.location.href='?student_id='+this.value+'&date=<?php echo $date_param; ?>'"
                         class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-8 py-2.5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#223488]/20 cursor-pointer">
                     <option value="">👤 Öğrenci Seçin...</option>
@@ -592,46 +593,63 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
             </div>
 
             <?php if ($selected_student): ?>
-            <!-- Tabs — artık solda, dropdown'ın hemen yanında -->
+            <!-- Tabs — dropdown'ın hemen yanında (md+) -->
             <div class="hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-shrink-0">
-                <button onclick="openTab('schedule')" id="tab-schedule-desk" class="px-4 py-1.5 rounded-lg font-bold text-xs transition bg-slate-800 text-white shadow-sm flex items-center gap-2">📅 Program</button>
-                <button onclick="openTab('topics')"   id="tab-topics-desk"   class="px-4 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-2">📊 Analiz</button>
-                <button onclick="openTab('exams')"    id="tab-exams-desk"    class="px-4 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-2">📝 Denemeler</button>
+                <button onclick="openTab('schedule')" id="tab-schedule-desk" class="px-3 py-1.5 rounded-lg font-bold text-xs transition bg-slate-800 text-white shadow-sm flex items-center gap-1.5">📅 Program</button>
+                <button onclick="openTab('topics')"   id="tab-topics-desk"   class="px-3 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-1.5">📊 Analiz</button>
+                <button onclick="openTab('exams')"    id="tab-exams-desk"    class="px-3 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-1.5">📝 Denemeler</button>
+            </div>
+
+            <!-- Masaüstü Hafta/Gün navigasyonu (yalnızca lg+; stüdyo için) -->
+            <div class="hidden lg:flex items-center gap-1 flex-shrink-0">
+                <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $prev_week; ?>" title="Önceki hafta" class="px-2 py-2 rounded-lg text-xs font-bold bg-slate-50 border border-slate-200 text-[#223488] hover:bg-slate-100 transition">«</a>
+                <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $prev_day; ?>" title="Önceki gün" class="px-2 py-2 rounded-lg text-xs font-bold bg-[#223488] text-white hover:bg-[#314595] transition">‹</a>
+                <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $today_date; ?>" class="px-3 py-2 rounded-lg text-xs font-bold bg-[#ec9731] text-white hover:bg-[#d68625] transition whitespace-nowrap">📅 Bugün</a>
+                <span class="text-[11px] font-bold text-slate-500 px-1 whitespace-nowrap"><?php echo date('d.m', strtotime($week_dates[0])); ?>–<?php echo date('d.m', strtotime($week_dates[6])); ?></span>
+                <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $next_day; ?>" title="Sonraki gün" class="px-2 py-2 rounded-lg text-xs font-bold bg-[#223488] text-white hover:bg-[#314595] transition">›</a>
+                <a href="?student_id=<?php echo $sid; ?>&date=<?php echo $next_week; ?>" title="Sonraki hafta" class="px-2 py-2 rounded-lg text-xs font-bold bg-slate-50 border border-slate-200 text-[#223488] hover:bg-slate-100 transition">»</a>
             </div>
             <?php endif; ?>
 
-            <!-- Ekle + Bağla + Aksiyon butonları — artık sağda -->
+            <!-- Ekle + Bağla + 3-nokta menü — sağda -->
             <div class="flex items-center gap-2 flex-wrap ml-auto">
                 <a href="<?php echo BASE_URL; ?>/koc/ogrencilerim.php"
-                   class="flex items-center gap-1.5 px-3 py-2.5 bg-[#223488] text-white text-xs font-bold rounded-xl hover:bg-[#314595] transition whitespace-nowrap flex-shrink-0">
-                    ➕ Ekle
-                </a>
+                   class="flex items-center gap-1.5 px-3 py-2.5 bg-[#223488] text-white text-xs font-bold rounded-xl hover:bg-[#314595] transition whitespace-nowrap flex-shrink-0">➕ Ekle</a>
 
                 <button onclick="openModal('linkStudentModal')"
-                        class="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition whitespace-nowrap flex-shrink-0">
-                    🔗 Bağla
-                </button>
+                        class="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition whitespace-nowrap flex-shrink-0">🔗 Bağla</button>
 
                 <?php if ($selected_student): ?>
-                <button onclick="sendWhatsappReport()"
-                        class="flex items-center gap-1.5 px-3 py-2.5 bg-[#25D366] text-white text-xs font-bold rounded-xl hover:bg-[#128C7E] transition shadow-sm whitespace-nowrap">
-                    <i class="fa-brands fa-whatsapp"></i> Veliye Mesaj At
-                </button>
-
-                <button onclick="sendStudentMessage()"
-                        class="flex items-center gap-1.5 px-3 py-2.5 bg-[#ec9731] text-white text-xs font-bold rounded-xl hover:bg-[#d68625] transition shadow-sm whitespace-nowrap">
-                    <i class="fa-regular fa-paper-plane"></i> Öğrenciye Mesaj At
-                </button>
-
-                <button onclick="downloadPdfProgram()"
-                        class="flex items-center gap-1.5 px-3 py-2.5 bg-[#223488] text-white text-xs font-bold rounded-xl hover:bg-[#314595] transition shadow-sm whitespace-nowrap">
-                    <i class="fa-solid fa-file-pdf"></i> PDF İndir
-                </button>
+                <!-- 3-nokta: Veliye/Öğrenciye Mesaj + PDF -->
+                <div class="relative flex-shrink-0">
+                    <button type="button" onclick="event.stopPropagation(); document.getElementById('kocMoreMenu').classList.toggle('hidden');"
+                            class="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition" title="Diğer işlemler">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                    </button>
+                    <div id="kocMoreMenu" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 z-[60]">
+                        <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendWhatsappReport();"
+                                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-green-50 transition">
+                            <span class="w-7 h-7 rounded-lg bg-[#25D366] text-white flex items-center justify-center"><i class="fa-brands fa-whatsapp"></i></span> Veliye Mesaj At</button>
+                        <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendStudentMessage();"
+                                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-amber-50 transition">
+                            <span class="w-7 h-7 rounded-lg bg-[#ec9731] text-white flex items-center justify-center"><i class="fa-regular fa-paper-plane"></i></span> Öğrenciye Mesaj At</button>
+                        <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); downloadPdfProgram();"
+                                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-slate-50 transition">
+                            <span class="w-7 h-7 rounded-lg bg-[#223488] text-white flex items-center justify-center"><i class="fa-solid fa-file-pdf"></i></span> PDF İndir</button>
+                    </div>
+                </div>
                 <?php endif; ?>
             </div>
 
         </div>
     </div>
+    <script>
+    // 3-nokta menüyü dışarı tıklayınca kapat
+    document.addEventListener('click', function(e){
+        var m = document.getElementById('kocMoreMenu');
+        if (m && !m.classList.contains('hidden') && !m.parentElement.contains(e.target)) m.classList.add('hidden');
+    });
+    </script>
 
     <!-- ANA İÇERİK -->
     <div>
