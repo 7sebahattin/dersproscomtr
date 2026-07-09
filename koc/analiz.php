@@ -189,6 +189,68 @@ try {
 } catch (Exception $e) {
     $gap_error = $e->getMessage();
 }
+
+// G. MÜFREDAT KAPSAMA + ÖNE ÇIKANLAR ------------------------------------------
+// Kapsama: görev verilmiş konu / toplam konu (durumdan bağımsız).
+// $progress_data koc_paneli.php'de kurulur; her konuda 'assigned' bayrağı var.
+$coverage  = [];  // en az 1 konusuna görev verilmiş dersler
+$untouched = 0;   // müfredatta olup hiç görev verilmemiş ders sayısı
+foreach (($progress_data ?? []) as $subX) {
+    $topicsX = $subX['topics'] ?? [];
+    $totX = count($topicsX);
+    if ($totX === 0) continue;
+    $asgX = 0;
+    foreach ($topicsX as $tX) if (!empty($tX['assigned'])) $asgX++;
+    if ($asgX === 0) { $untouched++; continue; }
+    $coverage[] = [
+        'subject'  => $subX['subject_name'] ?? ($subX['name'] ?? 'Ders'),
+        'category' => $subX['category'] ?? '',
+        'assigned' => $asgX,
+        'total'    => $totX,
+        'pct'      => (int)round(100 * $asgX / $totX),
+    ];
+}
+usort($coverage, fn($a, $b) => $a['pct'] <=> $b['pct']); // en az kapsanan üstte
+
+// Öne çıkanlar: öğretmenin "ne gerekiyor?" sorusuna doğrudan cevap veren maddeler
+$insights = [];
+if (($stats['week_q'] ?? 0) == 0 && ($stats['week_t'] ?? 0) == 0) {
+    $insights[] = ['sev'=>'red', 'icon'=>'⚠️', 'text'=>'Bu hafta hiç soru/konu çalışması işlenmedi — programı ve öğrenciyi kontrol et.'];
+}
+foreach (array_slice($coverage, 0, 2) as $cv) {
+    if ($cv['pct'] < 50) {
+        $insights[] = ['sev'=>'orange', 'icon'=>'📚',
+            'text'=>$cv['subject'].($cv['category'] ? ' ('.$cv['category'].')' : '').' müfredatında '.$cv['total'].' konudan yalnızca '.$cv['assigned'].' tanesine görev verildi (%'.$cv['pct'].').'];
+    }
+}
+if ($untouched > 0) {
+    $insights[] = ['sev'=>'slate', 'icon'=>'🕳️', 'text'=>$untouched.' derste henüz hiç görev planlanmadı.'];
+}
+// Yanlış oranı en yüksek ders (en az 20 cevaplanmış soru şartı)
+$worstDY = null;
+foreach ($dy_data as $rowDY) {
+    $totDY = (int)$rowDY['total_correct'] + (int)$rowDY['total_wrong'];
+    if ($totDY < 20) continue;
+    $wpDY = (int)round(100 * (int)$rowDY['total_wrong'] / $totDY);
+    if ($worstDY === null || $wpDY > $worstDY['wp']) $worstDY = ['name'=>$rowDY['subject_name'], 'wp'=>$wpDY];
+}
+if ($worstDY && $worstDY['wp'] >= 30) {
+    $insights[] = ['sev'=>'red', 'icon'=>'❗', 'text'=>$worstDY['name'].' dersinde yanlış oranı %'.$worstDY['wp'].' — konu tekrarı önerilir.'];
+}
+// Hedefin en çok gerisinde kalınan ders
+foreach ($gap_data as $gd) {
+    $eksik = (int)$gd['hedef_toplam'] - (int)$gd['yapilan_toplam'];
+    if ($eksik > 0) {
+        $insights[] = ['sev'=>'orange', 'icon'=>'🎯', 'text'=>$gd['subject_name'].' dersinde hedefin '.number_format($eksik).' soru gerisinde.'];
+        break; // gap_data zaten farka göre sıralı, ilk eksik en büyüğü
+    }
+}
+if ($success_rate >= 80) {
+    $insights[] = ['sev'=>'green', 'icon'=>'🌟', 'text'=>'Görev tamamlama oranı %'.$success_rate.' — istikrar çok iyi, hedefler artırılabilir.'];
+} elseif ($success_rate > 0 && $success_rate < 50) {
+    $insights[] = ['sev'=>'red', 'icon'=>'📉', 'text'=>'Görev tamamlama oranı %'.$success_rate.' — verilen görevlerin yarısından azı tamamlanıyor.'];
+}
+$insights = array_slice($insights, 0, 6);
 ?>
 
 <style>
@@ -206,24 +268,8 @@ try {
     .kpi-card:hover { border-color: var(--atla-blue-dark); transform: translateY(-2px); }
 </style>
 
-<div class="bg-[#223488] rounded-2xl p-6 mb-6 text-white shadow-xl relative overflow-hidden">
-    <div class="absolute top-0 right-0 p-4 opacity-10 text-9xl transform rotate-12 translate-x-10 -translate-y-10">📊</div>
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-10">
-        <div>
-            <h2 class="text-2xl font-black mb-1 tracking-tight">Performans Analizi</h2>
-            <p class="text-blue-200 text-sm flex items-center gap-2 font-medium">
-                <span class="w-2 h-2 rounded-full bg-[#ec9731] animate-pulse"></span>
-                <?php echo htmlspecialchars($studentName); ?>
-            </p>
-        </div>
-        <div class="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 shadow-inner">
-            <span class="text-xs text-blue-100 mr-2 font-bold uppercase tracking-wider">Seviye</span>
-            <span class="bg-white text-[#223488] px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider shadow-sm"><?php echo htmlspecialchars($lvl); ?></span>
-        </div>
-    </div>
-</div>
-
-<div class="flex flex-wrap justify-center gap-3 mb-8 sticky top-2 z-40 bg-slate-50/90 backdrop-blur-sm p-2 rounded-xl border border-slate-200 shadow-sm mx-auto max-w-fit">
+<!-- Büyük "Performans Analizi" bannerı kaldırıldı — seviye rozeti filtre çubuğuna taşındı -->
+<div class="flex flex-wrap items-center justify-center gap-3 mb-6 sticky top-2 z-40 bg-slate-50/90 backdrop-blur-sm p-2 rounded-xl border border-slate-200 shadow-sm mx-auto max-w-fit">
     <button onclick="filterAnalysis('RAPOR')" id="btn-analiz-RAPOR"
         class="analiz-filter-btn px-6 py-2 rounded-lg text-sm font-bold transition-all shadow-md bg-[#ec9731] text-white ring-2 ring-orange-200 ring-offset-1 transform scale-105">
         📈 GENEL RAPOR
@@ -236,6 +282,7 @@ try {
         <button onclick="filterAnalysis('LGS')" id="btn-analiz-LGS" class="analiz-filter-btn px-6 py-2 rounded-lg text-sm font-bold transition-all shadow-sm bg-white text-[#223488] hover:bg-blue-50 border border-[#223488]/20">🎯 LGS</button>
         <button onclick="filterAnalysis('Ara Sınıf')" id="btn-analiz-ARASINIF" class="analiz-filter-btn px-6 py-2 rounded-lg text-sm font-bold transition-all shadow-sm bg-white text-[#223488] hover:bg-blue-50 border border-[#223488]/20">🎒 Ara Sınıf</button>
     <?php endif; ?>
+    <span class="px-3 py-2 rounded-lg text-xs font-black bg-[#223488] text-white uppercase tracking-wider" title="Öğrenci seviyesi">🎓 <?php echo htmlspecialchars($lvl); ?></span>
 </div>
 
 <div class="analysis-container pb-10">
@@ -332,11 +379,78 @@ try {
 
         </div>
 
+        <!-- ÖĞRETMEN İÇİN AKSİYON KATI: Öne Çıkanlar + Müfredat Kapsama -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+
+            <!-- Öne Çıkanlar: "bu öğrenci için ne gerekiyor?" -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-4 border-b border-slate-100 bg-slate-50">
+                    <h3 class="font-bold text-[#223488] text-sm uppercase tracking-wide">🔍 Öne Çıkanlar — Ne Gerekiyor?</h3>
+                </div>
+                <div class="p-4">
+                    <?php if (empty($insights)): ?>
+                        <div class="text-center py-6 text-slate-400 text-sm">Şu an dikkat gerektiren bir durum görünmüyor. 👍</div>
+                    <?php else: ?>
+                        <ul class="space-y-2">
+                        <?php foreach ($insights as $ins):
+                            $sevCls = match($ins['sev']) {
+                                'red'    => 'bg-red-50 border-red-100 text-red-700',
+                                'orange' => 'bg-orange-50 border-orange-100 text-orange-700',
+                                'green'  => 'bg-green-50 border-green-100 text-green-700',
+                                default  => 'bg-slate-50 border-slate-100 text-slate-600',
+                            };
+                        ?>
+                            <li class="flex items-start gap-2.5 text-xs font-semibold rounded-lg border px-3 py-2.5 <?php echo $sevCls; ?>">
+                                <span class="text-sm leading-none mt-0.5"><?php echo $ins['icon']; ?></span>
+                                <span class="leading-snug"><?php echo htmlspecialchars($ins['text']); ?></span>
+                            </li>
+                        <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Müfredat Kapsama: görev verilmiş konu / toplam konu -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-4 border-b border-slate-100 bg-slate-50 flex flex-wrap justify-between items-center gap-2">
+                    <h3 class="font-bold text-[#223488] text-sm uppercase tracking-wide">🗺️ Müfredat Kapsama <span class="text-[9px] text-slate-400 normal-case font-semibold">(görev verilen konu oranı)</span></h3>
+                    <?php if ($untouched > 0): ?>
+                    <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200"><?php echo $untouched; ?> derste hiç görev yok</span>
+                    <?php endif; ?>
+                </div>
+                <div class="max-h-[280px] overflow-y-auto custom-scrollbar p-4">
+                    <?php if (empty($coverage)): ?>
+                        <div class="text-center py-6 text-slate-400 text-sm">Henüz müfredat konusuna bağlı görev verilmemiş.</div>
+                    <?php else: ?>
+                        <div class="space-y-3">
+                        <?php foreach ($coverage as $cv):
+                            $cvColor = $cv['pct'] >= 67 ? 'bg-green-500' : ($cv['pct'] >= 34 ? 'bg-[#ec9731]' : 'bg-red-500');
+                            $cvText  = $cv['pct'] >= 67 ? 'text-green-600' : ($cv['pct'] >= 34 ? 'text-[#d68625]' : 'text-red-500');
+                        ?>
+                            <div class="group">
+                                <div class="flex justify-between items-end mb-1 gap-2">
+                                    <span class="font-bold text-xs text-slate-700 uppercase tracking-tight truncate">
+                                        <?php echo htmlspecialchars($cv['subject']); ?>
+                                        <?php if ($cv['category']): ?><span class="text-[9px] font-black text-slate-400 ml-1"><?php echo htmlspecialchars($cv['category']); ?></span><?php endif; ?>
+                                    </span>
+                                    <span class="text-[10px] font-bold text-slate-400 whitespace-nowrap"><?php echo $cv['assigned']; ?>/<?php echo $cv['total']; ?> konu · <b class="<?php echo $cvText; ?> text-xs">%<?php echo $cv['pct']; ?></b></span>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                                    <div class="h-full rounded-full <?php echo $cvColor; ?>" style="width: <?php echo $cv['pct']; ?>%"></div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            
+
             <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm lg:col-span-2">
                 <h3 class="font-bold text-[#223488] mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
-                    <span class="bg-[#223488]/10 text-[#223488] p-1.5 rounded-lg text-xs">📈</span> 
+                    <span class="bg-[#223488]/10 text-[#223488] p-1.5 rounded-lg text-xs">📈</span>
                     Son 7 Günlük Performans
                 </h3>
                 <div class="h-[250px] w-full">
@@ -667,12 +781,22 @@ try {
                 }
             }
 
-            // Hiç işlem kaydı olmayan dersi gizle
+            // Müfredat kapsaması: görev verilmiş konu / toplam konu (durumdan bağımsız)
+            $topicTotal = count($topics);
+            $topicAsg   = 0;
+            foreach ($topics as $tpItem) { if (!empty($tpItem['assigned'])) $topicAsg++; }
+            $covPct = $topicTotal > 0 ? (int)round(100 * $topicAsg / $topicTotal) : 0;
+
+            // Hiç işlem kaydı VE hiç görev ataması olmayan dersi gizle
             $hasAnyHistory = false;
             foreach ($topics as $tpItem) {
                 if (!empty($tpItem['history'])) { $hasAnyHistory = true; break; }
             }
-            if (!$hasAnyHistory) continue;
+            if (!$hasAnyHistory && $topicAsg === 0) continue;
+
+            $covColor = $covPct >= 67 ? '#22c55e' : ($covPct >= 34 ? '#ec9731' : '#ef4444');
+            $covDash  = round(2 * M_PI * 24, 2);
+            $covOff   = round($covDash * (1 - min(100, $covPct) / 100), 2);
         ?>
 
         <div class="analysis-card group hidden" data-category="<?php echo htmlspecialchars($cat); ?>">
@@ -680,11 +804,25 @@ try {
 
                 <div class="bg-slate-50 border-b border-slate-100 p-4 flex justify-between items-center relative overflow-hidden">
                     <div class="absolute left-0 top-0 bottom-0 w-1 bg-[#223488]"></div>
-                    <div>
-                        <h3 class="text-lg font-black text-[#223488]"><?php echo htmlspecialchars($subjectName); ?></h3>
-                        <p class="text-[10px] font-bold uppercase tracking-widest text-[#ec9731] bg-orange-50 inline-block px-2 py-0.5 rounded mt-1 border border-orange-100">
-                            <?php echo htmlspecialchars($cat); ?>
-                        </p>
+                    <div class="flex items-center gap-3 min-w-0">
+                        <!-- Müfredat kapsama çemberi: görev verilen konu / toplam konu -->
+                        <div class="relative w-14 h-14 shrink-0" title="Müfredat kapsaması: <?php echo $topicTotal; ?> konudan <?php echo $topicAsg; ?> tanesine görev verildi">
+                            <svg viewBox="0 0 56 56" class="w-14 h-14 -rotate-90">
+                                <circle cx="28" cy="28" r="24" fill="none" stroke="#e2e8f0" stroke-width="6"/>
+                                <circle cx="28" cy="28" r="24" fill="none" stroke="<?php echo $covColor; ?>" stroke-width="6" stroke-linecap="round"
+                                        stroke-dasharray="<?php echo $covDash; ?>" stroke-dashoffset="<?php echo $covOff; ?>"/>
+                            </svg>
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <span class="text-[11px] font-black" style="color:<?php echo $covColor; ?>">%<?php echo $covPct; ?></span>
+                            </div>
+                        </div>
+                        <div class="min-w-0">
+                            <h3 class="text-lg font-black text-[#223488] truncate"><?php echo htmlspecialchars($subjectName); ?></h3>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-[#ec9731] bg-orange-50 inline-block px-2 py-0.5 rounded mt-1 border border-orange-100">
+                                <?php echo htmlspecialchars($cat); ?>
+                            </p>
+                            <p class="text-[9px] text-slate-400 font-bold mt-0.5"><?php echo $topicAsg; ?>/<?php echo $topicTotal; ?> konuya görev verildi</p>
+                        </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 justify-end">
                         <?php if($subCorrect > 0 || $subWrong > 0): ?>
@@ -750,7 +888,11 @@ try {
                                     <?php echo htmlspecialchars($topicName); ?>
                                 </h4>
                                 <p class="text-[10px] text-slate-400">
-                                    <?php echo $hasHistory ? count($history).' işlem kaydı' : 'İşlem yok'; ?>
+                                    <?php
+                                    if ($hasHistory)                { echo count($history) . ' işlem kaydı'; }
+                                    elseif (!empty($t['assigned'])) { echo '<span class="text-[#d68625] font-bold">📌 Görev verildi</span> · henüz işlem yok'; }
+                                    else                            { echo 'İşlem yok'; }
+                                    ?>
                                 </p>
                             </div>
                             
