@@ -108,8 +108,8 @@ foreach (($raw_items ?? []) as $it) {
                 <div class="ps-pane" data-pspane="mufredat">
                     <!-- Ders combobox: yaz → anında eşleş, tıkla → tam liste. Eşleşme yoksa özel ders. -->
                     <div class="relative">
-                        <input id="psSubjInput" autocomplete="off" placeholder="Ders yaz veya seç... (m → Matematik)"
-                               class="w-full bg-white border border-red-300 rounded-lg text-[11px] font-semibold text-slate-700 p-2 pr-6 outline-none focus:border-red-500">
+                        <input id="psSubjInput" autocomplete="off" placeholder="Ders yaz veya seç..."
+                               class="w-full bg-[#223488]/[0.06] border-2 border-[#223488]/30 rounded-lg text-[11px] font-bold text-[#223488] p-2 pr-6 outline-none focus:bg-white focus:border-[#223488] transition placeholder:text-[#223488]/50">
                         <button type="button" id="psSubjClear" class="hidden absolute right-1.5 top-1.5 text-slate-300 hover:text-red-500 text-xs font-black px-1" title="Ders seçimini temizle">✕</button>
                         <div id="psSubjDrop" class="hidden absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto custom-scrollbar bg-white border border-slate-200 rounded-lg shadow-xl z-[70]"></div>
                     </div>
@@ -127,7 +127,7 @@ foreach (($raw_items ?? []) as $it) {
 
             <!-- Konu ara -->
             <div class="p-2.5 pb-1.5 flex-shrink-0">
-                <input id="psSearch" type="search" placeholder="🔍 Konu yaz... (po → Polinomlar)" class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 p-2 outline-none focus:border-[#223488]">
+                <input id="psSearch" type="search" placeholder="🔍 Konu yaz..." class="w-full bg-[#ec9731]/[0.07] border-2 border-[#ec9731]/30 rounded-lg text-[11px] font-bold text-[#d68625] p-2 outline-none focus:bg-white focus:border-[#ec9731] transition placeholder:text-[#ec9731]/60">
             </div>
 
             <!-- Sürüklenebilir konu listesi -->
