@@ -90,11 +90,12 @@
                         <label class="block text-[10px] font-bold text-[#223488]/70 uppercase mb-1.5 ml-1">Ders Adı</label>
                         <input id="eduManualSubject" placeholder="ÖRN: GEOMETRİ" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 uppercase focus:bg-white focus:border-[#223488] outline-none disabled:opacity-60">
                     </div>
-                    <div>
+                    <div class="relative">
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Konu / Not</label>
-                        <input id="eduManualTopic" placeholder="ÖRN: ÜÇGENLER TEKRAR" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 uppercase focus:bg-white focus:border-[#223488] outline-none disabled:opacity-60">
+                        <input id="eduManualTopic" autocomplete="off" placeholder="ÖRN: ÜÇGENLER TEKRAR" class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 font-medium text-slate-700 uppercase focus:bg-white focus:border-[#223488] outline-none disabled:opacity-60">
+                        <div id="eduManualAc" class="hidden absolute z-[60] left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto custom-scrollbar"></div>
                     </div>
-                    <p class="text-[10px] text-slate-400">Manuel görevler analizde <b>"Diğer"</b> başlığı altında listelenir.</p>
+                    <p class="text-[10px] text-slate-400">Yazarken müfredatta eşleşen konu çıkarsa <b>seç</b> → göreve bağlanır (analizde doğru derste sayılır). Eşleşme yoksa serbest metin olarak kaydedilir.</p>
                 </div>
 
                 <!-- Video görev bilgi bandı (video kaynak seçilince görünür) -->
@@ -568,12 +569,67 @@ if (!empty($sid)) {
     manSubj.addEventListener('input', manualSync);
     manTopic.addEventListener('input', manualSync);
 
+    // ── MANUEL akıllı eşleşme: yazınca müfredatta ara, seçince göreve bağla ──
+    // (Yeni "Görev Seç" combobox'ıyla aynı mantık — manuel giriş artık "Diğer"
+    //  yerine mümkünse edu_topic_id'ye bağlanır; istatistikler doğru sayılır.)
+    var manAc = document.getElementById('eduManualAc');
+    var MAN_TOPICS = null, manTreePromise = null;
+    function manNorm(s){ return String(s==null?'':s).replace(/İ/g,'i').replace(/I/g,'ı').toLocaleLowerCase('tr-TR').replace(/\s+/g,' ').trim(); }
+    function loadManTree(){
+        if (manTreePromise) return manTreePromise;
+        manTreePromise = fetch(API + '?action=tree', {credentials:'same-origin'}).then(r=>r.json()).then(function(j){
+            MAN_TOPICS = [];
+            if (j.ok) (j.data||[]).forEach(function(c){ (c.subjects||[]).forEach(function(s){ (s.topics||[]).forEach(function(t){
+                MAN_TOPICS.push({ id:t.id, t:t.topic_name, s:s.lesson_name, c:c.name, tn:manNorm(t.topic_name), sn:manNorm(s.lesson_name) });
+            }); }); });
+        }).catch(function(){ manTreePromise = null; });
+        return manTreePromise;
+    }
+    function manAcHide(){ if (manAc){ manAc.classList.add('hidden'); manAc.innerHTML = ''; } }
+    function manAcRender(){
+        if (!manAc || !MAN_TOPICS) return;
+        var q = manNorm(manTopic.value);
+        if (q.length < 1 || manTopic.disabled) { manAcHide(); return; }
+        var subjQ = manNorm(manSubj.value);
+        var matches = MAN_TOPICS.filter(function(x){ return x.tn.indexOf(q) !== -1 && (!subjQ || x.sn.indexOf(subjQ) !== -1); });
+        if (!matches.length && subjQ) matches = MAN_TOPICS.filter(function(x){ return x.tn.indexOf(q) !== -1; });
+        if (!matches.length) { manAcHide(); return; }
+        manAc.innerHTML = matches.slice(0,25).map(function(x){
+            return '<button type="button" data-i="'+MAN_TOPICS.indexOf(x)+'" class="man-ac-opt w-full flex items-center justify-between gap-2 text-left px-3 py-2 text-xs hover:bg-indigo-50 border-b border-slate-50">' +
+                '<span class="font-bold text-slate-700 truncate">'+esc(x.t)+'</span>' +
+                '<span class="text-[9px] font-black text-slate-400 bg-slate-100 rounded px-1 py-0.5 shrink-0">'+esc(x.c+' › '+x.s)+'</span></button>';
+        }).join('');
+        manAc.classList.remove('hidden');
+        manAc.querySelectorAll('.man-ac-opt').forEach(function(opt){
+            opt.addEventListener('mousedown', function(ev){ ev.preventDefault(); manAcPick(MAN_TOPICS[parseInt(opt.dataset.i,10)]); });
+        });
+    }
+    function manAcPick(x){
+        if (!x) return;
+        setChosen(x.id, x.s, x.t);   // edu_topic_id bağlanır — artık orphan/"Diğer" değil
+        manSubj.value  = x.s.toLocaleUpperCase('tr-TR');
+        manTopic.value = x.t.toLocaleUpperCase('tr-TR');
+        manAcHide();
+    }
+    manTopic.addEventListener('focus', function(){ loadManTree().then(manAcRender); });
+    manTopic.addEventListener('input', function(){ loadManTree().then(manAcRender); });
+    manSubj.addEventListener('input', function(){ if (manAc && !manAc.classList.contains('hidden')) manAcRender(); });
+    manTopic.addEventListener('blur', function(){ setTimeout(manAcHide, 150); });
+
     // ── İsimsiz görev kaydını engelle ──
     // Ne müfredat/kaynak bağlantısı ne de manuel ders/konu adı varsa kaydetme.
     var scheduleFormEl = document.getElementById('scheduleFormV3');
     if (scheduleFormEl) {
         scheduleFormEl.addEventListener('submit', function (e) {
             var hasEdu = !!eduIdEl.value;
+            // Güvenlik ağı: manuel yazılan konu müfredatla TAM eşleşiyorsa otomatik
+            // bağla — öğretmen listeden seçmeyi unutsa bile orphan kayıt oluşmaz.
+            if (!hasEdu && MAN_TOPICS && (ctEl.value || '').trim()) {
+                var qn = manNorm(ctEl.value), sn = manNorm(csEl.value);
+                var exact = MAN_TOPICS.find(function(x){ return x.tn === qn && (!sn || x.sn === sn); })
+                         || MAN_TOPICS.find(function(x){ return x.tn === qn; });
+                if (exact) { setChosen(exact.id, exact.s, exact.t); hasEdu = true; }
+            }
             var hasManual = (csEl.value || '').trim() !== '' || (ctEl.value || '').trim() !== '';
             if (!hasEdu && !hasManual) {
                 e.preventDefault();

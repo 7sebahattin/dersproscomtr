@@ -114,6 +114,25 @@ $B = defined('BASE_URL') ? BASE_URL : '';
             <p class="text-sm text-slate-500 mt-1">Kendi kategori, ders ve konularınızı ekleyin. 🔒 genel (onaylı) içeriktir, değiştirilemez; ★ size aittir.</p>
         </div>
         <div class="flex gap-2">
+            <?php
+            // Eşleşmemiş (manuel girilmiş) görev grubu sayısı — rozet
+            $unmatchedCnt = 0;
+            try {
+                $ust = $pdo->prepare("SELECT COUNT(DISTINCT CONCAT(COALESCE(si.custom_subject,''),'|',COALESCE(si.custom_topic,'')))
+                    FROM schedule_items si
+                    JOIN coaching_relationships cr ON cr.student_id = si.student_id AND cr.teacher_id = ?
+                    WHERE si.edu_topic_id IS NULL AND si.topic_id IS NULL
+                      AND (COALESCE(si.custom_subject,'') <> '' OR COALESCE(si.custom_topic,'') <> '')");
+                $ust->execute([$uid]);
+                $unmatchedCnt = (int)$ust->fetchColumn();
+            } catch (Throwable $e) {}
+            ?>
+            <a href="<?= $B ?>/koc/konu_eslestir.php" class="relative bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-700 shadow-sm" title="Manuel girilmiş görevleri müfredat konularına bağla">
+                🧩 Konuları Eşleştir
+                <?php if ($unmatchedCnt > 0): ?>
+                <span class="absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black leading-5 text-center"><?= $unmatchedCnt ?></span>
+                <?php endif; ?>
+            </a>
             <a href="<?= $B ?>/education_kaynaklar.php" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-sm">🔗 Kaynak Havuzu</a>
             <a href="<?= $B ?>/index.php" class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-50">Panel</a>
         </div>
