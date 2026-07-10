@@ -586,7 +586,7 @@ include 'header.php';
                                     <span class="text-[10px] text-slate-400"><?php echo $dt->format('d.m.Y'); ?></span>
                                 </div>
                                 <p class="font-bold text-slate-800 text-xs leading-snug"><?php echo htmlspecialchars($upd['title']); ?></p>
-                                <p class="text-slate-500 text-[11px] mt-1 leading-relaxed line-clamp-2"><?php echo htmlspecialchars($upd['content']); ?></p>
+                                <p class="text-slate-500 text-[11px] mt-1 leading-relaxed whitespace-pre-line"><?php echo nl2br(htmlspecialchars($upd['content'])); ?></p>
                             </div>
                             <?php endforeach; ?>
                         </div>
