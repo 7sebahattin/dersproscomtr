@@ -394,7 +394,13 @@ foreach (($raw_items ?? []) as $it) {
     };
 
     // ── Tahta render ──
-    var STATUS_META = { bekliyor:['⏳','border-slate-300'], yapildi:['✅','border-green-300'], yarim:['⚠️','border-orange-400'], yapilmadi:['❌','border-red-400'] };
+    // Durum renkleri: kenarlık + arka plan birlikte (beyaz üstünde net seçilsin)
+    var STATUS_META = {
+        bekliyor:  ['⏳', 'border-slate-300 bg-white'],
+        yapildi:   ['✅', 'border-green-500 bg-green-100'],
+        yarim:     ['⚠️', 'border-orange-500 bg-orange-100'],
+        yapilmadi: ['❌', 'border-red-500 bg-red-100']
+    };
     function renderBoard(){
         document.querySelectorAll('#plannerStudio .ps-drop').forEach(function(zone){
             var date = zone.dataset.date;
@@ -424,7 +430,7 @@ foreach (($raw_items ?? []) as $it) {
         var sm = STATUS_META[c.status] || STATUS_META.bekliyor;
         var actMeta = { soru:['Soru','bg-[#223488]'], konu:['Dakika','bg-[#ec9731]'], video:['Video','bg-red-600'] };
         var am = actMeta[c.action_type] || actMeta.soru;
-        el.className = 'ps-card group rounded-lg border-l-4 border bg-white p-2 shadow-sm cursor-pointer transition hover:shadow-md ' + sm[1] +
+        el.className = 'ps-card group rounded-lg border-l-4 border p-2 shadow-sm cursor-pointer transition hover:shadow-md ' + sm[1] +
                        (isNew ? ' ring-2 ring-indigo-200' : (isMod ? ' ring-2 ring-amber-200' : ''));
         el.draggable = true;
         el.innerHTML =
