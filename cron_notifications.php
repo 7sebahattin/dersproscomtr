@@ -102,6 +102,9 @@ $notif_defaults = [
     'B_22_no'  => ['hour'=>22, 'title'=>'🌙 Bugün Çalışmayı Unutma',                  'body'=>'Sisteme girdin ama henüz hiç görev işaretlemedin. Başarı için her gün düzenli çalışmak şart!'],
     'B_22_done'=> ['hour'=>22, 'title'=>'🎉 Harika Bir Gün!',                          'body'=>'Tebrikler! Bugünkü tüm görevlerini tamamladın. Yarının programına da göz atmayı unutma!'],
     'C'        => ['hour'=>null,'title'=>null,'body'=>null],
+    // Öğretmene giden özet bildirimler (student_id her zaman NULL kaydedilir)
+    'T_LOGIN'  => ['hour'=>17, 'title'=>'👀 Giriş Yapmayan Öğrenciler',  'body'=>'{toplam} öğrenciden {sayi} tanesi bugün sisteme hiç girmedi: {isimler}'],
+    'T_TASKS'  => ['hour'=>22, 'title'=>'📉 Görev Yapmayan Öğrenciler', 'body'=>'Bugün görevi olan {toplam} öğrenciden {sayi} tanesi henüz hiç görev işaretlemedi: {isimler}'],
 ];
 
 function resolve_notif(PDO $pdo, int $teacher_id, int $student_id, string $scenario, string $field, array $defaults): mixed {
@@ -427,6 +430,84 @@ foreach ($students as $student) {
     } catch (Throwable $e) {
         cron_log("  [HATA] Durum C sorgusu: " . $e->getMessage());
     }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ÖĞRETMEN BİLDİRİMLERİ — kendi telefonuna özet:
+//   T_LOGIN: bugün görevi olup sisteme hiç girmeyen öğrenciler (vars. 17:00)
+//   T_TASKS: bugün görevi olup hiç görev işaretlemeyen öğrenciler (vars. 22:00)
+// Ayarlar notification_settings'te (teacher_id, student_id=NULL, scenario=T_*).
+// Tekrar koruması push_notification_log üzerinden (student_id sütununa
+// öğretmenin user id'si yazılır — aynı gün aynı tip ikinci kez gitmez).
+// ════════════════════════════════════════════════════════════════════════════
+try {
+    $teachers = $pdo->query("
+        SELECT DISTINCT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name
+        FROM users u
+        JOIN push_subscriptions ps ON ps.student_id = u.id
+        WHERE u.role = 'teacher' AND u.push_notifications_enabled = 1
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) { $teachers = []; }
+
+if ($teachers) cron_log("\nÖğretmen bildirimleri — abone öğretmen sayısı: " . count($teachers));
+
+foreach ($teachers as $teacher) {
+    $tid = (int)$teacher['id'];
+
+    $subStmt = $pdo->prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE student_id = ?");
+    $subStmt->execute([$tid]);
+    $teacher['subscriptions'] = $subStmt->fetchAll(PDO::FETCH_ASSOC);
+    if (empty($teacher['subscriptions'])) continue;
+
+    // Bugün görevi olan öğrencilerin giriş + görev durumu (tek sorguda)
+    try {
+        $ps = $pdo->prepare("
+            SELECT u.id, u.first_name, u.last_login_at,
+                   COUNT(si.id)                                                    AS total,
+                   SUM(CASE WHEN si.status IN ('yapildi','yarim') THEN 1 ELSE 0 END) AS done
+            FROM coaching_relationships cr
+            JOIN users u ON u.id = cr.student_id
+            JOIN schedule_items si ON si.student_id = u.id AND DATE(si.date) = :today
+            WHERE cr.teacher_id = :tid
+            GROUP BY u.id, u.first_name, u.last_login_at
+        ");
+        $ps->execute([':today' => $today, ':tid' => $tid]);
+        $tStudents = $ps->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        cron_log("  [T] Öğrenci sorgusu hatası: " . $e->getMessage());
+        continue;
+    }
+
+    if (!$tStudents) continue;
+    cron_log("► Öğretmen: {$teacher['name']} (ID: $tid) — bugün görevli öğrenci: " . count($tStudents));
+
+    // İsim listesi: en fazla 4 ad, kalanı "+N"
+    $nameList = function (array $rows): string {
+        $names = array_map(fn($r) => $r['first_name'], $rows);
+        if (count($names) > 4) return implode(', ', array_slice($names, 0, 4)) . ' +' . (count($names) - 4);
+        return implode(', ', $names);
+    };
+
+    $sendTeacher = function (string $sc, array $problem) use ($pdo, $webPush, $tid, $teacher, $tStudents, $today, $currentHour, $notif_defaults, $nameList): void {
+        if (!$problem) { cron_log("  [$sc] Sorunlu öğrenci yok, bildirim gerekmiyor."); return; }
+        if (!notif_active($pdo, $tid, 0, $sc)) { cron_log("  [$sc] Pasif, atlandı."); return; }
+        $h = (int)resolve_notif($pdo, $tid, 0, $sc, 'hour', $notif_defaults);
+        if ($currentHour < $h || $currentHour > $h + NOTIF_CATCHUP_HOURS) { cron_log("  [$sc] Saat penceresi dışında (hedef: $h)."); return; }
+        $title = resolve_notif($pdo, $tid, 0, $sc, 'title', $notif_defaults);
+        $body  = str_replace(
+            ['{toplam}', '{sayi}', '{isimler}'],
+            [count($tStudents), count($problem), $nameList($problem)],
+            resolve_notif($pdo, $tid, 0, $sc, 'body', $notif_defaults)
+        );
+        send_push($webPush, $pdo, $teacher, $sc, $today, $title, $body, BASE_URL . '/koc_paneli.php');
+    };
+
+    $notLogged = array_values(array_filter($tStudents,
+        fn($s) => !($s['last_login_at'] && substr($s['last_login_at'], 0, 10) === $today)));
+    $noTasks   = array_values(array_filter($tStudents, fn($s) => (int)$s['done'] === 0));
+
+    $sendTeacher('T_LOGIN', $notLogged);
+    $sendTeacher('T_TASKS', $noTasks);
 }
 
 cron_log("\n=== Cron tamamlandı: " . (new DateTime())->format('Y-m-d H:i:s') . " ===\n");

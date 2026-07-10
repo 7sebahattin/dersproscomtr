@@ -27,6 +27,7 @@ $upcoming_appointments = [];
 $top_question_students = [];
 $top_topic_students = [];
 $student_streaks = []; // Yeni eklenen dizi
+$today_progress = [];  // Bugünkü görev tamamlama yüzdesi (öğrenci başına)
 
 try {
     // 1. Toplam Öğrenci Sayısı
@@ -132,6 +133,29 @@ try {
     try {
         $system_updates = $pdo->query("SELECT * FROM system_updates WHERE is_published = 1 ORDER BY created_at DESC LIMIT 6")->fetchAll(PDO::FETCH_ASSOC);
     } catch (Exception $e) {}
+
+    // --- 9. BUGÜNKÜ GÖREV TAMAMLAMA DURUMU (öğrenci başına yüzde) ---
+    try {
+        $stmt = $pdo->prepare("
+            SELECT u.id, u.first_name, u.last_name, u.last_login_at,
+                   COUNT(si.id)                                                      AS total,
+                   SUM(CASE WHEN si.status IN ('yapildi','yarim') THEN 1 ELSE 0 END) AS done
+            FROM coaching_relationships cr
+            JOIN users u ON u.id = cr.student_id
+            JOIN schedule_items si ON si.student_id = u.id AND DATE(si.date) = ?
+            WHERE cr.teacher_id = ?
+            GROUP BY u.id, u.first_name, u.last_name, u.last_login_at
+        ");
+        $stmt->execute([$today, $teacher_id]);
+        $today_progress = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($today_progress as &$tp) {
+            $tp['pct']    = (int)$tp['total'] > 0 ? (int)round(100 * (int)$tp['done'] / (int)$tp['total']) : 0;
+            $tp['logged'] = $tp['last_login_at'] && substr($tp['last_login_at'], 0, 10) === $today;
+        }
+        unset($tp);
+        // Geride kalan (düşük yüzdeli) öğrenciler üstte — öğretmenin dikkatine
+        usort($today_progress, fn($a, $b) => $a['pct'] <=> $b['pct']);
+    } catch (Exception $e) { $today_progress = []; }
 
 } catch (PDOException $e) {}
 
@@ -254,6 +278,51 @@ include 'header.php';
                             </div>
                             <h3 class="font-bold text-red-700 text-xs group-hover:text-slate-700 transition-colors">Hata Bildir</h3>
                         </button>
+                    </div>
+                </div>
+
+                <!-- BUGÜNKÜ GÖREV DURUMU (öğrenci başına yüzde) -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-[#1a1a2e] to-[#223488] px-5 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-chart-simple text-[#ec9731]"></i>
+                            <h2 class="text-xs font-bold text-white uppercase tracking-wider">Bugünkü Görev Durumu</h2>
+                        </div>
+                        <span class="text-[10px] text-blue-200 font-bold"><?php echo date('d.m.Y'); ?></span>
+                    </div>
+                    <div class="p-5">
+                    <?php if (empty($today_progress)): ?>
+                        <div class="text-center py-6 text-slate-400 text-sm">Bugün görevi olan öğrenci yok.</div>
+                    <?php else: ?>
+                        <div class="space-y-3">
+                        <?php foreach ($today_progress as $tp):
+                            $pct    = (int)$tp['pct'];
+                            $barCls = $pct >= 67 ? 'bg-green-500' : ($pct >= 34 ? 'bg-[#ec9731]' : 'bg-red-500');
+                            $txtCls = $pct >= 67 ? 'text-green-600' : ($pct >= 34 ? 'text-[#d68625]' : 'text-red-500');
+                        ?>
+                            <a href="<?php echo BASE_URL; ?>/koc_paneli.php?student_id=<?php echo (int)$tp['id']; ?>"
+                               class="block p-3 rounded-xl bg-slate-50 hover:bg-blue-50 transition-colors">
+                                <div class="flex items-center justify-between gap-3 mb-1.5">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="w-7 h-7 rounded-full bg-[#223488] text-white text-xs font-black flex items-center justify-center shrink-0"><?php echo mb_strtoupper(mb_substr($tp['first_name'], 0, 1, 'UTF-8'), 'UTF-8'); ?></span>
+                                        <span class="font-bold text-slate-700 text-sm truncate"><?php echo htmlspecialchars($tp['first_name'] . ' ' . $tp['last_name']); ?></span>
+                                        <?php if (!$tp['logged']): ?>
+                                            <span class="text-[9px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0" title="Bugün sisteme hiç girmedi">GİRİŞ YOK</span>
+                                        <?php endif; ?>
+                                        <?php if ($pct >= 100): ?><span class="shrink-0">🎉</span><?php endif; ?>
+                                    </div>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <span class="text-[10px] font-bold text-slate-400"><?php echo (int)$tp['done']; ?>/<?php echo (int)$tp['total']; ?> görev</span>
+                                        <span class="text-sm font-black <?php echo $txtCls; ?> w-11 text-right">%<?php echo $pct; ?></span>
+                                    </div>
+                                </div>
+                                <div class="h-2 rounded-full bg-slate-200 overflow-hidden">
+                                    <div class="h-full rounded-full <?php echo $barCls; ?>" style="width: <?php echo $pct; ?>%"></div>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                     </div>
                 </div>
 

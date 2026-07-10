@@ -509,18 +509,36 @@ if ($sid) {
             ];
         }
 
+        // Konu başına verilen görev SAYISI (durumdan bağımsız).
+        // Kapsama yüzdesi + FAZ sistemi için: faz N = her konuya en az N görev.
+        $assigned_topics = [];
+        try {
+            $asg = $pdo->prepare("
+                SELECT CAST(topic_id AS CHAR) AS k, COUNT(*) AS c FROM schedule_items
+                WHERE student_id = ? AND topic_id IS NOT NULL GROUP BY topic_id
+                UNION ALL
+                SELECT CONCAT('edu_', edu_topic_id) AS k, COUNT(*) AS c FROM schedule_items
+                WHERE student_id = ? AND edu_topic_id IS NOT NULL GROUP BY edu_topic_id
+            ");
+            $asg->execute([$sid, $sid]);
+            foreach ($asg->fetchAll(PDO::FETCH_ASSOC) as $ar) {
+                $assigned_topics[$ar['k']] = (int)$ar['c'];
+            }
+        } catch (Exception $e) {}
+
         // 1) ESKİ koçluk müfredatı (topic_id bazlı) — dokunulmadı
         $catFilter = ($student_level == 'Ortaokul') ? "category = 'LGS'" : "category IN ('TYT', 'AYT')";
         $subs = $pdo->query("SELECT * FROM coaching_subjects WHERE $catFilter ORDER BY category, name")->fetchAll();
         foreach($subs as $sub) {
             $tops = $pdo->prepare("SELECT * FROM coaching_topics WHERE subject_id = ?"); $tops->execute([$sub['id']]); $t_list = $tops->fetchAll();
-            $sub_data = ['subject_name'=>$sub['name'], 'name'=>$sub['name'], 'category'=>$sub['category'], 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
+            $sub_data = ['subject_name'=>$sub['name'], 'name'=>$sub['name'], 'category'=>$sub['category'], 'src'=>'old', 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
             foreach($t_list as $t) {
                 $stats = $topic_stats[$t['id']] ?? ['total_questions'=>0, 'total_topics'=>0, 'total_videos'=>0, 'history'=>[]];
                 $sub_data['q_total'] += $stats['total_questions'];
                 $sub_data['t_total'] += $stats['total_topics'];
                 $sub_data['v_total'] += ($stats['total_videos'] ?? 0);
-                $sub_data['topics'][] = ['id'=>$t['id'], 'name'=>$t['name'], 'q_count'=>$stats['total_questions'], 't_count'=>$stats['total_topics'], 'v_count'=>($stats['total_videos'] ?? 0), 'history'=>$stats['history']];
+                $asgC = (int)($assigned_topics[(string)$t['id']] ?? 0);
+                $sub_data['topics'][] = ['id'=>$t['id'], 'name'=>$t['name'], 'q_count'=>$stats['total_questions'], 't_count'=>$stats['total_topics'], 'v_count'=>($stats['total_videos'] ?? 0), 'history'=>$stats['history'], 'assigned'=>$asgC > 0, 'asg_count'=>$asgC];
             }
             $progress_data[] = $sub_data;
         }
@@ -535,14 +553,15 @@ if ($sid) {
                     $eduTops = $pdo->prepare("SELECT * FROM education_topics WHERE subject_id = ? ORDER BY display_order, topic_name");
                     $eduTops->execute([$esub['id']]);
                     $et_list = $eduTops->fetchAll(PDO::FETCH_ASSOC);
-                    $esub_data = ['subject_name'=>$esub['lesson_name'], 'name'=>$esub['lesson_name'], 'category'=>$eduCat['name'], 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
+                    $esub_data = ['subject_name'=>$esub['lesson_name'], 'name'=>$esub['lesson_name'], 'category'=>$eduCat['name'], 'src'=>'edu', 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
                     foreach ($et_list as $et) {
                         $key = 'edu_' . $et['id'];
                         $stats = $topic_stats[$key] ?? ['total_questions'=>0, 'total_topics'=>0, 'total_videos'=>0, 'history'=>[]];
                         $esub_data['q_total'] += $stats['total_questions'];
                         $esub_data['t_total'] += $stats['total_topics'];
                         $esub_data['v_total'] += ($stats['total_videos'] ?? 0);
-                        $esub_data['topics'][] = ['id'=>$et['id'], 'name'=>$et['topic_name'], 'q_count'=>$stats['total_questions'], 't_count'=>$stats['total_topics'], 'v_count'=>($stats['total_videos'] ?? 0), 'history'=>$stats['history']];
+                        $asgC = (int)($assigned_topics[$key] ?? 0);
+                        $esub_data['topics'][] = ['id'=>$et['id'], 'name'=>$et['topic_name'], 'q_count'=>$stats['total_questions'], 't_count'=>$stats['total_topics'], 'v_count'=>($stats['total_videos'] ?? 0), 'history'=>$stats['history'], 'assigned'=>$asgC > 0, 'asg_count'=>$asgC];
                     }
                     $progress_data[] = $esub_data;
                 }

@@ -42,6 +42,9 @@ $defaults = [
     'B_22_no'  => ['hour'=>22, 'title'=>'🌙 Bugün Çalışmayı Unutma',                   'body'=>'Sisteme girdin ama henüz hiç görev işaretlemedin. Başarı için her gün düzenli çalışmak şart!'],
     'B_22_done'=> ['hour'=>22, 'title'=>'🎉 Harika Bir Gün!',                           'body'=>'Tebrikler! Bugünkü tüm görevlerini tamamladın. Yarının programına da göz atmayı unutma!'],
     'C'        => ['hour'=>null,'title'=>null,                                           'body'=>null],
+    // Öğretmene giden özet bildirimler (her zaman student_id=NULL kaydedilir)
+    'T_LOGIN'  => ['hour'=>17, 'title'=>'👀 Giriş Yapmayan Öğrenciler',  'body'=>'{toplam} öğrenciden {sayi} tanesi bugün sisteme hiç girmedi: {isimler}'],
+    'T_TASKS'  => ['hour'=>22, 'title'=>'📉 Görev Yapmayan Öğrenciler', 'body'=>'Bugün görevi olan {toplam} öğrenciden {sayi} tanesi henüz hiç görev işaretlemedi: {isimler}'],
 ];
 
 // ── İnsani etiketler (teknik kod → anlaşılır ad + açıklama) ───────────────────
@@ -55,6 +58,8 @@ $labels = [
     'B_22_no'  => ['icon'=>'🌙', 'name'=>'Gece — görev yok',      'desc'=>'Girdi ama gün sonunda hiç görev işaretlemediyse.'],
     'B_22_done'=> ['icon'=>'🎉', 'name'=>'Tebrik mesajı',         'desc'=>'Tüm görevleri tamamladıysa kutlama.'],
     'C'        => ['icon'=>'⏱️', 'name'=>'Göreve özel saat',      'desc'=>'Bir göreve saat atandığında tam o saatte hatırlatır.'],
+    'T_LOGIN'  => ['icon'=>'👀', 'name'=>'Giriş yapmayanlar',     'desc'=>'Bugün görevi olup sisteme hiç girmeyen öğrencilerin özeti sana gelir.'],
+    'T_TASKS'  => ['icon'=>'📉', 'name'=>'Görev yapmayanlar',     'desc'=>'Bugün görevi olup hiç görev işaretlemeyen öğrencilerin özeti sana gelir.'],
 ];
 
 // ── Hazır şablonlar: hangi senaryolar açık olsun ─────────────────────────────
@@ -67,6 +72,9 @@ $presets = [
 $groupA = ['A_12','A_16','A_20','A_22'];
 $groupB = ['B_17','B_20','B_22_no','B_22_done'];
 $allScenarios = array_merge($groupA, $groupB, ['C']);
+// Öğretmen senaryoları ana anahtardan ve öğrenci filtresinden BAĞIMSIZDIR;
+// yalnızca "Tüm Öğrenciler" görünümünde gösterilir (student_id=NULL kaydedilir).
+$teacherScenarios = ['T_LOGIN','T_TASKS'];
 
 // ── Seçili öğrenci için ayarları çek ─────────────────────────────────────────
 function get_settings(PDO $pdo, int $teacher_id, ?int $student_id, array $defaults): array {
@@ -96,7 +104,7 @@ $masterOn = false;
 foreach ($allScenarios as $sc) { if (!empty($settings[$sc]['is_active'])) { $masterOn = true; break; } }
 
 // Tek bir senaryo kartını (insani başlıkla) basan yardımcı
-function render_notif_row(string $sc, array $s, array $labels, bool $hasHour): void {
+function render_notif_row(string $sc, array $s, array $labels, bool $hasHour, string $hint = '{ad} ve {toplam} otomatik doldurulur'): void {
     $L = $labels[$sc];
     ?>
     <div class="notif-card border border-slate-100 rounded-2xl bg-white overflow-hidden" data-scenario="<?php echo $sc; ?>">
@@ -134,7 +142,7 @@ function render_notif_row(string $sc, array $s, array $labels, bool $hasHour): v
                       rows="2" placeholder="Bildirim metni"><?php echo htmlspecialchars($s['body']); ?></textarea>
             <div class="flex justify-between items-center">
                 <button type="button" onclick="resetScenario('<?php echo $sc; ?>')" class="text-[11px] text-slate-400 hover:text-red-500 font-medium">↺ Varsayılan metne dön</button>
-                <span class="text-[10px] text-slate-400">{ad} ve {toplam} otomatik doldurulur</span>
+                <span class="text-[10px] text-slate-400"><?php echo htmlspecialchars($hint); ?></span>
             </div>
         </div>
         <?php else: ?>
@@ -195,6 +203,34 @@ function render_notif_row(string $sc, array $s, array $labels, bool $hasHour): v
             <div id="testPushResult" class="hidden mt-3 text-xs rounded-xl border p-3"></div>
         </div>
     </div>
+
+    <?php if (!$filter_sid): ?>
+    <!-- 1.5) SANA GELEN BİLDİRİMLER (öğretmen özeti) -->
+    <div class="bg-white rounded-2xl border-2 border-indigo-100 p-5 mb-5 shadow-sm">
+        <label class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-1 block">
+            📣 Sana gelen bildirimler
+            <span class="ml-1 text-[9px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full align-middle">YENİ</span>
+        </label>
+        <p class="text-xs text-slate-400 mb-3">Öğrencilerinin günlük durumu hakkında <b>senin telefonuna</b> gelen özetler. Ana anahtardan bağımsızdır; saatlerini aşağıdan ayarlayabilirsin.</p>
+
+        <div class="space-y-2">
+            <?php foreach ($teacherScenarios as $sc) render_notif_row($sc, $settings[$sc], $labels, true, '{toplam}, {sayi} ve {isimler} otomatik doldurulur'); ?>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-2">
+            <button type="button" id="teacherPushBtn" onclick="teacherEnablePush()"
+                    class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition">
+                🔔 Bu cihazda bildirimlere izin ver
+            </button>
+            <button type="button" id="teacherTestBtn" onclick="sendTestPushSelf()"
+                    class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition">
+                🧪 Kendime test gönder
+            </button>
+            <span class="text-[11px] text-slate-400">Bildirim alacağın her cihazda bir kez izin vermen yeterli.</span>
+        </div>
+        <div id="teacherPushResult" class="hidden mt-3 text-xs rounded-xl border p-3"></div>
+    </div>
+    <?php endif; ?>
 
     <!-- 2) Ana Anahtar -->
     <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-5 shadow-sm">
@@ -304,6 +340,9 @@ function render_notif_row(string $sc, array $s, array $labels, bool $hasHour): v
 const DEFAULTS = <?php echo json_encode($defaults, JSON_UNESCAPED_UNICODE); ?>;
 const PRESETS  = <?php echo json_encode($presets, JSON_UNESCAPED_UNICODE); ?>;
 const ALL_SC   = <?php echo json_encode($allScenarios, JSON_UNESCAPED_UNICODE); ?>;
+// Öğretmen senaryoları: yalnızca "Tüm Öğrenciler" görünümünde vardır ve
+// ana anahtardan etkilenmez (her zaman student_id=NULL kaydedilir).
+const T_SC     = <?php echo json_encode($filter_sid ? [] : $teacherScenarios, JSON_UNESCAPED_UNICODE); ?>;
 const FILTER_SID = <?php echo $filter_sid ?: 'null'; ?>;
 
 function showToast(msg, ok=true) {
@@ -394,6 +433,20 @@ async function saveAll() {
             if (j.success) ok++; else fail++;
         } catch(e) { fail++; }
     }
+
+    // Öğretmen senaryoları: ana anahtardan BAĞIMSIZ, her zaman genel (NULL) kayıt
+    for (const sc of T_SC) {
+        const data = getCardData(sc);
+        if (!data) continue;
+        try {
+            const res = await fetch('<?php echo $B; ?>/ajax/save_notif_settings.php', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ scenario: sc, student_id: null, ...data })
+            });
+            const j = await res.json();
+            if (j.success) ok++; else fail++;
+        } catch(e) { fail++; }
+    }
     btn.disabled = false; btn.textContent = old;
     if (fail === 0) showToast('Tüm ayarlar kaydedildi ✅', true);
     else showToast(`${ok} kaydedildi, ${fail} başarısız`, false);
@@ -460,6 +513,97 @@ function sendTestPush(studentId) {
     })
     .finally(() => {
         if (btn) { btn.disabled = false; btn.textContent = '🔔 Şimdi Test Et'; }
+    });
+}
+
+// ── Öğretmen: bu cihazda bildirim izni + abonelik ──
+function tpShow(msg, ok) {
+    const box = document.getElementById('teacherPushResult');
+    if (!box) return;
+    box.className = 'mt-3 text-xs rounded-xl border p-3 break-words ' +
+        (ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700');
+    box.classList.remove('hidden');
+    box.innerHTML = msg;
+}
+
+async function teacherEnablePush() {
+    const btn = document.getElementById('teacherPushBtn');
+    if (btn) { btn.disabled = true; }
+    try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            return tpShow('Bu tarayıcı web push desteklemiyor. (iPhone\'da site "Ana Ekrana Ekle" ile kurulmalı.)', false);
+        }
+        if (!window.__VAPID_PUB__) return tpShow('Sunucuda VAPID anahtarı bulunamadı (push_setup.php).', false);
+
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') return tpShow('Bildirim izni verilmedi. Tarayıcının site ayarlarından bildirim iznini açman gerekiyor.', false);
+
+        const reg = await navigator.serviceWorker.register('<?php echo $B; ?>/sw.js', { scope: '<?php echo $B; ?>/' });
+        await navigator.serviceWorker.ready;
+
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+            const key = window.__VAPID_PUB__;
+            const pad = '='.repeat((4 - key.length % 4) % 4);
+            const raw = atob((key + pad).replace(/-/g, '+').replace(/_/g, '/'));
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
+            });
+        }
+        const r = await fetch('<?php echo $B; ?>/ajax/push_subscribe.php', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ subscription: sub.toJSON(), action: 'subscribe' })
+        });
+        const j = await r.json();
+        tpShow(j.ok
+            ? '✅ Bu cihaz kaydedildi — artık öğretmen bildirimleri alacaksın. "🧪 Kendime test gönder" ile hemen deneyebilirsin.'
+            : ('Kayıt hatası: ' + (j.msg || 'bilinmeyen')), !!j.ok);
+    } catch (e) {
+        tpShow('Hata: ' + (e && e.message ? e.message : 'abonelik oluşturulamadı'), false);
+    } finally {
+        if (btn) { btn.disabled = false; }
+    }
+}
+
+// ── Öğretmen: kendine anlık test ──
+function sendTestPushSelf() {
+    const btn = document.getElementById('teacherTestBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Gönderiliyor...'; }
+    tpShow('Test bildirimi gönderiliyor...', true);
+
+    fetch('<?php echo $B; ?>/ajax/push_test.php', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ target: 'self' })
+    })
+    .then(async r => {
+        const t = await r.text();
+        try { return JSON.parse(t); }
+        catch(e) { throw new Error('Sunucu JSON döndürmedi (HTTP ' + r.status + ').'); }
+    })
+    .then(res => {
+        let html = '<p class="font-bold mb-1">' + (res.ok ? '✅ ' : '⚠️ ') + (res.msg || '') + '</p>';
+        if (typeof res.device_count !== 'undefined') {
+            html += '<p class="text-slate-500">Kayıtlı cihaz: <b>' + res.device_count + '</b></p>';
+        }
+        if (res.diagnostics && res.diagnostics.length) {
+            html += '<ul class="mt-1 list-disc list-inside text-amber-700">';
+            res.diagnostics.forEach(d => html += '<li>' + d + '</li>');
+            html += '</ul>';
+        }
+        if (res.results && res.results.length) {
+            html += '<ul class="mt-1 space-y-0.5">';
+            res.results.forEach(r => {
+                html += '<li>' + (r.ok ? '✅' : '❌') + ' <b>' + r.device + '</b>'
+                     + (r.http ? ' (HTTP ' + r.http + ')' : '') + ' — ' + r.detail + '</li>';
+            });
+            html += '</ul>';
+        }
+        tpShow(html, !!res.ok);
+    })
+    .catch(err => tpShow('Hata: ' + (err && err.message ? err.message : 'test gönderilemedi.'), false))
+    .finally(() => {
+        if (btn) { btn.disabled = false; btn.textContent = '🧪 Kendime test gönder'; }
     });
 }
 </script>

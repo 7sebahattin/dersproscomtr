@@ -228,6 +228,10 @@ try {
     </a>
 <?php endif; ?>
 
+                <?php if ($isLoggedIn && $myRole === 'teacher'): ?>
+                    <a href="<?php echo $B; ?>/koc/mufredat_v2.php" class="text-slate-600 hover:text-blue-600 transition px-3 py-2 rounded-lg hover:bg-slate-50">📚 Müfredat Yükle</a>
+                <?php endif; ?>
+
                 <?php if ($isLoggedIn): ?>
                     <a href="<?php echo $linkRandevu; ?>" class="text-slate-600 hover:text-blue-600 px-3 py-2 rounded-lg hover:bg-slate-50 relative">📅 Randevu</a>
                     <a href="<?php echo $linkKocluk; ?>" class="relative inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg shadow-md transition ml-2 font-bold">
@@ -619,8 +623,9 @@ window.__VAPID_PUB__ = '<?php echo htmlspecialchars($vapidPublicKey, ENT_QUOTES)
     async function initPush() {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
-        // Öğrenci bildirimleri DB'de kapalıysa hiçbir şey yapma
-        if (MY_ROLE === 'student' && PUSH_ENABLED === 0) return;
+        // Öğrenci/öğretmen bildirimleri DB'de kapalıysa hiçbir şey yapma
+        const PUSH_ROLE_OK = (MY_ROLE === 'student' || MY_ROLE === 'teacher');
+        if (PUSH_ROLE_OK && PUSH_ENABLED === 0) return;
 
         // Tarayıcı izin durumunu kontrol et
         if (Notification.permission === 'denied') {
@@ -638,14 +643,16 @@ window.__VAPID_PUB__ = '<?php echo htmlspecialchars($vapidPublicKey, ENT_QUOTES)
         // Mevcut aboneliği kontrol et
         let sub = await reg.pushManager.getSubscription();
 
-        // Öğrenci değilse sadece mevcut aboneliği yenile, yeni izin isteme
-        if (MY_ROLE !== 'student') {
+        // Öğrenci/öğretmen değilse sadece mevcut aboneliği yenile, yeni izin isteme
+        if (!PUSH_ROLE_OK) {
             if (sub) await saveSubscription(sub);
             return;
         }
 
-        // İzin henüz istenmemişse → sor
+        // İzin henüz istenmemişse → sor (yalnızca öğrenciye otomatik sorulur;
+        // öğretmen izni Bildirim Ayarları sayfasındaki butonla verir)
         if (Notification.permission === 'default') {
+            if (MY_ROLE !== 'student') return;
             // Küçük bir gecikme: kullanıcı sayfaya yerleşsin
             setTimeout(async () => {
                 const permission = await Notification.requestPermission();

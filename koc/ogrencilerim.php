@@ -24,6 +24,26 @@ $teacher_id = $_SESSION['user_id'];
 $message = '';
 $error = '';
 
+// Sınıf/Alan kolonları (yoksa ekle — idempotent).
+// grade: 9/10/11/12/Mezun (Lise) veya 5-8 (Ortaokul); track: Sayısal/Sözel/Eşit Ağırlık (yalnızca 11/12/Mezun)
+try {
+    if ($pdo->query("SHOW COLUMNS FROM users LIKE 'grade'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN grade VARCHAR(10) DEFAULT NULL");
+    }
+    if ($pdo->query("SHOW COLUMNS FROM users LIKE 'track'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN track VARCHAR(20) DEFAULT NULL");
+    }
+} catch (Throwable $e) {}
+
+// Sınıf/Alan doğrulama: seviyeye uymayan değerleri NULL'a çevirir
+function ogr_validate_grade_track(string $level, string $grade, string $track): array {
+    $validGrades = ($level === 'Ortaokul') ? ['5','6','7','8'] : ['9','10','11','12','Mezun'];
+    if (!in_array($grade, $validGrades, true)) $grade = null;
+    $trackAllowed = ($level !== 'Ortaokul' && in_array($grade, ['11','12','Mezun'], true));
+    if (!$trackAllowed || !in_array($track, ['Sayısal','Sözel','Eşit Ağırlık'], true)) $track = null;
+    return [$grade, $track];
+}
+
 // --- İŞLEMLER (POST) ---
 
 // 1. Öğrenci Ekleme
@@ -37,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_student'])) {
     $u_phone  = trim($_POST['phone']);
     $u_pname  = trim($_POST['parent_name']  ?? '');
     $u_pphone = trim($_POST['parent_phone'] ?? '');
+    [$u_grade, $u_track] = ogr_validate_grade_track($u_level, trim($_POST['grade'] ?? ''), trim($_POST['track'] ?? ''));
 
     $check = $pdo->prepare("SELECT id FROM users WHERE username = ?");
     $check->execute([$u_user]);
@@ -46,10 +67,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_student'])) {
     } else {
         try {
             $passHash = password_hash($u_pass, PASSWORD_DEFAULT);
-            $sql = "INSERT INTO users (username, password, first_name, last_name, email, phone, parent_name, parent_phone, role, school_level, is_active, date_joined)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'student', ?, 1, NOW())";
+            $sql = "INSERT INTO users (username, password, first_name, last_name, email, phone, parent_name, parent_phone, role, school_level, grade, track, is_active, date_joined)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'student', ?, ?, ?, 1, NOW())";
             $stmt = $pdo->prepare($sql);
-            if ($stmt->execute([$u_user, $passHash, $u_name, $u_last, $u_email, $u_phone, $u_pname, $u_pphone, $u_level])) {
+            if ($stmt->execute([$u_user, $passHash, $u_name, $u_last, $u_email, $u_phone, $u_pname, $u_pphone, $u_level, $u_grade, $u_track])) {
                 $new_sid = $pdo->lastInsertId();
                 $pdo->prepare("INSERT INTO coaching_relationships (teacher_id, student_id) VALUES (?, ?)")->execute([$teacher_id, $new_sid]);
                 $message = "Öğrenci başarıyla sisteme eklendi.";
@@ -70,14 +91,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_student'])) {
     $pname = $_POST['parent_name'];
     $pphone = $_POST['parent_phone'];
     $level = $_POST['school_level'];
+    [$grade, $track] = ogr_validate_grade_track($level, trim($_POST['grade'] ?? ''), trim($_POST['track'] ?? ''));
 
     $checkRel = $pdo->prepare("SELECT id FROM coaching_relationships WHERE teacher_id = ? AND student_id = ?");
     $checkRel->execute([$teacher_id, $sid]);
 
     if ($checkRel->rowCount() > 0) {
-        $sql = "UPDATE users SET first_name=?, last_name=?, email=?, phone=?, parent_name=?, parent_phone=?, school_level=? WHERE id=?";
+        $sql = "UPDATE users SET first_name=?, last_name=?, email=?, phone=?, parent_name=?, parent_phone=?, school_level=?, grade=?, track=? WHERE id=?";
         $stmt = $pdo->prepare($sql);
-        if ($stmt->execute([$fname, $lname, $email, $phone, $pname, $pphone, $level, $sid])) {
+        if ($stmt->execute([$fname, $lname, $email, $phone, $pname, $pphone, $level, $grade, $track, $sid])) {
             $message = "Bilgiler başarıyla güncellendi.";
         } else {
             $error = "Güncelleme sırasında bir sorun oluştu.";
@@ -286,10 +308,22 @@ $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             </span>
                                             <?php endif; ?>
                                         </div>
-                                        <div class="flex items-center gap-2 mt-1">
+                                        <div class="flex items-center gap-1.5 mt-1 flex-wrap">
                                             <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 uppercase tracking-wide">
                                                 <?php echo htmlspecialchars($s['school_level']); ?>
                                             </span>
+                                            <?php if (!empty($s['grade'])): ?>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-wide">
+                                                <?php echo htmlspecialchars($s['grade'] === 'Mezun' ? 'Mezun' : $s['grade'] . '. Sınıf'); ?>
+                                            </span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($s['track'])): ?>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-wide">
+                                                <?php echo htmlspecialchars($s['track']); ?>
+                                            </span>
+                                            <?php elseif (($s['school_level'] ?? '') === 'Ortaokul'): ?>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-100 uppercase tracking-wide">LGS</span>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 </div>
@@ -409,12 +443,35 @@ $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wide mb-1.5 ml-1">Seviye</label>
                     <div class="relative">
-                        <select name="school_level" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer">
+                        <select name="school_level" id="add_level_sel" onchange="syncGradeTrack('add')" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer">
                             <option value="Lise">🎓 Lise (TYT/AYT)</option>
                             <option value="Ortaokul">🎒 Ortaokul (LGS)</option>
                         </select>
                         <i class="fa-solid fa-chevron-down absolute right-4 top-4 text-slate-400 text-xs pointer-events-none"></i>
                     </div>
+                </div>
+            </div>
+
+            <!-- SINIF + ALAN -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wide mb-1.5 ml-1">Sınıf</label>
+                    <div class="relative">
+                        <select name="grade" id="add_grade_sel" onchange="syncGradeTrack('add')" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"></select>
+                        <i class="fa-solid fa-chevron-down absolute right-4 top-4 text-slate-400 text-xs pointer-events-none"></i>
+                    </div>
+                </div>
+                <div id="add_track_wrap">
+                    <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wide mb-1.5 ml-1">Alan</label>
+                    <div class="relative">
+                        <select name="track" id="add_track_sel" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer">
+                            <option value="Sayısal">🔢 Sayısal</option>
+                            <option value="Eşit Ağırlık">⚖️ Eşit Ağırlık</option>
+                            <option value="Sözel">📖 Sözel</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down absolute right-4 top-4 text-slate-400 text-xs pointer-events-none"></i>
+                    </div>
+                    <p id="add_track_hint" class="hidden text-[10px] text-slate-400 mt-1 ml-1"></p>
                 </div>
             </div>
 
@@ -521,11 +578,34 @@ $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div>
                 <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wide mb-1.5 ml-1">Seviye</label>
                 <div class="relative">
-                    <select name="school_level" id="edit_level" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none">
+                    <select name="school_level" id="edit_level" onchange="syncGradeTrack('edit')" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none">
                         <option value="Lise">🎓 Lise (TYT/AYT)</option>
                         <option value="Ortaokul">🎒 Ortaokul (LGS)</option>
                     </select>
                     <i class="fa-solid fa-chevron-down absolute right-4 top-4 text-slate-400 text-xs pointer-events-none"></i>
+                </div>
+            </div>
+
+            <!-- SINIF + ALAN -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wide mb-1.5 ml-1">Sınıf</label>
+                    <div class="relative">
+                        <select name="grade" id="edit_grade_sel" onchange="syncGradeTrack('edit')" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none"></select>
+                        <i class="fa-solid fa-chevron-down absolute right-4 top-4 text-slate-400 text-xs pointer-events-none"></i>
+                    </div>
+                </div>
+                <div id="edit_track_wrap">
+                    <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wide mb-1.5 ml-1">Alan</label>
+                    <div class="relative">
+                        <select name="track" id="edit_track_sel" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none">
+                            <option value="Sayısal">🔢 Sayısal</option>
+                            <option value="Eşit Ağırlık">⚖️ Eşit Ağırlık</option>
+                            <option value="Sözel">📖 Sözel</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down absolute right-4 top-4 text-slate-400 text-xs pointer-events-none"></i>
+                    </div>
+                    <p id="edit_track_hint" class="hidden text-[10px] text-slate-400 mt-1 ml-1"></p>
                 </div>
             </div>
 
@@ -596,11 +676,39 @@ $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
         modal.classList.add('flex');
     }
 
+    // ── Sınıf/Alan senkronu ──
+    // Lise: 9,10 (alan yok) · 11,12,Mezun (Sayısal/Sözel/Eşit Ağırlık)
+    // Ortaokul: 5-8, alan her zaman LGS (seçilmez)
+    function syncGradeTrack(prefix, keepGrade) {
+        const levelSel = document.getElementById(prefix + '_level_sel') || document.getElementById(prefix + '_level');
+        const gradeSel = document.getElementById(prefix + '_grade_sel');
+        const trackSel = document.getElementById(prefix + '_track_sel');
+        const hint     = document.getElementById(prefix + '_track_hint');
+        if (!levelSel || !gradeSel || !trackSel) return;
+
+        const level  = levelSel.value;
+        const grades = (level === 'Ortaokul') ? ['5','6','7','8'] : ['9','10','11','12','Mezun'];
+        const cur    = keepGrade !== undefined ? keepGrade : gradeSel.value;
+
+        gradeSel.innerHTML = grades.map(g =>
+            '<option value="' + g + '">' + (g === 'Mezun' ? '🎓 Mezun' : g + '. Sınıf') + '</option>').join('');
+        gradeSel.value = grades.includes(cur) ? cur : grades[0];
+
+        const trackOk = (level !== 'Ortaokul' && ['11','12','Mezun'].includes(gradeSel.value));
+        trackSel.disabled = !trackOk;
+        trackSel.closest('div').classList.toggle('opacity-40', !trackOk);
+        if (hint) {
+            hint.classList.toggle('hidden', trackOk);
+            hint.textContent = (level === 'Ortaokul') ? 'Ortaokulda alan: LGS' : '9-10. sınıfta alan seçilmez';
+        }
+    }
+
     function openAddModal() {
         const modal = document.getElementById('addStudentModal');
         modal.classList.remove('hidden');
         modal.classList.add('flex');
-        
+        syncGradeTrack('add');
+
         // Animasyon için içeriği biraz büyüterek göster
         setTimeout(() => {
             const content = modal.querySelector('div');
@@ -618,7 +726,10 @@ $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
         document.getElementById('edit_parent').value = data.parent_name || '';
         document.getElementById('edit_parent_phone').value = data.parent_phone || '';
         document.getElementById('edit_level').value = data.school_level || 'Lise';
-        
+        syncGradeTrack('edit', data.grade || '');
+        const trackSel = document.getElementById('edit_track_sel');
+        if (trackSel && !trackSel.disabled && data.track) trackSel.value = data.track;
+
         const modal = document.getElementById('editStudentModal');
         modal.classList.remove('hidden');
         modal.classList.add('flex');

@@ -34,8 +34,10 @@ $uid  = (int)$_SESSION['user_id'];
 $role = $_SESSION['role'] ?? '';
 $body = json_decode(file_get_contents('php://input'), true) ?? [];
 
-// ── Hedef öğrenciyi belirle ───────────────────────────────────────────────────
-if ($role === 'teacher') {
+// ── Hedef kullanıcıyı belirle ─────────────────────────────────────────────────
+if ($role === 'teacher' && ($body['target'] ?? '') === 'self') {
+    $student_id = $uid; // öğretmen KENDİNE test (öğretmen bildirimleri için)
+} elseif ($role === 'teacher') {
     $student_id = (int)($body['student_id'] ?? 0);
     if ($student_id <= 0) {
         echo json_encode(['ok' => false, 'msg' => 'Test için bir öğrenci seçin.']);
@@ -82,6 +84,7 @@ if (!$student) {
 }
 
 $prefEnabled = (int)($student['push_notifications_enabled'] ?? 0);
+$isSelf      = ($student_id === $uid);
 
 $subStmt = $pdo->prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE student_id=?");
 $subStmt->execute([$student_id]);
@@ -90,12 +93,16 @@ $subs = $subStmt->fetchAll(PDO::FETCH_ASSOC);
 // ── Erken teşhis: neden gitmeyeceğini önceden söyle ──────────────────────────
 $diagnostics = [];
 if ($prefEnabled === 0) {
-    $diagnostics[] = 'Öğrencinin bildirim tercihi KAPALI (users.push_notifications_enabled = 0). Öğrenci kendi ekranından açmalı.';
+    $diagnostics[] = $isSelf
+        ? 'Bildirim tercihin KAPALI (users.push_notifications_enabled = 0). "Bu cihazda bildirimlere izin ver" ile tekrar açabilirsin.'
+        : 'Öğrencinin bildirim tercihi KAPALI (users.push_notifications_enabled = 0). Öğrenci kendi ekranından açmalı.';
 }
 if (empty($subs)) {
     echo json_encode([
         'ok'      => false,
-        'msg'     => 'Bu öğrencinin kayıtlı cihaz aboneliği yok. Öğrenci telefonunda/tarayıcısında bildirim iznini vermeli.',
+        'msg'     => $isSelf
+            ? 'Bu hesabın kayıtlı cihaz aboneliği yok. Önce "🔔 Bu cihazda bildirimlere izin ver" butonunu kullan.'
+            : 'Bu öğrencinin kayıtlı cihaz aboneliği yok. Öğrenci telefonunda/tarayıcısında bildirim iznini vermeli.',
         'pref_enabled' => $prefEnabled,
         'device_count' => 0,
         'diagnostics'  => $diagnostics,

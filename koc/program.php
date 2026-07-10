@@ -225,7 +225,7 @@
                                     <div class="font-extrabold text-slate-900 text-[13px] leading-tight truncate group-hover:text-[#223488] transition-colors">
                                         <?php echo htmlspecialchars($title); ?>
                                     </div>
-                                    <div class="text-[11px] font-semibold text-[#314595] truncate">
+                                    <div class="text-[11px] font-semibold text-[#314595] leading-snug break-words">
                                         <?php echo htmlspecialchars($subtitle); ?>
                                     </div>
                                     <?php if ($taskNote !== ''): ?>
