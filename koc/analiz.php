@@ -905,6 +905,9 @@ $insights = array_slice($insights, 0, 7);
             if (!$hasAnyHistory && $topicAsg === 0) continue;
 
             $cardRelevant = $subjectRelevant($cat, $subjectName);
+            // Sepete ekleme yalnızca YENİ müfredat (edu_topic_id) kartlarında —
+            // Planlama Stüdyosu kartları edu_topic_id ile oluşturur.
+            $isEduCard = (($sub['src'] ?? '') === 'edu');
             $covColor = $covPct >= 67 ? '#22c55e' : ($covPct >= 34 ? '#ec9731' : '#ef4444');
             $covDash  = round(2 * M_PI * 24, 2);
             $covOff   = round($covDash * (1 - min(100, $covPct) / 100), 2);
@@ -1017,6 +1020,16 @@ $insights = array_slice($insights, 0, 7);
                             </div>
                             
                             <div class="flex items-center gap-2">
+                                <?php if ($isEduCard): ?>
+                                <button type="button"
+                                        class="bskt-add-btn w-6 h-6 shrink-0 rounded-full border border-slate-200 text-slate-400 hover:border-[#223488] hover:text-[#223488] hover:bg-blue-50 text-sm font-black leading-none flex items-center justify-center transition"
+                                        data-etid="<?php echo (int)$t['id']; ?>"
+                                        data-topic="<?php echo htmlspecialchars($topicName, ENT_QUOTES); ?>"
+                                        data-subject="<?php echo htmlspecialchars($subjectName, ENT_QUOTES); ?>"
+                                        data-cat="<?php echo htmlspecialchars($cat, ENT_QUOTES); ?>"
+                                        onclick="event.stopPropagation(); anlzBasketToggle(this);"
+                                        title="Programa eklemek için sepete at">＋</button>
+                                <?php endif; ?>
                                 <?php if($qCount > 0): ?>
                                 <span class="bg-blue-50 text-[#223488] text-[10px] font-bold px-2 py-1 rounded border border-blue-100 min-w-[35px] text-center">
                                     <?php echo $qCount; ?>s
@@ -1182,7 +1195,41 @@ document.addEventListener('DOMContentLoaded', function() {
         var raporBtn = document.getElementById('btn-analiz-RAPOR');
         if(raporBtn) raporBtn.click();
     }, 100);
+
+    // Sepette olan konuların + butonlarını ✓ olarak işaretle
+    // (psBasketHas, planlayici.php'de tanımlanır; DOMContentLoaded'da hazırdır)
+    if (typeof window.psBasketHas === 'function') {
+        document.querySelectorAll('.bskt-add-btn').forEach(function(btn){
+            if (window.psBasketHas(btn.dataset.etid)) anlzMarkBasket(btn, true);
+        });
+    }
 });
+
+// ── Sepet entegrasyonu: + ile ekle, ✓ ile çıkar (Planlama Stüdyosu sepeti) ──
+function anlzMarkBasket(btn, inBasket) {
+    btn.textContent = inBasket ? '✓' : '＋';
+    btn.className = 'bskt-add-btn w-6 h-6 shrink-0 rounded-full border text-sm font-black leading-none flex items-center justify-center transition ' +
+        (inBasket
+            ? 'border-emerald-300 bg-emerald-50 text-emerald-600 hover:border-red-300 hover:bg-red-50 hover:text-red-500'
+            : 'border-slate-200 text-slate-400 hover:border-[#223488] hover:text-[#223488] hover:bg-blue-50');
+    btn.title = inBasket ? 'Sepette — çıkarmak için tıkla' : 'Programa eklemek için sepete at';
+}
+function anlzBasketToggle(btn) {
+    if (typeof window.psBasketAdd !== 'function') { alert('Sepet yalnızca masaüstü Planlama Stüdyosu ile çalışır.'); return; }
+    var id = btn.dataset.etid;
+    if (window.psBasketHas(id)) {
+        window.psBasketRemove(id);
+        anlzMarkBasket(btn, false);
+    } else {
+        window.psBasketAdd({
+            edu_topic_id: parseInt(id, 10),
+            category: btn.dataset.cat || '',
+            subject:  btn.dataset.subject || '',
+            topic:    btn.dataset.topic || ''
+        });
+        anlzMarkBasket(btn, true);
+    }
+}
 
 function showModal(title, data) {
     var modal = document.getElementById('topicDetailsModal');

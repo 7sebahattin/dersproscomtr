@@ -531,7 +531,7 @@ if ($sid) {
         $subs = $pdo->query("SELECT * FROM coaching_subjects WHERE $catFilter ORDER BY category, name")->fetchAll();
         foreach($subs as $sub) {
             $tops = $pdo->prepare("SELECT * FROM coaching_topics WHERE subject_id = ?"); $tops->execute([$sub['id']]); $t_list = $tops->fetchAll();
-            $sub_data = ['subject_name'=>$sub['name'], 'name'=>$sub['name'], 'category'=>$sub['category'], 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
+            $sub_data = ['subject_name'=>$sub['name'], 'name'=>$sub['name'], 'category'=>$sub['category'], 'src'=>'old', 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
             foreach($t_list as $t) {
                 $stats = $topic_stats[$t['id']] ?? ['total_questions'=>0, 'total_topics'=>0, 'total_videos'=>0, 'history'=>[]];
                 $sub_data['q_total'] += $stats['total_questions'];
@@ -553,7 +553,7 @@ if ($sid) {
                     $eduTops = $pdo->prepare("SELECT * FROM education_topics WHERE subject_id = ? ORDER BY display_order, topic_name");
                     $eduTops->execute([$esub['id']]);
                     $et_list = $eduTops->fetchAll(PDO::FETCH_ASSOC);
-                    $esub_data = ['subject_name'=>$esub['lesson_name'], 'name'=>$esub['lesson_name'], 'category'=>$eduCat['name'], 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
+                    $esub_data = ['subject_name'=>$esub['lesson_name'], 'name'=>$esub['lesson_name'], 'category'=>$eduCat['name'], 'src'=>'edu', 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
                     foreach ($et_list as $et) {
                         $key = 'edu_' . $et['id'];
                         $stats = $topic_stats[$key] ?? ['total_questions'=>0, 'total_topics'=>0, 'total_videos'=>0, 'history'=>[]];
