@@ -5,6 +5,14 @@ on:
     branches: [ staging ]
   workflow_dispatch:
 
+# Hosting'in FTPS kontrol soketi aralıklı olarak "Timeout (control socket)" veriyor
+# (sunucu/ağ dalgalanması, kodla ilgisi yok) ve bu takılma bazen birkaç DAKİKA
+# sürüyor. Bu yüzden deploy adımı tek çalıştırma içinde 6 KEZ, gittikçe uzayan
+# beklemelerle (20s→45s→90s→150s→240s ≈ toplam 9 dk) yeniden denenir. Herhangi
+# biri başarılıysa sonrakiler atlanır ve job GEÇER; yalnızca altısı da başarısız
+# olursa job düşer. Böylece uzun hosting takılmaları tek çalıştırmada aşılır,
+# elle yeniden tetikleme ve "başarısız" e-postaları büyük ölçüde biter.
+
 jobs:
   ftp-deploy:
     runs-on: ubuntu-latest
@@ -12,17 +20,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Hosting'in FTPS kontrol soketi aralıklı olarak "Timeout (control socket)"
-      # veriyor (sunucu/ağ dalgalanması, kodla ilgisi yok). Bu yüzden deploy adımı
-      # otomatik yeniden denenir: 1. deneme başarısız olursa 2., o da olmazsa 3.
-      # denenir. Herhangi biri başarılıysa sonrakiler atlanır ve job GEÇER; ancak
-      # üçü de başarısız olursa job başarısız olur. timeout 60sn'ye çıkarıldı.
-
       - name: FTP Deploy — 1. deneme
         id: d1
         continue-on-error: true
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
+        with: &ftp_with
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
@@ -40,45 +42,47 @@ jobs:
       - name: 2. denemeden önce bekle
         if: steps.d1.outcome == 'failure'
         run: sleep 20
-
       - name: FTP Deploy — 2. deneme
         id: d2
         if: steps.d1.outcome == 'failure'
         continue-on-error: true
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          port: 21
-          timeout: 60000
-          local-dir: ./
-          server-dir: test.derspros.com.tr/
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.github
-            **/.github/**
+        with: *ftp_with
 
       - name: 3. denemeden önce bekle
         if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
-        run: sleep 30
-
-      - name: FTP Deploy — 3. deneme (son)
+        run: sleep 45
+      - name: FTP Deploy — 3. deneme
+        id: d3
         if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
+        continue-on-error: true
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          port: 21
-          timeout: 60000
-          local-dir: ./
-          server-dir: test.derspros.com.tr/
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.github
-            **/.github/**
+        with: *ftp_with
+
+      - name: 4. denemeden önce bekle
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure' && steps.d3.outcome == 'failure'
+        run: sleep 90
+      - name: FTP Deploy — 4. deneme
+        id: d4
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure' && steps.d3.outcome == 'failure'
+        continue-on-error: true
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with: *ftp_with
+
+      - name: 5. denemeden önce bekle
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure' && steps.d3.outcome == 'failure' && steps.d4.outcome == 'failure'
+        run: sleep 150
+      - name: FTP Deploy — 5. deneme
+        id: d5
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure' && steps.d3.outcome == 'failure' && steps.d4.outcome == 'failure'
+        continue-on-error: true
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with: *ftp_with
+
+      - name: 6. denemeden önce bekle
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure' && steps.d3.outcome == 'failure' && steps.d4.outcome == 'failure' && steps.d5.outcome == 'failure'
+        run: sleep 240
+      - name: FTP Deploy — 6. deneme (son)
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure' && steps.d3.outcome == 'failure' && steps.d4.outcome == 'failure' && steps.d5.outcome == 'failure'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with: *ftp_with
