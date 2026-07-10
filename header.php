@@ -228,6 +228,10 @@ try {
     </a>
 <?php endif; ?>
 
+                <?php if ($isLoggedIn && $myRole === 'teacher'): ?>
+                    <a href="<?php echo $B; ?>/koc/mufredat_v2.php" class="text-slate-600 hover:text-blue-600 transition px-3 py-2 rounded-lg hover:bg-slate-50">📚 Müfredat Yükle</a>
+                <?php endif; ?>
+
                 <?php if ($isLoggedIn): ?>
                     <a href="<?php echo $linkRandevu; ?>" class="text-slate-600 hover:text-blue-600 px-3 py-2 rounded-lg hover:bg-slate-50 relative">📅 Randevu</a>
                     <a href="<?php echo $linkKocluk; ?>" class="relative inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg shadow-md transition ml-2 font-bold">

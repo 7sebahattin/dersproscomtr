@@ -443,8 +443,8 @@ foreach (($raw_items ?? []) as $it) {
                         : '<span class="text-[11px]">' + sm[0] + '</span>') +
                 '</span>' +
             '</div>' +
-            '<p class="text-[11px] font-extrabold text-slate-900 leading-tight truncate">' + esc(c.subject || '-') + '</p>' +
-            '<p class="text-[10px] font-semibold text-[#314595] leading-tight truncate">' + esc(c.topic || '-') + '</p>' +
+            '<p class="text-[11px] font-extrabold text-slate-900 leading-tight break-words">' + esc(c.subject || '-') + '</p>' +
+            '<p class="text-[10px] font-semibold text-[#314595] leading-snug break-words">' + esc(c.topic || '-') + '</p>' +
             '<div class="flex items-center gap-1 mt-1 flex-wrap">' +
                 '<span class="' + am[1] + ' text-white rounded px-1.5 py-[1px] text-[8px] font-black">' + c.amount + ' ' + am[0] + '</span>' +
                 (c.time_note ? '<span class="text-[8px] font-bold text-[#ec9731]">⏰' + esc(c.time_note) + '</span>' : '') +
