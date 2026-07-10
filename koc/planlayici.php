@@ -65,9 +65,9 @@ foreach (($raw_items ?? []) as $it) {
 
             <!-- Sekmeler -->
             <div class="flex p-1.5 gap-1 border-b border-slate-100 flex-shrink-0 text-[10px] font-bold">
-                <button type="button" data-pstab="mufredat" class="ps-tab flex-1 py-2 rounded-lg bg-[#ec9731] text-white transition">📚 MÜFREDAT</button>
+                <!-- GÖREV SEÇ = eski Müfredat + Manuel birleşimi (iç ad 'mufredat' korunur) -->
+                <button type="button" data-pstab="mufredat" class="ps-tab flex-1 py-2 rounded-lg bg-[#ec9731] text-white transition">🎯 GÖREV SEÇ</button>
                 <button type="button" data-pstab="kaynak"   class="ps-tab flex-1 py-2 rounded-lg text-slate-500 hover:text-[#223488] transition">🔗 KAYNAK</button>
-                <button type="button" data-pstab="manuel"   class="ps-tab flex-1 py-2 rounded-lg text-slate-500 hover:text-[#223488] transition">✏️ MANUEL</button>
                 <!-- Sepet: Analiz'den + ile eklenen konular (kompakt, rozetli) -->
                 <button type="button" data-pstab="sepet" class="ps-tab relative shrink-0 px-2.5 py-2 rounded-lg text-slate-500 hover:text-[#223488] transition" title="Sepet — Analiz sekmesinden eklenen konular">
                     🧺<span id="psBasketCount" class="hidden absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-black leading-4 text-center"></span>
@@ -106,21 +106,16 @@ foreach (($raw_items ?? []) as $it) {
             <!-- Sekme içerikleri: Alan/Ders (veya Kaynak/Manuel) -->
             <div class="p-2.5 space-y-2 border-b border-slate-100 flex-shrink-0">
                 <div class="ps-pane" data-pspane="mufredat">
-                    <div class="grid grid-cols-2 gap-1.5 mb-1.5">
-                        <select id="psCat" class="w-full bg-white border border-red-300 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-red-500"><option value="" disabled selected>Alan...</option></select>
-                        <select id="psSubj" disabled class="w-full bg-white border border-red-300 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-red-500 disabled:opacity-50"><option value="" disabled selected>Ders...</option></select>
+                    <!-- Ders combobox: yaz → anında eşleş, tıkla → tam liste. Eşleşme yoksa özel ders. -->
+                    <div class="relative">
+                        <input id="psSubjInput" autocomplete="off" placeholder="Ders yaz veya seç... (m → Matematik)"
+                               class="w-full bg-white border border-red-300 rounded-lg text-[11px] font-semibold text-slate-700 p-2 pr-6 outline-none focus:border-red-500">
+                        <button type="button" id="psSubjClear" class="hidden absolute right-1.5 top-1.5 text-slate-300 hover:text-red-500 text-xs font-black px-1" title="Ders seçimini temizle">✕</button>
+                        <div id="psSubjDrop" class="hidden absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto custom-scrollbar bg-white border border-slate-200 rounded-lg shadow-xl z-[70]"></div>
                     </div>
                 </div>
                 <div class="ps-pane hidden" data-pspane="kaynak">
                     <select id="psRes" class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488]"><option value="" disabled selected>Kaynak seçiniz...</option></select>
-                </div>
-                <div class="ps-pane hidden" data-pspane="manuel">
-                    <input id="psManSubj" placeholder="DERS ADI (ÖRN: GEOMETRİ)" class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488] mb-1.5 uppercase">
-                    <div class="flex gap-1.5">
-                        <input id="psManTopic" placeholder="KONU / NOT" class="js-upper flex-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 p-2 outline-none focus:border-[#223488] uppercase">
-                        <button type="button" onclick="psAddPill()" class="px-3 rounded-lg bg-[#223488] text-white text-[11px] font-black hover:bg-[#314595] transition">＋</button>
-                    </div>
-                    <p class="text-[9px] text-slate-400 mt-1">Oluşan hap sürüklenebilir; tekrar tekrar kullan.</p>
                 </div>
                 <div class="ps-pane hidden" data-pspane="sepet">
                     <div class="flex items-center justify-between gap-2">
@@ -132,12 +127,12 @@ foreach (($raw_items ?? []) as $it) {
 
             <!-- Konu ara -->
             <div class="p-2.5 pb-1.5 flex-shrink-0">
-                <input id="psSearch" type="search" placeholder="🔍 Konu ara..." class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 p-2 outline-none focus:border-[#223488]">
+                <input id="psSearch" type="search" placeholder="🔍 Konu yaz... (po → Polinomlar)" class="w-full bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 p-2 outline-none focus:border-[#223488]">
             </div>
 
             <!-- Sürüklenebilir konu listesi -->
             <div id="psTopicList" class="flex-grow overflow-y-auto custom-scrollbar p-2 space-y-1 min-h-0">
-                <p class="ps-list-hint text-center text-[10px] text-slate-400 font-medium py-8">Alan ve ders seçince<br>konular burada listelenir.<br><b>Konuyu güne sürükle.</b></p>
+                <p class="ps-list-hint text-center text-[10px] text-slate-400 font-medium py-8">Ders yazınca/seçince<br>konular burada listelenir.<br><b>Konuyu güne sürükle.</b></p>
             </div>
         </div>
 
@@ -595,35 +590,108 @@ foreach (($raw_items ?? []) as $it) {
     });
     function activeTab(){ return currentTab; }
 
-    // ── Palet: müfredat verisi ──
-    var catsP = null, resP = null, topics = [], resTopics = [];
-    var catSel = document.getElementById('psCat'), subjSel = document.getElementById('psSubj'), resSel = document.getElementById('psRes');
-    function loadCats(){
-        if (catsP) return catsP;
-        catsP = fetch(API + '?action=categories', {credentials:'same-origin'}).then(function(r){return r.json();}).then(function(j){
+    // ── Palet: GÖREV SEÇ — tüm müfredat ağacı tek istekte, eşleşme anlık/yerel ──
+    var treeP = null, resP = null, topics = [], resTopics = [];
+    var SUBJ_INDEX = [];   // {id, name, cat, topics:[{id, topic_name}]}
+    var selSubj = null;    // {id|null, name, cat} — id=null → özel (custom) ders
+    var resSel = document.getElementById('psRes');
+    var subjInput = document.getElementById('psSubjInput');
+    var subjDrop  = document.getElementById('psSubjDrop');
+    var subjClear = document.getElementById('psSubjClear');
+
+    function loadTree(){
+        if (treeP) return treeP;
+        treeP = fetch(API + '?action=tree', {credentials:'same-origin'}).then(function(r){return r.json();}).then(function(j){
             if (!j.ok) return;
-            catSel.innerHTML = '<option value="" disabled selected>Alan...</option>' + j.data.map(function(c){ return '<option value="'+c.id+'" data-name="'+esc(c.name)+'">'+esc(c.name)+'</option>'; }).join('');
-        }).catch(function(){ catsP = null; });
-        return catsP;
+            SUBJ_INDEX = [];
+            (j.data || []).forEach(function(c){
+                (c.subjects || []).forEach(function(s){
+                    SUBJ_INDEX.push({ id: s.id, name: s.lesson_name, cat: c.name, topics: s.topics || [] });
+                });
+            });
+        }).catch(function(){ treeP = null; });
+        return treeP;
     }
-    catSel.addEventListener('change', function(){
-        subjSel.innerHTML = '<option value="" disabled selected>Yükleniyor...</option>'; subjSel.disabled = true;
-        topics = []; renderTopicList();
-        fetch(API + '?action=subjects&category_id=' + catSel.value, {credentials:'same-origin'}).then(function(r){return r.json();}).then(function(j){
-            if (!j.ok) return;
-            subjSel.innerHTML = '<option value="" disabled selected>Ders...</option>' + j.data.map(function(s){ return '<option value="'+s.id+'" data-name="'+esc(s.lesson_name)+'">'+esc(s.lesson_name)+'</option>'; }).join('');
-            subjSel.disabled = false;
-        }).catch(function(){});
+    // Eski ad korunur (psShowStudio ilk kurulumda çağırır)
+    function loadCats(){ return loadTree(); }
+
+    function renderSubjDrop(){
+        var q = trUp(subjInput.value.trim());
+        var matches = SUBJ_INDEX.filter(function(s){ return !q || trUp(s.name).indexOf(q) !== -1; });
+        var html = matches.slice(0, 40).map(function(s, i){
+            return '<div class="ps-subj-opt flex items-center justify-between gap-2 px-2.5 py-1.5 cursor-pointer hover:bg-indigo-50 border-b border-slate-50" data-i="' + SUBJ_INDEX.indexOf(s) + '">' +
+                '<span class="text-[11px] font-bold text-slate-700 truncate">' + esc(s.name) + '</span>' +
+                '<span class="text-[8px] font-black text-slate-400 bg-slate-100 rounded px-1 py-0.5 shrink-0">' + esc(s.cat) + '</span></div>';
+        }).join('');
+        // Eşleşme yoksa / tam eşleşme yoksa: yazılanı ÖZEL ders olarak kullan
+        var exact = q && matches.some(function(s){ return trUp(s.name) === q; });
+        if (q && !exact) {
+            html += '<div class="ps-subj-custom px-2.5 py-2 cursor-pointer hover:bg-amber-50 text-[10px] font-bold text-amber-700">➕ "' + esc(trUp(subjInput.value.trim())) + '" özel ders olarak kullan</div>';
+        }
+        if (!html) html = '<p class="text-center text-[10px] text-slate-400 py-3">Ders bulunamadı.</p>';
+        subjDrop.innerHTML = html;
+        subjDrop.classList.remove('hidden');
+        // mousedown: blur'dan önce yakala
+        subjDrop.querySelectorAll('.ps-subj-opt').forEach(function(opt){
+            opt.addEventListener('mousedown', function(ev){ ev.preventDefault(); selectSubj(SUBJ_INDEX[parseInt(opt.dataset.i, 10)]); });
+        });
+        var cu = subjDrop.querySelector('.ps-subj-custom');
+        if (cu) cu.addEventListener('mousedown', function(ev){ ev.preventDefault(); selectCustomSubj(subjInput.value.trim()); });
+    }
+    function hideSubjDrop(){ subjDrop.classList.add('hidden'); }
+    function selectSubj(s){
+        if (!s) return;
+        selSubj = { id: s.id, name: s.name, cat: s.cat };
+        topics = s.topics.map(function(t){ return { edu_topic_id: t.id, category: s.cat, subject: s.name, topic: t.topic_name }; });
+        subjInput.value = s.name + ' — ' + s.cat;
+        subjClear.classList.remove('hidden');
+        hideSubjDrop();
+        document.getElementById('psSearch').value = '';
+        renderTopicList();
+        document.getElementById('psSearch').focus();
+    }
+    function selectCustomSubj(name){
+        var n = trUp(name);
+        if (!n) return;
+        selSubj = { id: null, name: n, cat: 'Diğer' };
+        topics = [];
+        subjInput.value = n + ' — ÖZEL';
+        subjClear.classList.remove('hidden');
+        hideSubjDrop();
+        renderTopicList();
+        document.getElementById('psSearch').focus();
+    }
+    subjInput.addEventListener('focus', function(){
+        // Seçim varken tıklanınca yeni arama için temizle
+        if (selSubj) { subjInput.value = ''; }
+        loadTree().then ? loadTree().then(renderSubjDrop) : renderSubjDrop();
     });
-    subjSel.addEventListener('change', function(){
-        topics = []; renderTopicList(true);
-        fetch(API + '?action=topics&subject_id=' + subjSel.value + '&per_page=500', {credentials:'same-origin'}).then(function(r){return r.json();}).then(function(j){
-            if (!j.ok) return;
-            var catName = catSel.options[catSel.selectedIndex] ? catSel.options[catSel.selectedIndex].dataset.name : '';
-            var subjName = subjSel.options[subjSel.selectedIndex] ? subjSel.options[subjSel.selectedIndex].dataset.name : '';
-            topics = j.data.map(function(t){ return { edu_topic_id: t.id, category: catName, subject: subjName, topic: t.topic_name }; });
-            renderTopicList();
-        }).catch(function(){ renderTopicList(); });
+    subjInput.addEventListener('input', function(){
+        if (selSubj) { selSubj = null; topics = []; subjClear.classList.add('hidden'); renderTopicList(); }
+        renderSubjDrop();
+    });
+    subjInput.addEventListener('blur', function(){
+        setTimeout(function(){
+            hideSubjDrop();
+            // Boş bırakıldıysa mevcut seçimi geri yaz
+            if (selSubj && subjInput.value.trim() === '') subjInput.value = selSubj.name + ' — ' + (selSubj.id ? selSubj.cat : 'ÖZEL');
+        }, 150);
+    });
+    subjInput.addEventListener('keydown', function(e){
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            var q = trUp(subjInput.value.trim());
+            if (!q) return;
+            var exact = SUBJ_INDEX.find(function(s){ return trUp(s.name) === q; });
+            var first = SUBJ_INDEX.find(function(s){ return trUp(s.name).indexOf(q) !== -1; });
+            if (exact || first) selectSubj(exact || first); else selectCustomSubj(subjInput.value.trim());
+        }
+    });
+    subjClear.addEventListener('click', function(){
+        selSubj = null; topics = []; subjInput.value = '';
+        subjClear.classList.add('hidden');
+        renderTopicList();
+        subjInput.focus();
     });
     function loadResources(){
         if (resP) return resP;
@@ -646,16 +714,19 @@ foreach (($raw_items ?? []) as $it) {
         }).catch(function(){ renderTopicList(); });
     });
 
-    // ── Palet: manuel haplar ──
-    window.psAddPill = function(){
-        var s = trUp(document.getElementById('psManSubj').value.trim());
-        var t = trUp(document.getElementById('psManTopic').value.trim());
-        if (!s && !t) return;
-        pills.push({ category:'Diğer', subject:s, topic:t });
-        document.getElementById('psManTopic').value = '';
+    // ── Özel konu hapları (eski Manuel sekmesinin yerine, Görev Seç içinde) ──
+    // Konu arama kutusuna yazılan metin eşleşmezse "＋ özel konu ekle" satırı çıkar.
+    function addCustomPill(topicText){
+        var t = trUp(topicText.trim());
+        if (!t) return;
+        pills.push({
+            category: selSubj ? (selSubj.id ? selSubj.cat : 'Diğer') : 'Diğer',
+            subject:  selSubj ? selSubj.name : '',
+            topic:    t
+        });
+        document.getElementById('psSearch').value = '';
         renderTopicList();
-    };
-    document.getElementById('psManTopic').addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); psAddPill(); } });
+    }
 
     // ── Palet: konu listesi render (sürüklenebilir satırlar) ──
     // STATS lazy okunur (modals.php window.eduTopicStats'ı bu dosyadan SONRA
@@ -665,15 +736,15 @@ foreach (($raw_items ?? []) as $it) {
         var list = document.getElementById('psTopicList');
         var tab = activeTab();
         var q = trUp(document.getElementById('psSearch').value.trim());
-        var rows = tab === 'mufredat' ? topics : (tab === 'kaynak' ? resTopics : (tab === 'sepet' ? basket : pills));
+        // Görev Seç: müfredat konuları + özel haplar birlikte listelenir
+        var rows = tab === 'mufredat' ? topics.concat(pills) : (tab === 'kaynak' ? resTopics : (tab === 'sepet' ? basket : []));
         list.innerHTML = '';
         if (loading) { list.innerHTML = '<p class="text-center text-[10px] text-slate-400 py-8">Yükleniyor...</p>'; return; }
-        if (!rows.length) {
+        if (!rows.length && !(tab === 'mufredat' && q)) {
             list.innerHTML = '<p class="ps-list-hint text-center text-[10px] text-slate-400 font-medium py-8">' +
-                (tab === 'mufredat' ? 'Alan ve ders seçince<br>konular burada listelenir.<br><b>Konuyu güne sürükle.</b>' :
+                (tab === 'mufredat' ? 'Ders yazınca/seçince<br>konular burada listelenir.<br><b>Konuyu güne sürükle.</b>' :
                  tab === 'kaynak' ? 'Kaynak seçince konuları<br>burada listelenir.' :
-                 tab === 'sepet' ? 'Sepet boş.<br>Analiz sekmesinde konuların<br>yanındaki <b>＋</b> ile konu ekle.' :
-                 'Ders + konu yazıp ＋ ile<br>sürüklenebilir hap oluştur.') + '</p>';
+                 'Sepet boş.<br>Analiz sekmesinde konuların<br>yanındaki <b>＋</b> ile konu ekle.') + '</p>';
             return;
         }
         var STATS = window.eduTopicStats || {};
@@ -685,27 +756,45 @@ foreach (($raw_items ?? []) as $it) {
                 var parts = []; if (st.soru) parts.push(st.soru+'s'); if (st.konu) parts.push(st.konu+'k'); if (st.video) parts.push(st.video+'v');
                 badge = '<span class="shrink-0 text-[8px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded px-1">✓' + parts.join('·') + '</span>';
             }
+            var isPill = (tab === 'mufredat' && !t.edu_topic_id); // özel (custom) hap
             var row = document.createElement('div');
             row.draggable = true;
-            row.className = 'flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg border border-slate-100 bg-white hover:border-[#223488]/40 hover:bg-indigo-50/50 cursor-grab active:cursor-grabbing transition select-none';
+            row.className = 'flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg border cursor-grab active:cursor-grabbing transition select-none ' +
+                (isPill ? 'border-amber-200 bg-amber-50/60 hover:border-amber-400'
+                        : 'border-slate-100 bg-white hover:border-[#223488]/40 hover:bg-indigo-50/50');
             var label = (tab === 'sepet' && t.subject)
                 ? '<span class="text-[8px] font-black text-slate-400 shrink-0">' + esc(t.subject) + ' ›</span> ' + esc(t.topic || '')
                 : esc(t.topic || t.subject);
-            row.innerHTML = '<span class="text-[10px] font-bold text-slate-700 truncate">' +
-                (t.resource_type === 'video' ? '🎬 ' : '⠿ ') + label + '</span>' + badge +
-                (tab === 'sepet' ? '<button type="button" class="ps-bskt-del shrink-0 text-[10px] font-black text-slate-300 hover:text-red-500 transition px-1" title="Sepetten çıkar">✕</button>' : '');
-            row.title = (t.subject ? t.subject + ' › ' : '') + (t.topic || '');
+            row.innerHTML = '<span class="text-[10px] font-bold ' + (isPill ? 'text-amber-800' : 'text-slate-700') + ' truncate">' +
+                (t.resource_type === 'video' ? '🎬 ' : (isPill ? '✏️ ' : '⠿ ')) + label + '</span>' + badge +
+                (tab === 'sepet' || isPill ? '<button type="button" class="ps-row-del shrink-0 text-[10px] font-black text-slate-300 hover:text-red-500 transition px-1" title="' + (isPill ? 'Hapı sil' : 'Sepetten çıkar') + '">✕</button>' : '');
+            row.title = (t.subject ? t.subject + ' › ' : '') + (t.topic || '') + (isPill ? ' (özel — müfredata bağlı değil)' : '');
             row.addEventListener('dragstart', function(ev){
                 var payload = (tab === 'sepet') ? Object.assign({ fromBasket: true }, t) : t;
                 ev.dataTransfer.setData('text/ps-topic', JSON.stringify(payload));
                 ev.dataTransfer.effectAllowed = 'copy';
             });
-            if (tab === 'sepet') {
-                var del = row.querySelector('.ps-bskt-del');
-                if (del) del.addEventListener('click', function(ev){ ev.stopPropagation(); window.psBasketRemove(t.edu_topic_id); });
-            }
+            var del = row.querySelector('.ps-row-del');
+            if (del) del.addEventListener('click', function(ev){
+                ev.stopPropagation();
+                if (tab === 'sepet') { window.psBasketRemove(t.edu_topic_id); }
+                else { var ix = pills.indexOf(t); if (ix !== -1) { pills.splice(ix, 1); renderTopicList(); } }
+            });
             list.appendChild(row);
         });
+
+        // Görev Seç: yazılan konu hiçbir müfredat konusuyla TAM eşleşmiyorsa
+        // "özel konu olarak ekle" satırı göster (eski Manuel'in yerine geçer)
+        if (tab === 'mufredat' && q) {
+            var exactTopic = topics.concat(pills).some(function(t){ return trUp(t.topic || '') === q; });
+            if (!exactTopic) {
+                var addRow = document.createElement('div');
+                addRow.className = 'px-2 py-2 rounded-lg border border-dashed border-amber-300 bg-amber-50/40 text-[10px] font-bold text-amber-700 cursor-pointer hover:bg-amber-50 transition text-center';
+                addRow.innerHTML = '➕ "' + esc(q) + '" özel konu olarak ekle' + (selSubj ? ' <span class="text-[8px] text-amber-500">(' + esc(selSubj.name) + ')</span>' : '');
+                addRow.addEventListener('click', function(){ addCustomPill(q); });
+                list.appendChild(addRow);
+            }
+        }
     }
 
     // ── Haftayı Kaydet: tüm diff tek istekte, tek transaction ──
