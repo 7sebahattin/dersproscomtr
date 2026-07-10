@@ -190,43 +190,122 @@ try {
     $gap_error = $e->getMessage();
 }
 
-// G. MÜFREDAT KAPSAMA + ÖNE ÇIKANLAR ------------------------------------------
-// Kapsama: görev verilmiş konu / toplam konu (durumdan bağımsız).
-// $progress_data koc_paneli.php'de kurulur; her konuda 'assigned' bayrağı var.
-$coverage  = [];  // en az 1 konusuna görev verilmiş dersler
-$untouched = 0;   // müfredatta olup hiç görev verilmemiş ders sayısı
+// G. ALAN (TRACK) EŞLEMESİ + FAZ'LI MÜFREDAT KAPSAMA + ÖNE ÇIKANLAR ------------
+// Öğrencinin sınıfı/alanı (Öğrenciler sayfasından ayarlanır)
+$track = trim((string)($selected_student['track'] ?? ''));
+$grade = trim((string)($selected_student['grade'] ?? ''));
+
+// Alan → ilgili AYT dersleri (ders adında anahtar kelime araması)
+$TRACK_AYT = [
+    'Sayısal'      => ['matematik','geometri','fizik','kimya','biyoloji'],
+    'Eşit Ağırlık' => ['matematik','geometri','edebiyat','tarih','coğrafya'],
+    'Sözel'        => ['edebiyat','tarih','coğrafya','felsefe','din','psikoloji','sosyoloji','mantık'],
+];
+$trLower = fn($s) => mb_strtolower(str_replace(['İ','I'], ['i','ı'], (string)$s), 'UTF-8');
+// Bu ders öğrencinin hedefi için geçerli mi? (TYT/LGS herkese; AYT alana göre)
+$subjectRelevant = function (string $catR, string $nameR) use ($TRACK_AYT, $track, $grade, $trLower): bool {
+    if (mb_strtoupper(trim($catR), 'UTF-8') !== 'AYT') return true;
+    if (in_array($grade, ['9','10'], true)) return false;      // 9-10: önce TYT temelleri
+    if ($track === '' || !isset($TRACK_AYT[$track])) return true; // alan seçilmemiş → hepsi
+    $nR = $trLower($nameR);
+    foreach ($TRACK_AYT[$track] as $kw) {
+        if (mb_strpos($nR, $kw) !== false) return true;
+    }
+    return false;
+};
+
+// Kapsama + FAZ: faz N = müfredattaki HER konuya en az N kez görev verilmesi.
+// Faz 1 %100 olunca otomatik Faz 2 başlar (konu başına 2. görev sayılır)… 5. faza kadar.
+$coverage           = [];
+$untouchedRelevant  = 0;  // alana uygun olup hiç görev verilmemiş ders sayısı
 foreach (($progress_data ?? []) as $subX) {
     $topicsX = $subX['topics'] ?? [];
     $totX = count($topicsX);
     if ($totX === 0) continue;
-    $asgX = 0;
-    foreach ($topicsX as $tX) if (!empty($tX['assigned'])) $asgX++;
-    if ($asgX === 0) { $untouched++; continue; }
+    $nameX = $subX['subject_name'] ?? ($subX['name'] ?? 'Ders');
+    $catX  = $subX['category'] ?? '';
+    $relX  = $subjectRelevant($catX, $nameX);
+
+    $asgX = 0; $minAsgX = PHP_INT_MAX;
+    foreach ($topicsX as $tX) {
+        $cX = (int)($tX['asg_count'] ?? (!empty($tX['assigned']) ? 1 : 0));
+        if ($cX > 0) $asgX++;
+        $minAsgX = min($minAsgX, $cX);
+    }
+    if ($asgX === 0) { if ($relX) $untouchedRelevant++; continue; }
+
+    $fazX = min(5, $minAsgX + 1);
+    $fazDoneX = 0;
+    foreach ($topicsX as $tX) {
+        if ((int)($tX['asg_count'] ?? 0) >= $fazX) $fazDoneX++;
+    }
     $coverage[] = [
-        'subject'  => $subX['subject_name'] ?? ($subX['name'] ?? 'Ders'),
-        'category' => $subX['category'] ?? '',
-        'assigned' => $asgX,
+        'subject'  => $nameX,
+        'category' => $catX,
+        'assigned' => $fazDoneX,
         'total'    => $totX,
-        'pct'      => (int)round(100 * $asgX / $totX),
+        'pct'      => (int)round(100 * $fazDoneX / $totX),
+        'faz'      => $fazX,
+        'relevant' => $relX,
     ];
 }
-usort($coverage, fn($a, $b) => $a['pct'] <=> $b['pct']); // en az kapsanan üstte
+// Sıralama: alana uygun dersler önce; sonra düşük faz, sonra düşük yüzde (en geride olan üstte)
+usort($coverage, function ($a, $b) {
+    if ($a['relevant'] !== $b['relevant']) return $b['relevant'] <=> $a['relevant'];
+    if ($a['faz'] !== $b['faz'])           return $a['faz'] <=> $b['faz'];
+    return $a['pct'] <=> $b['pct'];
+});
 
-// Öne çıkanlar: öğretmenin "ne gerekiyor?" sorusuna doğrudan cevap veren maddeler
+// ── Öne çıkanlar: eğitim koçu gözüyle "bu öğrenci için ne gerekiyor?" ─────────
 $insights = [];
+
+// 1) Bu hafta hiç aktivite yoksa — en acil sinyal
 if (($stats['week_q'] ?? 0) == 0 && ($stats['week_t'] ?? 0) == 0) {
     $insights[] = ['sev'=>'red', 'icon'=>'⚠️', 'text'=>'Bu hafta hiç soru/konu çalışması işlenmedi — programı ve öğrenciyi kontrol et.'];
 }
-foreach (array_slice($coverage, 0, 2) as $cv) {
-    if ($cv['pct'] < 50) {
-        $insights[] = ['sev'=>'orange', 'icon'=>'📚',
-            'text'=>$cv['subject'].($cv['category'] ? ' ('.$cv['category'].')' : '').' müfredatında '.$cv['total'].' konudan yalnızca '.$cv['assigned'].' tanesine görev verildi (%'.$cv['pct'].').'];
+
+// 2) Alan bilgisi eksikse hatırlat (öneriler alana göre kişiselleşir)
+if (in_array($grade, ['11','12','Mezun'], true) && $track === '') {
+    $insights[] = ['sev'=>'slate', 'icon'=>'🧭', 'text'=>'Öğrencinin alanı seçilmemiş — Öğrenciler sayfasından Sayısal/Sözel/Eşit Ağırlık seçersen öneriler alana göre kişiselleşir.'];
+} elseif (in_array($grade, ['9','10'], true)) {
+    $insights[] = ['sev'=>'slate', 'icon'=>'ℹ️', 'text'=>$grade.'. sınıf öğrencisi — odak TYT temelleri; AYT dersleri öneri ve kapsama hesabının dışında tutuluyor.'];
+}
+
+// 3) Alana uygun derslerde en düşük kapsama (Faz 1'de %50 altı)
+$trackPrefix = $track !== '' ? $track.' önceliği: ' : '';
+$lowCov = array_values(array_filter($coverage, fn($cv) => $cv['relevant'] && $cv['faz'] === 1 && $cv['pct'] < 50));
+usort($lowCov, fn($a, $b) => $a['pct'] <=> $b['pct']);
+foreach (array_slice($lowCov, 0, 2) as $cv) {
+    $insights[] = ['sev'=>'orange', 'icon'=>'📚',
+        'text'=>$trackPrefix.$cv['subject'].($cv['category'] ? ' ('.$cv['category'].')' : '').' müfredatında '.$cv['total'].' konudan yalnızca '.$cv['assigned'].' tanesine görev verildi (%'.$cv['pct'].').'];
+}
+if ($untouchedRelevant > 0) {
+    $insights[] = ['sev'=>'slate', 'icon'=>'🕳️', 'text'=>$untouchedRelevant.' alana uygun derste henüz hiç görev planlanmadı.'];
+}
+
+// 4) Geçmiş fazları baz alan konu-düzeyi öneriler:
+//    Çok soru çözülmüş ama hiç konu çalışılmamış → konu tekrarı;
+//    çok konu çalışılmış ama hiç soru yok → soru pratiği.
+$needTheory = []; $needPractice = [];
+foreach (($progress_data ?? []) as $subX) {
+    $nameX = $subX['subject_name'] ?? ($subX['name'] ?? 'Ders');
+    if (!$subjectRelevant($subX['category'] ?? '', $nameX)) continue;
+    foreach (($subX['topics'] ?? []) as $tX) {
+        $qX = (int)($tX['q_count'] ?? 0); $tcX = (int)($tX['t_count'] ?? 0); $vX = (int)($tX['v_count'] ?? 0);
+        if ($qX >= 100 && $tcX === 0 && $vX === 0) $needTheory[]   = ['s'=>$nameX, 't'=>$tX['name'] ?? '', 'q'=>$qX];
+        if ($tcX >= 3  && $qX === 0)               $needPractice[] = ['s'=>$nameX, 't'=>$tX['name'] ?? '', 'k'=>$tcX];
     }
 }
-if ($untouched > 0) {
-    $insights[] = ['sev'=>'slate', 'icon'=>'🕳️', 'text'=>$untouched.' derste henüz hiç görev planlanmadı.'];
+usort($needTheory, fn($a, $b) => $b['q'] <=> $a['q']);
+foreach (array_slice($needTheory, 0, 2) as $nt) {
+    $insights[] = ['sev'=>'orange', 'icon'=>'📖', 'text'=>$nt['s'].' › '.$nt['t'].': '.number_format($nt['q']).' soru çözüldü ama hiç konu çalışması yapılmadı — konu tekrarı planla.'];
 }
-// Yanlış oranı en yüksek ders (en az 20 cevaplanmış soru şartı)
+usort($needPractice, fn($a, $b) => $b['k'] <=> $a['k']);
+foreach (array_slice($needPractice, 0, 1) as $np) {
+    $insights[] = ['sev'=>'orange', 'icon'=>'✍️', 'text'=>$np['s'].' › '.$np['t'].': '.$np['k'].' kez konu çalışıldı ama hiç soru çözülmedi — soru pratiği ekle.'];
+}
+
+// 5) Yanlış oranı en yüksek ders (en az 20 cevaplanmış soru şartı)
 $worstDY = null;
 foreach ($dy_data as $rowDY) {
     $totDY = (int)$rowDY['total_correct'] + (int)$rowDY['total_wrong'];
@@ -237,7 +316,8 @@ foreach ($dy_data as $rowDY) {
 if ($worstDY && $worstDY['wp'] >= 30) {
     $insights[] = ['sev'=>'red', 'icon'=>'❗', 'text'=>$worstDY['name'].' dersinde yanlış oranı %'.$worstDY['wp'].' — konu tekrarı önerilir.'];
 }
-// Hedefin en çok gerisinde kalınan ders
+
+// 6) Hedefin en çok gerisinde kalınan ders
 foreach ($gap_data as $gd) {
     $eksik = (int)$gd['hedef_toplam'] - (int)$gd['yapilan_toplam'];
     if ($eksik > 0) {
@@ -245,12 +325,21 @@ foreach ($gap_data as $gd) {
         break; // gap_data zaten farka göre sıralı, ilk eksik en büyüğü
     }
 }
+
+// 7) Faz ilerlemesi + genel tamamlama — olumlu geri bildirim
+$bestFaz = null;
+foreach ($coverage as $cv) {
+    if ($cv['relevant'] && $cv['faz'] >= 2 && ($bestFaz === null || $cv['faz'] > $bestFaz['faz'])) $bestFaz = $cv;
+}
+if ($bestFaz) {
+    $insights[] = ['sev'=>'green', 'icon'=>'🔁', 'text'=>$bestFaz['subject'].' müfredatı '.($bestFaz['faz'] - 1).'. turu tamamladı, şu an Faz '.$bestFaz['faz'].' — tekrar turları düzenli ilerliyor.'];
+}
 if ($success_rate >= 80) {
     $insights[] = ['sev'=>'green', 'icon'=>'🌟', 'text'=>'Görev tamamlama oranı %'.$success_rate.' — istikrar çok iyi, hedefler artırılabilir.'];
 } elseif ($success_rate > 0 && $success_rate < 50) {
     $insights[] = ['sev'=>'red', 'icon'=>'📉', 'text'=>'Görev tamamlama oranı %'.$success_rate.' — verilen görevlerin yarısından azı tamamlanıyor.'];
 }
-$insights = array_slice($insights, 0, 6);
+$insights = array_slice($insights, 0, 7);
 ?>
 
 <style>
@@ -410,13 +499,20 @@ $insights = array_slice($insights, 0, 6);
                 </div>
             </div>
 
-            <!-- Müfredat Kapsama: görev verilmiş konu / toplam konu -->
+            <!-- Müfredat Kapsama: faz'lı, alana duyarlı -->
             <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div class="p-4 border-b border-slate-100 bg-slate-50 flex flex-wrap justify-between items-center gap-2">
-                    <h3 class="font-bold text-[#223488] text-sm uppercase tracking-wide">🗺️ Müfredat Kapsama <span class="text-[9px] text-slate-400 normal-case font-semibold">(görev verilen konu oranı)</span></h3>
-                    <?php if ($untouched > 0): ?>
-                    <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200"><?php echo $untouched; ?> derste hiç görev yok</span>
-                    <?php endif; ?>
+                    <h3 class="font-bold text-[#223488] text-sm uppercase tracking-wide">🗺️ Müfredat Kapsama <span class="text-[9px] text-slate-400 normal-case font-semibold">(faz ilerlemesi)</span></h3>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <?php if ($track !== ''): ?>
+                        <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100">🧭 Alan: <?php echo htmlspecialchars($track); ?></span>
+                        <?php elseif (in_array($grade, ['9','10'], true)): ?>
+                        <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100">🧭 <?php echo $grade; ?>. sınıf — TYT odak</span>
+                        <?php endif; ?>
+                        <?php if ($untouchedRelevant > 0): ?>
+                        <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200"><?php echo $untouchedRelevant; ?> derste hiç görev yok</span>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <div class="max-h-[280px] overflow-y-auto custom-scrollbar p-4">
                     <?php if (empty($coverage)): ?>
@@ -426,12 +522,15 @@ $insights = array_slice($insights, 0, 6);
                         <?php foreach ($coverage as $cv):
                             $cvColor = $cv['pct'] >= 67 ? 'bg-green-500' : ($cv['pct'] >= 34 ? 'bg-[#ec9731]' : 'bg-red-500');
                             $cvText  = $cv['pct'] >= 67 ? 'text-green-600' : ($cv['pct'] >= 34 ? 'text-[#d68625]' : 'text-red-500');
+                            if (!$cv['relevant']) { $cvColor = 'bg-slate-300'; $cvText = 'text-slate-400'; }
                         ?>
-                            <div class="group">
+                            <div class="group <?php echo $cv['relevant'] ? '' : 'opacity-60'; ?>">
                                 <div class="flex justify-between items-end mb-1 gap-2">
                                     <span class="font-bold text-xs text-slate-700 uppercase tracking-tight truncate">
                                         <?php echo htmlspecialchars($cv['subject']); ?>
                                         <?php if ($cv['category']): ?><span class="text-[9px] font-black text-slate-400 ml-1"><?php echo htmlspecialchars($cv['category']); ?></span><?php endif; ?>
+                                        <?php if ($cv['faz'] > 1): ?><span class="text-[8px] font-black text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1 py-0.5 ml-1">🔁 FAZ <?php echo $cv['faz']; ?></span><?php endif; ?>
+                                        <?php if (!$cv['relevant']): ?><span class="text-[8px] font-black text-slate-400 bg-slate-100 border border-slate-200 rounded px-1 py-0.5 ml-1">ALAN DIŞI</span><?php endif; ?>
                                     </span>
                                     <span class="text-[10px] font-bold text-slate-400 whitespace-nowrap"><?php echo $cv['assigned']; ?>/<?php echo $cv['total']; ?> konu · <b class="<?php echo $cvText; ?> text-xs">%<?php echo $cv['pct']; ?></b></span>
                                 </div>
@@ -781,11 +880,22 @@ $insights = array_slice($insights, 0, 6);
                 }
             }
 
-            // Müfredat kapsaması: görev verilmiş konu / toplam konu (durumdan bağımsız)
+            // FAZ'lı müfredat kapsaması: faz N = her konuya en az N görev verilmesi.
+            // Faz 1 %100 olunca çember Faz 2 ilerlemesini (konu başına 2. görev) sayar… 5. faza kadar.
             $topicTotal = count($topics);
             $topicAsg   = 0;
-            foreach ($topics as $tpItem) { if (!empty($tpItem['assigned'])) $topicAsg++; }
-            $covPct = $topicTotal > 0 ? (int)round(100 * $topicAsg / $topicTotal) : 0;
+            $minAsg     = ($topicTotal > 0) ? PHP_INT_MAX : 0;
+            foreach ($topics as $tpItem) {
+                $cT = (int)($tpItem['asg_count'] ?? (!empty($tpItem['assigned']) ? 1 : 0));
+                if ($cT > 0) $topicAsg++;
+                $minAsg = min($minAsg, $cT);
+            }
+            $cardFaz = ($topicTotal > 0) ? min(5, $minAsg + 1) : 1;
+            $fazDone = 0;
+            foreach ($topics as $tpItem) {
+                if ((int)($tpItem['asg_count'] ?? 0) >= $cardFaz) $fazDone++;
+            }
+            $covPct = $topicTotal > 0 ? (int)round(100 * $fazDone / $topicTotal) : 0;
 
             // Hiç işlem kaydı VE hiç görev ataması olmayan dersi gizle
             $hasAnyHistory = false;
@@ -794,6 +904,7 @@ $insights = array_slice($insights, 0, 6);
             }
             if (!$hasAnyHistory && $topicAsg === 0) continue;
 
+            $cardRelevant = $subjectRelevant($cat, $subjectName);
             $covColor = $covPct >= 67 ? '#22c55e' : ($covPct >= 34 ? '#ec9731' : '#ef4444');
             $covDash  = round(2 * M_PI * 24, 2);
             $covOff   = round($covDash * (1 - min(100, $covPct) / 100), 2);
@@ -805,23 +916,32 @@ $insights = array_slice($insights, 0, 6);
                 <div class="bg-slate-50 border-b border-slate-100 p-4 flex justify-between items-center relative overflow-hidden">
                     <div class="absolute left-0 top-0 bottom-0 w-1 bg-[#223488]"></div>
                     <div class="flex items-center gap-3 min-w-0">
-                        <!-- Müfredat kapsama çemberi: görev verilen konu / toplam konu -->
-                        <div class="relative w-14 h-14 shrink-0" title="Müfredat kapsaması: <?php echo $topicTotal; ?> konudan <?php echo $topicAsg; ?> tanesine görev verildi">
+                        <!-- FAZ'lı müfredat kapsama çemberi -->
+                        <div class="relative w-14 h-14 shrink-0" title="Faz <?php echo $cardFaz; ?>: <?php echo $topicTotal; ?> konudan <?php echo $fazDone; ?> tanesine en az <?php echo $cardFaz; ?> kez görev verildi. Çember %100 olunca bir üst faz başlar (en fazla 5).">
                             <svg viewBox="0 0 56 56" class="w-14 h-14 -rotate-90">
                                 <circle cx="28" cy="28" r="24" fill="none" stroke="#e2e8f0" stroke-width="6"/>
                                 <circle cx="28" cy="28" r="24" fill="none" stroke="<?php echo $covColor; ?>" stroke-width="6" stroke-linecap="round"
                                         stroke-dasharray="<?php echo $covDash; ?>" stroke-dashoffset="<?php echo $covOff; ?>"/>
                             </svg>
-                            <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="absolute inset-0 flex flex-col items-center justify-center leading-none">
                                 <span class="text-[11px] font-black" style="color:<?php echo $covColor; ?>">%<?php echo $covPct; ?></span>
+                                <?php if ($cardFaz > 1): ?><span class="text-[7px] font-black text-indigo-500 mt-0.5">FAZ <?php echo $cardFaz; ?></span><?php endif; ?>
                             </div>
                         </div>
                         <div class="min-w-0">
                             <h3 class="text-lg font-black text-[#223488] truncate"><?php echo htmlspecialchars($subjectName); ?></h3>
-                            <p class="text-[10px] font-bold uppercase tracking-widest text-[#ec9731] bg-orange-50 inline-block px-2 py-0.5 rounded mt-1 border border-orange-100">
-                                <?php echo htmlspecialchars($cat); ?>
-                            </p>
-                            <p class="text-[9px] text-slate-400 font-bold mt-0.5"><?php echo $topicAsg; ?>/<?php echo $topicTotal; ?> konuya görev verildi</p>
+                            <div class="flex items-center gap-1.5 flex-wrap mt-1">
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-[#ec9731] bg-orange-50 inline-block px-2 py-0.5 rounded border border-orange-100">
+                                    <?php echo htmlspecialchars($cat); ?>
+                                </p>
+                                <span class="text-[9px] font-black px-1.5 py-0.5 rounded border <?php echo $cardFaz > 1 ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-slate-50 text-slate-500 border-slate-200'; ?>" title="Tüm konulara <?php echo $cardFaz; ?> kez görev verildiğinde Faz <?php echo min(5, $cardFaz + 1); ?> başlar">
+                                    <?php echo $cardFaz > 1 ? '🔁 ' : ''; ?>FAZ <?php echo $cardFaz; ?>
+                                </span>
+                                <?php if (!$cardRelevant): ?>
+                                <span class="text-[9px] font-black px-1.5 py-0.5 rounded border bg-slate-100 text-slate-400 border-slate-200" title="Öğrencinin alanı/sınıfı için öncelikli değil">ALAN DIŞI</span>
+                                <?php endif; ?>
+                            </div>
+                            <p class="text-[9px] text-slate-400 font-bold mt-0.5"><?php echo $fazDone; ?>/<?php echo $topicTotal; ?> konu<?php echo $cardFaz > 1 ? ' (≥' . $cardFaz . ' görev)' : 'ya görev verildi'; ?></p>
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 justify-end">
