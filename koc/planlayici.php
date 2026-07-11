@@ -159,6 +159,24 @@ foreach (($raw_items ?? []) as $it) {
     </div>
 </div>
 
+<!-- 👥 Bu haftayı başka öğrencilere uygula — onay modalı -->
+<div id="psMultiModal" class="hidden fixed inset-0 z-[80] items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+        <div class="bg-[#223488] px-6 py-4 flex items-center justify-between">
+            <h3 class="font-bold text-white text-base">👥 Başka Öğrencilere Uygula</h3>
+            <button type="button" onclick="psMultiClose()" class="text-white/60 hover:text-white rounded-full w-8 h-8 flex items-center justify-center transition">✕</button>
+        </div>
+        <div class="p-5">
+            <p class="text-xs text-slate-500 mb-3">Bu haftadaki <b id="psMultiCount" class="text-[#223488]">0</b> görev, seçtiğin öğrencilere <b>aynı tarihlerle YENİ görev</b> olarak eklenir. Mevcut programlarına dokunulmaz, silme olmaz.</p>
+            <div id="psMultiList" class="max-h-56 overflow-y-auto custom-scrollbar space-y-1 border border-slate-100 rounded-xl p-2 mb-4"></div>
+            <div class="flex gap-2">
+                <button type="button" onclick="psMultiClose()" class="flex-1 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition text-sm">Vazgeç</button>
+                <button type="button" id="psMultiGo" onclick="psMultiConfirm()" class="flex-[2] py-2.5 rounded-xl font-black text-white bg-[#ec9731] hover:bg-[#d68625] transition text-sm">Uygula</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     'use strict';
@@ -166,6 +184,14 @@ foreach (($raw_items ?? []) as $it) {
     var SID = <?php echo (int)$sid; ?>;
     var WEEK = <?php echo json_encode(array_values($week_dates)); ?>;
     var EXISTING = <?php echo json_encode($psItems, JSON_UNESCAPED_UNICODE); ?>;
+    // Diğer öğrenciler ("başka öğrencilere uygula" için; mevcut öğrenci hariç)
+    var PS_STUDENTS = <?php
+        $psOthers = [];
+        foreach (($my_students ?? []) as $ms) {
+            if ((int)$ms['id'] !== (int)$sid) $psOthers[] = ['id' => (int)$ms['id'], 'name' => trim(($ms['first_name'] ?? '') . ' ' . ($ms['last_name'] ?? ''))];
+        }
+        echo json_encode($psOthers, JSON_UNESCAPED_UNICODE);
+    ?>;
     var DRAFT_KEY  = 'psDraft:' + SID + ':' + WEEK[0];
     var PRESET_KEY = 'psPreset';
     var BASKET_KEY = 'psBasket:' + SID; // Analiz'den + ile eklenen konular (haftadan bağımsız)
@@ -832,6 +858,150 @@ foreach (($raw_items ?? []) as $it) {
             btn.disabled = false; btn.innerHTML = old;
             setStatus('⚠ ' + (err.message || 'Kayıt hatası — taslak yerelde güvende'), 'bg-red-500/40');
         });
+    };
+
+    // ════════════════════════════════════════════════════════════════════
+    // 🧰 ARAÇLAR: geçen haftayı kopyala / şablonlar / çoklu öğrenciye uygula
+    // ════════════════════════════════════════════════════════════════════
+    function toolPost(data){
+        return fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: new URLSearchParams(data)
+        }).then(function(r){ return r.json(); });
+    }
+    function closeToolsMenu(){ var m = document.getElementById('psToolsMenu'); if (m) m.classList.add('hidden'); }
+
+    // Getirilen kalemleri (day_offset'li) bu haftanın TASLAĞINA yeni kart olarak ekle
+    function addItemsAsCards(items){
+        var n = 0;
+        (items || []).forEach(function(it){
+            var off = parseInt(it.day_offset, 10);
+            if (!(off >= 0 && off < WEEK.length)) return;
+            cards.push({
+                uid: 'n'+(uidSeq++), id: null, date: WEEK[off],
+                category: it.category || 'Diğer', subject: it.subject || '', topic: it.topic || '',
+                edu_topic_id: it.edu_topic_id || null,
+                custom_subject: it.custom_subject || it.subject || '', custom_topic: it.custom_topic || it.topic || '',
+                resource_id: it.resource_id || null, resource_title: it.resource_title || '', resource_type: it.resource_type || '',
+                action_type: it.action_type || 'soru', amount: parseInt(it.amount, 10) || 1,
+                time_note: it.time_note || '', task_note: it.task_note || '',
+                status: 'bekliyor', deleted: false
+            });
+            n++;
+        });
+        if (n) renderBoard();
+        return n;
+    }
+
+    // 📋 Geçen haftayı kopyala → taslağa ekler (Haftayı Kaydet ile onaylanır)
+    window.psToolCopyPrevWeek = function(){
+        closeToolsMenu();
+        var d = new Date(WEEK[0] + 'T12:00:00'); d.setDate(d.getDate() - 7);
+        var ws = d.toISOString().slice(0, 10);
+        toolPost({ ajax: 'plan_fetch_week', week_start: ws }).then(function(j){
+            if (!j.ok) { alert(j.error || 'Hafta okunamadı.'); return; }
+            if (!j.items.length) { alert('Geçen hafta boş — kopyalanacak görev yok.'); return; }
+            if (!confirm('Geçen haftadan ' + j.items.length + ' görev bu haftanın taslağına eklenecek (durumlar "bekliyor" olarak sıfırlanır). Devam?')) return;
+            var n = addItemsAsCards(j.items);
+            setStatus('✓ ' + n + ' görev taslağa eklendi — Haftayı Kaydet ile onayla', 'bg-white/10');
+        }).catch(function(){ alert('Bağlantı hatası.'); });
+    };
+
+    // 💾 Bu haftayı şablon olarak kaydet
+    window.psToolSaveTemplate = function(){
+        closeToolsMenu();
+        var live = cards.filter(function(c){ return !c.deleted; });
+        if (!live.length) { alert('Bu hafta boş — şablona kaydedilecek görev yok.'); return; }
+        var name = prompt('Şablon adı:', 'Haftalık Plan');
+        if (!name || !name.trim()) return;
+        var items = live.map(function(c){
+            return { day_offset: WEEK.indexOf(c.date), category: c.category, subject: c.subject, topic: c.topic,
+                edu_topic_id: c.edu_topic_id, custom_subject: c.custom_subject || c.subject, custom_topic: c.custom_topic || c.topic,
+                resource_id: c.resource_id, resource_title: c.resource_title, resource_type: c.resource_type,
+                action_type: c.action_type, amount: c.amount, time_note: c.time_note, task_note: c.task_note };
+        });
+        toolPost({ ajax: 'tpl_save', name: name.trim(), items: JSON.stringify(items) }).then(function(j){
+            alert(j.ok ? '✅ "' + name.trim() + '" şablonu kaydedildi (' + j.items_count + ' görev).' : (j.error || 'Kaydedilemedi.'));
+        }).catch(function(){ alert('Bağlantı hatası.'); });
+    };
+
+    // 📂 Şablon listesi (menü içinde) — uygula / sil
+    window.psToolShowTemplates = function(){
+        var box = document.getElementById('psTplList');
+        if (!box) return;
+        box.classList.toggle('hidden');
+        if (box.classList.contains('hidden')) return;
+        box.innerHTML = '<p class="text-center text-[10px] text-slate-400 py-2">Yükleniyor...</p>';
+        toolPost({ ajax: 'tpl_list' }).then(function(j){
+            if (!j.ok) { box.innerHTML = '<p class="text-center text-[10px] text-red-400 py-2">' + esc(j.error || 'Hata') + '</p>'; return; }
+            if (!j.templates.length) { box.innerHTML = '<p class="text-center text-[10px] text-slate-400 py-2">Henüz şablon yok.<br>Önce "Haftayı şablon olarak kaydet".</p>'; return; }
+            box.innerHTML = j.templates.map(function(t){
+                return '<div class="flex items-center gap-1 rounded-lg hover:bg-indigo-50 transition">' +
+                    '<button type="button" data-tpl="' + t.id + '" class="ps-tpl-apply flex-1 text-left px-3 py-2 text-[11px] font-bold text-slate-700 truncate">📂 ' + esc(t.name) + ' <span class="text-[9px] text-slate-400 font-semibold">(' + t.items_count + ' görev · ' + t.d + ')</span></button>' +
+                    '<button type="button" data-tpl="' + t.id + '" class="ps-tpl-del shrink-0 px-2 py-2 text-[10px] font-black text-slate-300 hover:text-red-500 transition" title="Şablonu sil">✕</button></div>';
+            }).join('');
+            box.querySelectorAll('.ps-tpl-apply').forEach(function(b){
+                b.addEventListener('click', function(){
+                    toolPost({ ajax: 'tpl_get', id: b.dataset.tpl }).then(function(g){
+                        if (!g.ok) { alert(g.error || 'Şablon okunamadı.'); return; }
+                        closeToolsMenu();
+                        var n = addItemsAsCards(g.items);
+                        setStatus('✓ Şablondan ' + n + ' görev taslağa eklendi — Haftayı Kaydet ile onayla', 'bg-white/10');
+                    });
+                });
+            });
+            box.querySelectorAll('.ps-tpl-del').forEach(function(b){
+                b.addEventListener('click', function(ev){
+                    ev.stopPropagation();
+                    if (!confirm('Şablon silinsin mi?')) return;
+                    toolPost({ ajax: 'tpl_delete', id: b.dataset.tpl }).then(function(){
+                        box.classList.add('hidden');      // kapat...
+                        window.psToolShowTemplates();     // ...ve yeniden yükleyerek aç
+                    });
+                });
+            });
+        });
+    };
+
+    // 👥 Bu haftayı başka öğrencilere uygula
+    window.psToolMultiApply = function(){
+        closeToolsMenu();
+        var live = cards.filter(function(c){ return !c.deleted; });
+        if (!live.length) { alert('Bu hafta boş — uygulanacak görev yok.'); return; }
+        if (!PS_STUDENTS.length) { alert('Uygulanacak başka öğrenci yok.'); return; }
+        document.getElementById('psMultiCount').textContent = live.length;
+        document.getElementById('psMultiList').innerHTML = PS_STUDENTS.map(function(s){
+            return '<label class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer">' +
+                '<input type="checkbox" class="ps-multi-stu w-4 h-4 accent-[#223488]" value="' + s.id + '">' +
+                '<span class="text-xs font-bold text-slate-700">' + esc(s.name) + '</span></label>';
+        }).join('');
+        var m = document.getElementById('psMultiModal');
+        m.classList.remove('hidden'); m.classList.add('flex');
+    };
+    window.psMultiClose = function(){
+        var m = document.getElementById('psMultiModal');
+        m.classList.add('hidden'); m.classList.remove('flex');
+    };
+    window.psMultiConfirm = function(){
+        var picked = Array.prototype.slice.call(document.querySelectorAll('.ps-multi-stu:checked')).map(function(el){ return parseInt(el.value, 10); });
+        if (!picked.length) { alert('En az bir öğrenci seç.'); return; }
+        var live = cards.filter(function(c){ return !c.deleted; });
+        var items = live.map(function(c){
+            return { date: c.date, action_type: c.action_type, amount: c.amount,
+                edu_topic_id: c.edu_topic_id, custom_subject: c.custom_subject || c.subject, custom_topic: c.custom_topic || c.topic,
+                resource_id: c.resource_id, resource_title: c.resource_title,
+                time_note: c.time_note, task_note: c.task_note };
+        });
+        if (!confirm(picked.length + ' öğrenciye toplam ' + (items.length * picked.length) + ' görev eklenecek. Bu işlem doğrudan kaydedilir. Devam?')) return;
+        var btn = document.getElementById('psMultiGo');
+        btn.disabled = true; btn.textContent = '⏳ Uygulanıyor...';
+        toolPost({ ajax: 'plan_apply_multi', students: JSON.stringify(picked), items: JSON.stringify(items) }).then(function(j){
+            btn.disabled = false; btn.textContent = 'Uygula';
+            if (!j.ok) { alert(j.error || 'Uygulanamadı.'); return; }
+            window.psMultiClose();
+            alert('✅ ' + j.students + ' öğrenciye ' + j.created + ' görev eklendi.' + (j.skipped ? ' (' + j.skipped + ' geçersiz kalem atlandı)' : ''));
+        }).catch(function(){ btn.disabled = false; btn.textContent = 'Uygula'; alert('Bağlantı hatası.'); });
     };
 
     // Çevrimiçi/çevrimdışı durum yansıması
