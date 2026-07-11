@@ -1,7 +1,12 @@
 <?php
 // save_temp_pdf.php — Geçici PDF kaydet, 48 saat sonra sil
 require_once 'db.php';
-session_start();
+// Oturumu diğer AJAX uçlarıyla (ajax/push_*.php, header.php) AYNI parametrelerle
+// başlat — çerez yolu farkında oturum bulunamayıp "Yetkisiz erişim" dönmesin.
+if (session_status() === PHP_SESSION_NONE) {
+    session_set_cookie_params(0, '/');
+    session_start();
+}
 
 header('Content-Type: application/json; charset=utf-8');
 
