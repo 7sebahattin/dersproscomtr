@@ -444,6 +444,8 @@ foreach (($raw_items ?? []) as $it) {
                 '<span class="' + am[1] + ' text-white rounded px-1.5 py-[1px] text-[8px] font-black">' + c.amount + ' ' + am[0] + '</span>' +
                 (c.time_note ? '<span class="text-[8px] font-bold text-[#ec9731]">⏰' + esc(c.time_note) + '</span>' : '') +
                 (c.task_note ? '<span class="text-[8px] font-bold text-amber-700 truncate max-w-[80px]">📝' + esc(c.task_note) + '</span>' : '') +
+                // Kapalıyken sağ altta minik "tıklayınca açılır" ipucu
+                (openEditor === c.uid ? '' : '<span class="ml-auto text-[9px] leading-none text-slate-300 group-hover:text-[#223488] transition select-none" title="Düzenlemek için karta tıkla">▾</span>') +
             '</div>' +
             (openEditor === c.uid ? editorHtml(c) : '');
         // Sürükleme (gün değiştirme)
