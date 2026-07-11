@@ -621,13 +621,13 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
                 <div id="kocMoreMenu" class="hidden absolute left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 z-[60]">
                     <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendWhatsappReport();"
                             class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-green-50 transition">
-                        <span class="w-7 h-7 rounded-lg bg-[#25D366] text-white flex items-center justify-center"><i class="fa-brands fa-whatsapp"></i></span> Veliye Mesaj At</button>
+                        <span class="text-lg leading-none">💬</span> Veliye Mesaj At</button>
                     <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendStudentMessage();"
                             class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-amber-50 transition">
-                        <span class="w-7 h-7 rounded-lg bg-[#ec9731] text-white flex items-center justify-center"><i class="fa-regular fa-paper-plane"></i></span> Öğrenciye Mesaj At</button>
+                        <span class="text-lg leading-none">📨</span> Öğrenciye Mesaj At</button>
                     <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); downloadPdfProgram();"
                             class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-slate-50 transition">
-                        <span class="w-7 h-7 rounded-lg bg-[#223488] text-white flex items-center justify-center"><i class="fa-solid fa-file-pdf"></i></span> PDF İndir</button>
+                        <span class="text-lg leading-none">📄</span> PDF İndir</button>
                 </div>
             </div>
 
