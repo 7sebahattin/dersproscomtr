@@ -14,10 +14,10 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/../db.php';
 
-// Giriş yapmış öğrenci VEYA öğretmen (öğretmen bildirimleri: T_LOGIN/T_TASKS).
+// Giriş yapmış öğrenci, öğretmen (T_LOGIN/T_TASKS) veya VELİ (P_WEEKLY haftalık özet).
 // Not: push_subscriptions.student_id sütunu aslında "user_id" anlamında kullanılır;
-// öğrenci cron sorgusu role='student' filtrelediği için öğretmen kayıtları karışmaz.
-if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'] ?? '', ['student', 'teacher'], true)) {
+// cron sorguları rol filtrelediği için kayıtlar birbirine karışmaz.
+if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'] ?? '', ['student', 'teacher', 'parent'], true)) {
     http_response_code(401);
     echo json_encode(['ok' => false, 'msg' => 'Yetkisiz erişim.']);
     exit;

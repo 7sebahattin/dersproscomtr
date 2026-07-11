@@ -105,6 +105,8 @@ $notif_defaults = [
     // Öğretmene giden özet bildirimler (student_id her zaman NULL kaydedilir)
     'T_LOGIN'  => ['hour'=>17, 'title'=>'👀 Giriş Yapmayan Öğrenciler',  'body'=>'{toplam} öğrenciden {sayi} tanesi bugün sisteme hiç girmedi: {isimler}'],
     'T_TASKS'  => ['hour'=>22, 'title'=>'📉 Görev Yapmayan Öğrenciler', 'body'=>'Bugün görevi olan {toplam} öğrenciden {sayi} tanesi henüz hiç görev işaretlemedi: {isimler}'],
+    // Veliye giden haftalık özet (yalnızca Pazar; student_id=NULL kaydedilir)
+    'P_WEEKLY' => ['hour'=>20, 'title'=>'📊 Haftalık Gelişim Özeti — {ogrenci}', 'body'=>'{ogrenci} bu hafta {gorev_yapilan}/{gorev_toplam} görevi tamamladı (tamamlama: %{yuzde}). Çözülen soru: {soru} · Konu çalışması: {konu_dk} dk.'],
 ];
 
 function resolve_notif(PDO $pdo, int $teacher_id, int $student_id, string $scenario, string $field, array $defaults): mixed {
@@ -508,6 +510,85 @@ foreach ($teachers as $teacher) {
 
     $sendTeacher('T_LOGIN', $notLogged);
     $sendTeacher('T_TASKS', $noTasks);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// VELİ HAFTALIK ÖZETİ — P_WEEKLY (yalnızca PAZAR, vars. 20:00)
+// Veli hesabının push aboneliğine, çocuğunun bu haftaki görev/soru özetini yollar.
+// Ayar: öğretmenin notification_settings kaydı (student_id=NULL, scenario=P_WEEKLY).
+// Tekrar koruması: push_notification_log (student_id=VELİ id, tip P_WEEKLY_{çocukId},
+// tarih=hafta başlangıcı) — aynı hafta ikinci kez gitmez.
+// ════════════════════════════════════════════════════════════════════════════
+if ((int)$now->format('N') === 7) {
+    try {
+        $parents = $pdo->query("
+            SELECT DISTINCT p.id AS parent_id,
+                   CONCAT(p.first_name, ' ', p.last_name) AS parent_name,
+                   pr.student_id,
+                   CONCAT(stu.first_name, ' ', stu.last_name) AS student_name,
+                   stu.first_name AS student_first,
+                   cr.teacher_id
+            FROM users p
+            JOIN push_subscriptions ps ON ps.student_id = p.id
+            JOIN parent_relationships pr ON pr.parent_id = p.id
+            JOIN users stu ON stu.id = pr.student_id
+            LEFT JOIN coaching_relationships cr ON cr.student_id = pr.student_id
+            WHERE p.role = 'parent' AND p.push_notifications_enabled = 1
+        ")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { $parents = []; }
+
+    if ($parents) cron_log("\nVeli haftalık özet — abone veli-çocuk çifti: " . count($parents));
+
+    $weekMon = date('Y-m-d', strtotime('monday this week'));
+    $weekSun = date('Y-m-d', strtotime($weekMon . ' +6 days'));
+
+    foreach ($parents as $pr) {
+        $pid   = (int)$pr['parent_id'];
+        $stuId = (int)$pr['student_id'];
+        $tid   = (int)($pr['teacher_id'] ?? 0);
+
+        if (!notif_active($pdo, $tid, 0, 'P_WEEKLY')) { cron_log("  [P] Öğretmen kapatmış, atlandı ({$pr['student_name']})."); continue; }
+        $h = (int)resolve_notif($pdo, $tid, 0, 'P_WEEKLY', 'hour', $notif_defaults);
+        if ($currentHour < $h || $currentHour > $h + NOTIF_CATCHUP_HOURS) continue;
+
+        // Haftalık istatistik (Pzt-Paz)
+        try {
+            $ws = $pdo->prepare("
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN status IN ('yapildi','yarim') THEN 1 ELSE 0 END) AS done,
+                       SUM(CASE WHEN action_type='soru' AND status='yapildi' THEN amount ELSE 0 END) AS soru,
+                       SUM(CASE WHEN action_type='konu' AND status='yapildi' THEN amount ELSE 0 END) AS konu_dk
+                FROM schedule_items
+                WHERE student_id = ? AND date BETWEEN ? AND ?");
+            $ws->execute([$stuId, $weekMon, $weekSun]);
+            $st = $ws->fetch(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $e) { continue; }
+
+        $total = (int)($st['total'] ?? 0);
+        if ($total === 0) { cron_log("  [P] {$pr['student_name']} — bu hafta görev yok, özet gönderilmedi."); continue; }
+        $done  = (int)($st['done'] ?? 0);
+        $pct   = (int)round(100 * $done / $total);
+
+        // Velinin abonelikleri (send_push'un beklediği yapı)
+        $subStmt = $pdo->prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE student_id = ?");
+        $subStmt->execute([$pid]);
+        $parent = ['id' => $pid, 'name' => $pr['parent_name'], 'subscriptions' => $subStmt->fetchAll(PDO::FETCH_ASSOC)];
+        if (empty($parent['subscriptions'])) continue;
+
+        $repl = [
+            '{ogrenci}'       => $pr['student_first'] ?: $pr['student_name'],
+            '{yuzde}'         => $pct,
+            '{gorev_yapilan}' => $done,
+            '{gorev_toplam}'  => $total,
+            '{soru}'          => (int)($st['soru'] ?? 0),
+            '{konu_dk}'       => (int)($st['konu_dk'] ?? 0),
+        ];
+        $title = strtr((string)resolve_notif($pdo, $tid, 0, 'P_WEEKLY', 'title', $notif_defaults), $repl);
+        $body  = strtr((string)resolve_notif($pdo, $tid, 0, 'P_WEEKLY', 'body',  $notif_defaults), $repl);
+
+        cron_log("► Veli: {$pr['parent_name']} ← {$pr['student_name']} ($done/$total, %$pct)");
+        send_push($webPush, $pdo, $parent, 'P_WEEKLY_' . $stuId, $weekMon, $title, $body, BASE_URL . '/veli/veli_paneli.php');
+    }
 }
 
 cron_log("\n=== Cron tamamlandı: " . (new DateTime())->format('Y-m-d H:i:s') . " ===\n");

@@ -157,15 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
     // B2. PLANLAYICI YAYINLAMA — Planlama Stüdyosu'nun "Haftayı Kaydet" ucu.
     //     Taslakta biriken TÜM değişiklikler (ekle / güncelle / sil) tek istekte,
     //     tek TRANSACTION içinde uygulanır: hata olursa hiçbiri yazılmaz.
-    if ($action === 'plan_apply') {
-        $ops = json_decode((string)($_POST['ops'] ?? ''), true);
-        if (!is_array($ops)) { echo json_encode(['ok' => false, 'error' => 'Geçersiz veri.']); exit; }
-        $create = is_array($ops['create'] ?? null) ? $ops['create'] : [];
-        $update = is_array($ops['update'] ?? null) ? $ops['update'] : [];
-        $delete = is_array($ops['delete'] ?? null) ? $ops['delete'] : [];
-        if (!count($create) && !count($update) && !count($delete)) { echo json_encode(['ok' => false, 'error' => 'Kaydedilecek değişiklik yok.']); exit; }
-        if (count($create) > 300 || count($update) > 500 || count($delete) > 500) { echo json_encode(['ok' => false, 'error' => 'Tek seferde çok fazla değişiklik.']); exit; }
-
+    if ($action === 'plan_apply' || $action === 'plan_apply_multi') {
         $optCols = [];
         foreach (['edu_topic_id','resource_title','resource_id','task_note'] as $c) {
             try { $optCols[$c] = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE '$c'")->rowCount() > 0; }
@@ -201,6 +193,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
         $insCols[] = 'item_order';
         $qm  = implode(', ', array_fill(0, count($insCols), '?'));
         $ins = $pdo->prepare("INSERT INTO schedule_items (".implode(', ', $insCols).") VALUES ($qm)");
+
+        // ── ÇOKLU ÖĞRENCİYE UYGULA: bu haftadaki kartlar seçilen öğrencilere
+        //    YENİ görev olarak eklenir (mevcut programları silinmez/değişmez). ──
+        if ($action === 'plan_apply_multi') {
+            $targets = json_decode((string)($_POST['students'] ?? ''), true);
+            $items   = json_decode((string)($_POST['items'] ?? ''), true);
+            if (!is_array($targets) || !count($targets) || !is_array($items) || !count($items)) {
+                echo json_encode(['ok' => false, 'error' => 'Öğrenci ve görev listesi gerekli.']); exit;
+            }
+            if (count($targets) > 50 || count($items) > 300) {
+                echo json_encode(['ok' => false, 'error' => 'Tek seferde çok fazla öğrenci/görev.']); exit;
+            }
+            // Hedef öğrencilerin TÜMÜ bu öğretmene bağlı olmalı
+            $ids = array_values(array_unique(array_filter(array_map('intval', $targets), fn($v) => $v > 0)));
+            if (!count($ids)) { echo json_encode(['ok' => false, 'error' => 'Geçerli öğrenci yok.']); exit; }
+            $inQ = implode(',', array_fill(0, count($ids), '?'));
+            $chk = $pdo->prepare("SELECT student_id FROM coaching_relationships WHERE teacher_id = ? AND student_id IN ($inQ)");
+            $chk->execute(array_merge([$teacher_id], $ids));
+            $owned = array_map('intval', $chk->fetchAll(PDO::FETCH_COLUMN));
+            if (count($owned) !== count($ids)) {
+                echo json_encode(['ok' => false, 'error' => 'Listenizde olmayan öğrenci seçildi.']); exit;
+            }
+            $nCre = 0; $skipped = 0;
+            try {
+                $pdo->beginTransaction();
+                foreach ($owned as $stuId) {
+                    foreach ($items as $it) {
+                        $n = is_array($it) ? $normalize($it) : null;
+                        if (!$n) { $skipped++; continue; }
+                        $vals = [$stuId, $n['date'], $n['amount'], $n['action_type'], 'bekliyor', null, $n['custom_subject'], $n['custom_topic'], $n['time_note']];
+                        foreach ($optCols as $c => $has) if ($has) $vals[] = $n['opt'][$c];
+                        $vals[] = 0;
+                        $ins->execute($vals);
+                        $nCre++;
+                    }
+                }
+                $pdo->commit();
+                echo json_encode(['ok' => true, 'created' => $nCre, 'students' => count($owned), 'skipped' => $skipped]); exit;
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                echo json_encode(['ok' => false, 'error' => 'Uygulama hatası: hiçbir öğrenciye yazılmadı.']); exit;
+            }
+        }
+
+        // ── HAFTAYI KAYDET (tek öğrenci, taslak diff'i) ──
+        $ops = json_decode((string)($_POST['ops'] ?? ''), true);
+        if (!is_array($ops)) { echo json_encode(['ok' => false, 'error' => 'Geçersiz veri.']); exit; }
+        $create = is_array($ops['create'] ?? null) ? $ops['create'] : [];
+        $update = is_array($ops['update'] ?? null) ? $ops['update'] : [];
+        $delete = is_array($ops['delete'] ?? null) ? $ops['delete'] : [];
+        if (!count($create) && !count($update) && !count($delete)) { echo json_encode(['ok' => false, 'error' => 'Kaydedilecek değişiklik yok.']); exit; }
+        if (count($create) > 300 || count($update) > 500 || count($delete) > 500) { echo json_encode(['ok' => false, 'error' => 'Tek seferde çok fazla değişiklik.']); exit; }
 
         // UPDATE: status ve topic_id bilerek dokunulmaz (save_schedule ile aynı;
         // topic_id'yi yazmak eski müfredat bağını sessizce koparırdı).
@@ -244,6 +288,130 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             echo json_encode(['ok' => false, 'error' => 'Kaydetme hatası: tüm değişiklikler geri alındı.']); exit;
         }
+    }
+
+    // B3. HAFTA GETİR — "Geçen haftayı kopyala" kaynağı: verilen haftanın
+    //     görevlerini gün-ofseti (0-6) ile döndürür; istemci taslağa kart olarak ekler.
+    if ($action === 'plan_fetch_week') {
+        $ws = (string)($_POST['week_start'] ?? '');
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ws)) { echo json_encode(['ok' => false, 'error' => 'Geçersiz tarih.']); exit; }
+        $we = date('Y-m-d', strtotime("$ws +6 days"));
+        try {
+            $q = $pdo->prepare("
+                SELECT si.*, t.name AS old_topic_name, s.name AS old_subject_name, s.category AS old_category,
+                       et.topic_name AS edu_topic_name, es.lesson_name AS edu_subject_name, ec.name AS edu_category_name,
+                       er.type AS res_type
+                FROM schedule_items si
+                LEFT JOIN coaching_topics t ON si.topic_id = t.id
+                LEFT JOIN coaching_subjects s ON t.subject_id = s.id
+                LEFT JOIN education_topics et ON si.edu_topic_id = et.id
+                LEFT JOIN education_subjects es ON et.subject_id = es.id
+                LEFT JOIN education_categories ec ON es.category_id = ec.id
+                LEFT JOIN education_resources er ON si.resource_id = er.id
+                WHERE si.student_id = ? AND si.date BETWEEN ? AND ?
+                ORDER BY si.date, si.item_order, si.id");
+            $q->execute([$sid, $ws, $we]);
+            $items = [];
+            $t0 = strtotime($ws);
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $it) {
+                $subject = ($it['edu_subject_name'] ?? '') ?: (!empty($it['old_topic_name']) ? ($it['old_subject_name'] ?? '') : ($it['custom_subject'] ?? ''));
+                $topic   = ($it['edu_topic_name'] ?? '')   ?: (!empty($it['old_topic_name']) ? $it['old_topic_name'] : ($it['custom_topic'] ?? ''));
+                $catN    = ($it['edu_category_name'] ?? '') ?: (($it['old_category'] ?? '') ?: 'Diğer');
+                // Kopyada HEDEF esas alınır (durum girilmişse amount gerçekleşene dönmüş olabilir)
+                $hedef = (isset($it['target_amount']) && $it['target_amount'] !== null && $it['target_amount'] !== '')
+                    ? (int)$it['target_amount'] : (int)$it['amount'];
+                $items[] = [
+                    'day_offset'     => (int)round((strtotime($it['date']) - $t0) / 86400),
+                    'category'       => $catN,
+                    'subject'        => (string)$subject,
+                    'topic'          => (string)$topic,
+                    'edu_topic_id'   => !empty($it['edu_topic_id']) ? (int)$it['edu_topic_id'] : null,
+                    'custom_subject' => (string)$subject,
+                    'custom_topic'   => (string)$topic,
+                    'resource_id'    => !empty($it['resource_id']) ? (int)$it['resource_id'] : null,
+                    'resource_title' => (string)($it['resource_title'] ?? ''),
+                    'resource_type'  => (string)($it['res_type'] ?? ''),
+                    'action_type'    => $it['action_type'],
+                    'amount'         => $hedef,
+                    'time_note'      => trim((string)($it['time_note'] ?? '')),
+                    'task_note'      => trim((string)($it['task_note'] ?? '')),
+                ];
+            }
+            echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_UNICODE); exit;
+        } catch (Throwable $e) { echo json_encode(['ok' => false, 'error' => 'Hafta okunamadı.']); exit; }
+    }
+
+    // B5. HAFTA ŞABLONLARI — kaydet / listele / getir / sil (öğretmene özel)
+    if (in_array($action, ['tpl_save','tpl_list','tpl_get','tpl_delete'], true)) {
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS plan_templates (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                teacher_id INT NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                data LONGTEXT NOT NULL,
+                items_count INT NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_tpl_teacher (teacher_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci");
+        } catch (Throwable $e) {}
+
+        try {
+            if ($action === 'tpl_list') {
+                $st = $pdo->prepare("SELECT id, name, items_count, DATE_FORMAT(created_at, '%d.%m.%Y') AS d FROM plan_templates WHERE teacher_id = ? ORDER BY id DESC LIMIT 50");
+                $st->execute([$teacher_id]);
+                echo json_encode(['ok' => true, 'templates' => $st->fetchAll(PDO::FETCH_ASSOC)], JSON_UNESCAPED_UNICODE); exit;
+            }
+            if ($action === 'tpl_get') {
+                $tid = (int)($_POST['id'] ?? 0);
+                $st = $pdo->prepare("SELECT data FROM plan_templates WHERE id = ? AND teacher_id = ?");
+                $st->execute([$tid, $teacher_id]);
+                $data = $st->fetchColumn();
+                if ($data === false) { echo json_encode(['ok' => false, 'error' => 'Şablon bulunamadı.']); exit; }
+                echo json_encode(['ok' => true, 'items' => (json_decode($data, true) ?: [])], JSON_UNESCAPED_UNICODE); exit;
+            }
+            if ($action === 'tpl_delete') {
+                $tid = (int)($_POST['id'] ?? 0);
+                $st = $pdo->prepare("DELETE FROM plan_templates WHERE id = ? AND teacher_id = ?");
+                $st->execute([$tid, $teacher_id]);
+                echo json_encode(['ok' => true, 'deleted' => $st->rowCount()]); exit;
+            }
+            // tpl_save — istemcinin gönderdiği kart listesini temizleyip sakla
+            $name  = trim(mb_substr((string)($_POST['name'] ?? ''), 0, 100));
+            $itemsIn = json_decode((string)($_POST['items'] ?? ''), true);
+            if ($name === '' || !is_array($itemsIn) || !count($itemsIn)) { echo json_encode(['ok' => false, 'error' => 'Şablon adı ve görev listesi gerekli.']); exit; }
+            if (count($itemsIn) > 300) { echo json_encode(['ok' => false, 'error' => 'Şablon çok büyük.']); exit; }
+            $clean = [];
+            foreach ($itemsIn as $it) {
+                if (!is_array($it)) continue;
+                $off = (int)($it['day_offset'] ?? -1);
+                if ($off < 0 || $off > 6) continue;
+                $act = in_array(($it['action_type'] ?? ''), ['soru','konu','video'], true) ? $it['action_type'] : 'soru';
+                $eduTid = !empty($it['edu_topic_id']) ? (int)$it['edu_topic_id'] : null;
+                $csub = trim((string)($it['custom_subject'] ?? ($it['subject'] ?? '')));
+                $ctop = trim((string)($it['custom_topic'] ?? ($it['topic'] ?? '')));
+                if (!$eduTid && $csub === '' && $ctop === '') continue; // isimsiz görev
+                $clean[] = [
+                    'day_offset'     => $off,
+                    'category'       => trim((string)($it['category'] ?? '')),
+                    'subject'        => trim((string)($it['subject'] ?? '')),
+                    'topic'          => trim((string)($it['topic'] ?? '')),
+                    'edu_topic_id'   => $eduTid,
+                    'custom_subject' => $csub,
+                    'custom_topic'   => $ctop,
+                    'resource_id'    => !empty($it['resource_id']) ? (int)$it['resource_id'] : null,
+                    'resource_title' => trim((string)($it['resource_title'] ?? '')),
+                    'resource_type'  => trim((string)($it['resource_type'] ?? '')),
+                    'action_type'    => $act,
+                    'amount'         => ($act === 'video') ? 1 : max(1, (int)($it['amount'] ?? 1)),
+                    'time_note'      => trim((string)($it['time_note'] ?? '')),
+                    'task_note'      => mb_substr(trim((string)($it['task_note'] ?? '')), 0, 255),
+                ];
+            }
+            if (!count($clean)) { echo json_encode(['ok' => false, 'error' => 'Geçerli görev bulunamadı.']); exit; }
+            $pdo->prepare("INSERT INTO plan_templates (teacher_id, name, data, items_count) VALUES (?,?,?,?)")
+                ->execute([$teacher_id, $name, json_encode($clean, JSON_UNESCAPED_UNICODE), count($clean)]);
+            echo json_encode(['ok' => true, 'id' => (int)$pdo->lastInsertId(), 'items_count' => count($clean)]); exit;
+        } catch (Throwable $e) { echo json_encode(['ok' => false, 'error' => 'Şablon işlemi başarısız.']); exit; }
     }
 
     // C. SIRALAMA GÜNCELLEME
@@ -653,6 +821,29 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
             <!-- Taslak durumu + Sıfırla + Kaydet — üst-barın sağ köşesi; yalnızca Program sekmesinde (masaüstü) -->
             <div class="ps-progbar hidden lg:flex items-center gap-2 ml-auto flex-shrink-0">
                 <span id="psDraftStatus" class="hidden lg:inline-flex items-center gap-1.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg px-2.5 py-1.5 whitespace-nowrap">✓ Hazır</span>
+
+                <!-- 🧰 Araçlar: şablonlar + geçen hafta + çoklu öğrenciye uygulama -->
+                <div class="relative">
+                    <button type="button" onclick="event.stopPropagation(); document.getElementById('psToolsMenu').classList.toggle('hidden');"
+                            class="text-[10px] font-bold text-[#223488] bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg px-2.5 py-2 transition whitespace-nowrap" title="Şablonlar ve toplu işlemler">🧰 Araçlar ▾</button>
+                    <div id="psToolsMenu" class="hidden absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 z-[70]">
+                        <button onclick="psToolCopyPrevWeek()"
+                                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-blue-50 transition text-left">
+                            <span class="text-base leading-none">📋</span> Geçen haftayı kopyala</button>
+                        <button onclick="psToolSaveTemplate()"
+                                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-indigo-50 transition text-left">
+                            <span class="text-base leading-none">💾</span> Haftayı şablon olarak kaydet</button>
+                        <button onclick="psToolShowTemplates()"
+                                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-indigo-50 transition text-left">
+                            <span class="text-base leading-none">📂</span> Şablondan uygula</button>
+                        <div id="psTplList" class="hidden max-h-52 overflow-y-auto border-t border-slate-100 mt-1 pt-1"></div>
+                        <div class="h-px bg-slate-100 my-1"></div>
+                        <button onclick="psToolMultiApply()"
+                                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-emerald-50 transition text-left">
+                            <span class="text-base leading-none">👥</span> Bu haftayı başka öğrencilere uygula</button>
+                    </div>
+                </div>
+
                 <button type="button" onclick="psResetDraft()" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-2 transition whitespace-nowrap" title="Kaydedilmemiş tüm değişiklikleri at, tabloya dön">↺ Taslağı Sıfırla</button>
                 <button type="button" id="psSaveBtn" onclick="psSaveWeek()" disabled
                     class="text-xs font-black text-white bg-[#ec9731] hover:bg-[#d68625] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-4 py-2 shadow-sm transition whitespace-nowrap">💾 Haftayı Kaydet <span id="psSaveCount"></span></button>
@@ -662,10 +853,12 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
         </div>
     </div>
     <script>
-    // 3-nokta menüyü dışarı tıklayınca kapat
+    // 3-nokta ve Araçlar menülerini dışarı tıklayınca kapat
     document.addEventListener('click', function(e){
-        var m = document.getElementById('kocMoreMenu');
-        if (m && !m.classList.contains('hidden') && !m.parentElement.contains(e.target)) m.classList.add('hidden');
+        ['kocMoreMenu', 'psToolsMenu'].forEach(function(id){
+            var m = document.getElementById(id);
+            if (m && !m.classList.contains('hidden') && !m.parentElement.contains(e.target)) m.classList.add('hidden');
+        });
     });
     </script>
 

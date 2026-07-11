@@ -623,8 +623,8 @@ window.__VAPID_PUB__ = '<?php echo htmlspecialchars($vapidPublicKey, ENT_QUOTES)
     async function initPush() {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
-        // Öğrenci/öğretmen bildirimleri DB'de kapalıysa hiçbir şey yapma
-        const PUSH_ROLE_OK = (MY_ROLE === 'student' || MY_ROLE === 'teacher');
+        // Öğrenci/öğretmen/veli bildirimleri DB'de kapalıysa hiçbir şey yapma
+        const PUSH_ROLE_OK = (MY_ROLE === 'student' || MY_ROLE === 'teacher' || MY_ROLE === 'parent');
         if (PUSH_ROLE_OK && PUSH_ENABLED === 0) return;
 
         // Tarayıcı izin durumunu kontrol et
@@ -649,10 +649,10 @@ window.__VAPID_PUB__ = '<?php echo htmlspecialchars($vapidPublicKey, ENT_QUOTES)
             return;
         }
 
-        // İzin henüz istenmemişse → sor (yalnızca öğrenciye otomatik sorulur;
-        // öğretmen izni Bildirim Ayarları sayfasındaki butonla verir)
+        // İzin henüz istenmemişse → sor (öğrenci ve VELİYE otomatik sorulur —
+        // ikisi de bildirim alıcısıdır; öğretmen izni Bildirim Ayarları'ndaki butonla verir)
         if (Notification.permission === 'default') {
-            if (MY_ROLE !== 'student') return;
+            if (MY_ROLE !== 'student' && MY_ROLE !== 'parent') return;
             // Küçük bir gecikme: kullanıcı sayfaya yerleşsin
             setTimeout(async () => {
                 const permission = await Notification.requestPermission();

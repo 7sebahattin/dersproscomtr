@@ -31,6 +31,14 @@ Options -Indexes
 # Sınav PDF'lerine DOĞRUDAN erişimi engelle (öğrenci kişisel verisi - KVKK).
 # Bu dosyalar yalnızca giriş yapmış kullanıcılara dosya.php üzerinden sunulur.
 RewriteEngine On
+
+# www → www'suz KANONİK yönlendirme. Oturum çerezi host'a özel olduğundan
+# www.derspros.com.tr ile derspros.com.tr İKİ AYRI oturum demekti; öğretmen
+# www'lu adreste kalınca PDF/WhatsApp gönderimi "Yetkisiz erişim" veriyordu.
+# Tek adrese sabitleyerek kökten çözülür (test alt alanında da zararsızdır).
+RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+RewriteRule ^ https://%1%{REQUEST_URI} [R=301,L]
+
 RewriteRule ^uploads/exams/ - [F,L]
 
 # Ödeme dekontlarına DOĞRUDAN erişimi engelle (mali/kişisel veri).
