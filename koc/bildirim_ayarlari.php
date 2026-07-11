@@ -45,6 +45,8 @@ $defaults = [
     // Öğretmene giden özet bildirimler (her zaman student_id=NULL kaydedilir)
     'T_LOGIN'  => ['hour'=>17, 'title'=>'👀 Giriş Yapmayan Öğrenciler',  'body'=>'{toplam} öğrenciden {sayi} tanesi bugün sisteme hiç girmedi: {isimler}'],
     'T_TASKS'  => ['hour'=>22, 'title'=>'📉 Görev Yapmayan Öğrenciler', 'body'=>'Bugün görevi olan {toplam} öğrenciden {sayi} tanesi henüz hiç görev işaretlemedi: {isimler}'],
+    // Veliye giden haftalık özet (yalnızca Pazar; student_id=NULL kaydedilir)
+    'P_WEEKLY' => ['hour'=>20, 'title'=>'📊 Haftalık Gelişim Özeti — {ogrenci}', 'body'=>'{ogrenci} bu hafta {gorev_yapilan}/{gorev_toplam} görevi tamamladı (tamamlama: %{yuzde}). Çözülen soru: {soru} · Konu çalışması: {konu_dk} dk.'],
 ];
 
 // ── İnsani etiketler (teknik kod → anlaşılır ad + açıklama) ───────────────────
@@ -60,6 +62,7 @@ $labels = [
     'C'        => ['icon'=>'⏱️', 'name'=>'Göreve özel saat',      'desc'=>'Bir göreve saat atandığında tam o saatte hatırlatır.'],
     'T_LOGIN'  => ['icon'=>'👀', 'name'=>'Giriş yapmayanlar',     'desc'=>'Bugün görevi olup sisteme hiç girmeyen öğrencilerin özeti sana gelir.'],
     'T_TASKS'  => ['icon'=>'📉', 'name'=>'Görev yapmayanlar',     'desc'=>'Bugün görevi olup hiç görev işaretlemeyen öğrencilerin özeti sana gelir.'],
+    'P_WEEKLY' => ['icon'=>'📊', 'name'=>'Haftalık veli özeti',   'desc'=>'Her PAZAR, çocuğunun haftalık görev/soru özeti velinin telefonuna gider.'],
 ];
 
 // ── Hazır şablonlar: hangi senaryolar açık olsun ─────────────────────────────
@@ -72,9 +75,10 @@ $presets = [
 $groupA = ['A_12','A_16','A_20','A_22'];
 $groupB = ['B_17','B_20','B_22_no','B_22_done'];
 $allScenarios = array_merge($groupA, $groupB, ['C']);
-// Öğretmen senaryoları ana anahtardan ve öğrenci filtresinden BAĞIMSIZDIR;
+// Öğretmen/veli senaryoları ana anahtardan ve öğrenci filtresinden BAĞIMSIZDIR;
 // yalnızca "Tüm Öğrenciler" görünümünde gösterilir (student_id=NULL kaydedilir).
 $teacherScenarios = ['T_LOGIN','T_TASKS'];
+$parentScenarios  = ['P_WEEKLY'];
 
 // ── Seçili öğrenci için ayarları çek ─────────────────────────────────────────
 function get_settings(PDO $pdo, int $teacher_id, ?int $student_id, array $defaults): array {
@@ -230,6 +234,19 @@ function render_notif_row(string $sc, array $s, array $labels, bool $hasHour, st
         </div>
         <div id="teacherPushResult" class="hidden mt-3 text-xs rounded-xl border p-3"></div>
     </div>
+
+    <!-- 1.6) VELİYE GİDEN BİLDİRİMLER (haftalık özet) -->
+    <div class="bg-white rounded-2xl border-2 border-emerald-100 p-5 mb-5 shadow-sm">
+        <label class="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1 block">
+            👨‍👩‍👧 Veliye giden bildirimler
+            <span class="ml-1 text-[9px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full align-middle">YENİ</span>
+        </label>
+        <p class="text-xs text-slate-400 mb-3">Her <b>Pazar</b> seçtiğin saatte, çocuğunun haftalık özeti (görev tamamlama, çözülen soru, konu çalışması) <b>velinin telefonuna</b> gider. Velinin siteye bir kez girip bildirim iznini vermesi yeterlidir.</p>
+        <div class="space-y-2">
+            <?php foreach ($parentScenarios as $sc) render_notif_row($sc, $settings[$sc], $labels, true, '{ogrenci}, {yuzde}, {gorev_yapilan}, {gorev_toplam}, {soru} ve {konu_dk} otomatik doldurulur'); ?>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-3">ℹ️ Veli hesabı olmayan ya da bildirim izni vermemiş velilere gönderim yapılamaz. Veli-öğrenci bağlantısı admin panelinden yapılır.</p>
+    </div>
     <?php endif; ?>
 
     <!-- 2) Ana Anahtar -->
@@ -340,9 +357,9 @@ function render_notif_row(string $sc, array $s, array $labels, bool $hasHour, st
 const DEFAULTS = <?php echo json_encode($defaults, JSON_UNESCAPED_UNICODE); ?>;
 const PRESETS  = <?php echo json_encode($presets, JSON_UNESCAPED_UNICODE); ?>;
 const ALL_SC   = <?php echo json_encode($allScenarios, JSON_UNESCAPED_UNICODE); ?>;
-// Öğretmen senaryoları: yalnızca "Tüm Öğrenciler" görünümünde vardır ve
+// Öğretmen + veli senaryoları: yalnızca "Tüm Öğrenciler" görünümünde vardır ve
 // ana anahtardan etkilenmez (her zaman student_id=NULL kaydedilir).
-const T_SC     = <?php echo json_encode($filter_sid ? [] : $teacherScenarios, JSON_UNESCAPED_UNICODE); ?>;
+const T_SC     = <?php echo json_encode($filter_sid ? [] : array_merge($teacherScenarios, $parentScenarios), JSON_UNESCAPED_UNICODE); ?>;
 const FILTER_SID = <?php echo $filter_sid ?: 'null'; ?>;
 
 function showToast(msg, ok=true) {
