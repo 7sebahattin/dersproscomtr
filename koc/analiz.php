@@ -16,6 +16,18 @@ $today = date('Y-m-d');
 $start_week = date('Y-m-d', strtotime('monday this week'));
 $start_month = date('Y-m-01');
 
+// Tarih aralığı filtresi: Ders Dağılımı, Görev Durumu, D/Y ve Hedef-Yapılan
+// sorgularına uygulanır. Müfredat kapsama/faz ve ders kartları KÜMÜLATİF kalır
+// (doğaları gereği tüm zamanları ölçer). KPI şeridi zaten dönemsel.
+$aralik = (string)($_GET['aralik'] ?? '');
+$rangeStart = null; $rangeLabel = 'Tüm Zamanlar';
+if     ($aralik === '7')  { $rangeStart = date('Y-m-d', strtotime('-6 days'));  $rangeLabel = 'Son 7 Gün';  }
+elseif ($aralik === '30') { $rangeStart = date('Y-m-d', strtotime('-29 days')); $rangeLabel = 'Son 30 Gün'; }
+elseif ($aralik === 'ay') { $rangeStart = $start_month;                          $rangeLabel = 'Bu Ay';      }
+else   { $aralik = ''; }
+$rangeSqlSi = $rangeStart ? " AND si.date >= " . $pdo->quote($rangeStart) : ''; // si aliaslı sorgular
+$rangeSqlNo = $rangeStart ? " AND date >= "    . $pdo->quote($rangeStart) : ''; // aliassız sorgular
+
 // Varsayılan değerler (try başarısız olursa tanımsız değişken hatası önlenir)
 $stats = [
     'today_q' => 0, 'week_q' => 0, 'month_q' => 0, 'total_q' => 0,
@@ -27,6 +39,7 @@ $graph_dates       = [];
 $graph_data        = [];
 $comp_raw          = [];
 $success_rate      = 0;
+$success_rate_all  = 0;
 $dy_data           = [];
 $total_correct_all = 0;
 $total_wrong_all   = 0;
@@ -69,7 +82,7 @@ try {
         LEFT JOIN education_subjects  es ON et.subject_id   = es.id
         LEFT JOIN coaching_topics t ON si.topic_id = t.id
         LEFT JOIN coaching_subjects s ON t.subject_id = s.id
-        WHERE si.student_id = ? AND si.action_type = 'soru' AND si.status = 'yapildi'
+        WHERE si.student_id = ? AND si.action_type = 'soru' AND si.status = 'yapildi'$rangeSqlSi
           AND (es.lesson_name IS NOT NULL OR s.name IS NOT NULL OR si.custom_subject IS NOT NULL)
         GROUP BY subject_name ORDER BY total_amount DESC
     ";
@@ -87,15 +100,25 @@ try {
     }
 
     // D. BAŞARI ORANI
-    $sql_compliance = "SELECT status, COUNT(*) as count FROM schedule_items WHERE student_id = ? GROUP BY status";
+    $sql_compliance = "SELECT status, COUNT(*) as count FROM schedule_items WHERE student_id = ?$rangeSqlNo GROUP BY status";
     $stmt_comp = $pdo->prepare($sql_compliance);
     $stmt_comp->execute([$sid]);
     $comp_raw     = $stmt_comp->fetchAll(PDO::FETCH_KEY_PAIR);
     $total_tasks  = array_sum($comp_raw);
     $done_tasks   = $comp_raw['yapildi'] ?? 0;
-    $success_rate = $total_tasks > 0 ? round(($done_tasks / $total_tasks) * 100) : 0;
+    $success_rate = $total_tasks > 0 ? round(($done_tasks / $total_tasks) * 100) : 0; // seçili döneme göre (Görev Durumu)
 
-} catch (Exception $e) {}
+    // Genel Toplam KPI kartı için KÜMÜLATİF tamamlama oranı (dönemden bağımsız)
+    if ($rangeStart) {
+        $ca = $pdo->prepare("SELECT COUNT(*) t, SUM(status='yapildi') d FROM schedule_items WHERE student_id = ?");
+        $ca->execute([$sid]);
+        $car = $ca->fetch(PDO::FETCH_ASSOC) ?: [];
+        $success_rate_all = ((int)($car['t'] ?? 0) > 0) ? round(100 * (int)($car['d'] ?? 0) / (int)$car['t']) : 0;
+    } else {
+        $success_rate_all = $success_rate; // dönem yoksa ikisi aynı
+    }
+
+} catch (Exception $e) { $success_rate_all = 0; }
 
 // E. DOĞRU / YANLIŞ — ayrı try: sütunlar eksikse diğer veriler etkilenmesin
 try {
@@ -111,7 +134,7 @@ try {
         LEFT JOIN coaching_topics t  ON si.topic_id  = t.id
         LEFT JOIN coaching_subjects s ON t.subject_id = s.id
         WHERE si.student_id = ?
-          AND si.action_type = 'soru'
+          AND si.action_type = 'soru'$rangeSqlSi
           AND (si.status = 'yapildi' OR si.status = 'yarim')
           AND (COALESCE(si.correct_count, 0) + COALESCE(si.wrong_count, 0)) > 0
         GROUP BY COALESCE(es.lesson_name, s.name, si.custom_subject, '(Belirtilmemiş)')
@@ -156,7 +179,7 @@ try {
         LEFT JOIN coaching_topics t   ON si.topic_id   = t.id
         LEFT JOIN coaching_subjects s ON t.subject_id  = s.id
         WHERE si.student_id = ?
-          AND si.action_type = 'soru'
+          AND si.action_type = 'soru'$rangeSqlSi
           AND si.status IN ('yapildi','yarim')
         GROUP BY
             COALESCE(es.lesson_name, s.name, si.custom_subject, '(Belirtilmemiş)'),
@@ -178,7 +201,7 @@ try {
             SUM(CASE WHEN target_amount IS NOT NULL THEN target_amount ELSE amount END) AS hedef_toplam,
             SUM(amount) AS yapilan_toplam
         FROM schedule_items
-        WHERE student_id = ? AND action_type = 'soru' AND status IN ('yapildi','yarim')
+        WHERE student_id = ? AND action_type = 'soru' AND status IN ('yapildi','yarim')$rangeSqlNo
     ";
     $stmt_hy = $pdo->prepare($sql_hy);
     $stmt_hy->execute([$sid]);
@@ -377,7 +400,28 @@ $insights = array_slice($insights, 0, 7);
 <div class="analysis-container pb-10">
     
     <div class="analysis-card mb-6 animate-fadeIn" data-category="RAPOR">
-        
+
+        <!-- Tarih aralığı filtresi — dönemsel kartları (dağılım/durum/D-Y/hedef) süzer -->
+        <?php
+            $baseAnalizUrl = '?student_id=' . (int)$sid . '&date=' . urlencode($date_param ?? $today);
+            $ranges = ['' => '📅 Tüm Zamanlar', '7' => 'Son 7 Gün', '30' => 'Son 30 Gün', 'ay' => 'Bu Ay'];
+        ?>
+        <div class="flex flex-wrap items-center gap-2 mb-5">
+            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Dönem:</span>
+            <?php foreach ($ranges as $rv => $rl):
+                $active = ($aralik === $rv);
+            ?>
+            <a href="<?php echo $baseAnalizUrl . ($rv !== '' ? '&aralik=' . $rv : ''); ?>#analiz"
+               class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition <?php echo $active ? 'bg-[#223488] text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'; ?>">
+                <?php echo $rl; ?></a>
+            <?php endforeach; ?>
+            <?php if ($aralik !== ''): ?>
+            <span class="ml-1 text-[10px] font-bold text-[#223488] bg-indigo-50 border border-indigo-100 rounded-full px-2.5 py-1">
+                ℹ️ Dağılım · Durum · Doğru/Yanlış · Hedef kartları <b><?php echo $rangeLabel; ?></b> için; müfredat kapsama/faz her zaman kümülatiftir.
+            </span>
+            <?php endif; ?>
+        </div>
+
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             
             <div class="kpi-card bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all duration-300">
@@ -443,7 +487,7 @@ $insights = array_slice($insights, 0, 7);
             <div class="kpi-card bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all duration-300">
                 <div class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-3 pb-2 border-b border-slate-50 flex justify-between">
                     <span>Genel Toplam</span>
-                    <span class="text-[#223488] font-black">%<?php echo $success_rate; ?></span>
+                    <span class="text-[#223488] font-black" title="Tüm zamanlar tamamlama oranı">%<?php echo $success_rate_all; ?></span>
                 </div>
                 <div class="flex items-center justify-between">
                     <div class="flex flex-col">
@@ -462,7 +506,7 @@ $insights = array_slice($insights, 0, 7);
                     </div>
                 </div>
                 <div class="w-full bg-slate-100 h-1 mt-3 rounded-full overflow-hidden">
-                    <div class="bg-[#223488] h-full" style="width: <?php echo $success_rate; ?>%"></div>
+                    <div class="bg-[#223488] h-full" style="width: <?php echo $success_rate_all; ?>%"></div>
                 </div>
             </div>
 
@@ -599,8 +643,10 @@ $insights = array_slice($insights, 0, 7);
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 p-2">
                         <?php
                         $max_val = !empty($subject_data) ? $subject_data[0]['total_amount'] : 1;
+                        // Yüzde: seçili dönemdeki soru dağılımı içindeki pay (kümülatif değil)
+                        $subject_sum = array_sum(array_column($subject_data, 'total_amount')) ?: 1;
                         foreach($subject_data as $sub):
-                            $percent = ($sub['total_amount'] / $stats['total_q']) * 100;
+                            $percent = ($sub['total_amount'] / $subject_sum) * 100;
                             $width_percent = ($sub['total_amount'] / $max_val) * 100;
                         ?>
                         <div class="group">
@@ -1195,6 +1241,15 @@ document.addEventListener('DOMContentLoaded', function() {
         var raporBtn = document.getElementById('btn-analiz-RAPOR');
         if(raporBtn) raporBtn.click();
     }, 100);
+
+    // Dönem filtresiyle yeniden yüklendiyse (?aralik=... veya #analiz) Analiz
+    // sekmesini otomatik aç — kullanıcı Program'a düşmesin.
+    try {
+        var sp = new URLSearchParams(window.location.search);
+        if ((sp.has('aralik') || window.location.hash === '#analiz') && typeof window.openTab === 'function') {
+            window.openTab('topics');
+        }
+    } catch(e) {}
 
     // Sepette olan konuların + butonlarını ✓ olarak işaretle
     // (psBasketHas, planlayici.php'de tanımlanır; DOMContentLoaded'da hazırdır)
