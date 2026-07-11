@@ -9,8 +9,14 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'teacher') {
 }
 
 require_once 'db.php';
+require_once 'app_settings_lib.php';
 $teacher_id = $_SESSION['user_id'];
 $teacher_name = $_SESSION['first_name'] ?? 'Hocam';
+
+// Sınav geri sayımı (admin/sinav_tarihleri.php'den; yoksa tahmini varsayılan)
+$examDates = exam_dates($pdo);
+$yksLeft = exam_days_left($examDates['YKS']);
+$lgsLeft = exam_days_left($examDates['LGS']);
 
 // Türkçe Ay adları
 $monthsTR = [
@@ -220,6 +226,19 @@ include 'header.php';
                     <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight">
                         Hoş geldin, <span class="text-[#ec9731]"><?php echo htmlspecialchars($teacher_name); ?></span> 👋
                     </h1>
+                    <!-- Sınav geri sayımı -->
+                    <div class="flex flex-wrap items-center gap-2 mt-3">
+                        <?php if ($yksLeft >= 0): ?>
+                        <span class="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 rounded-full px-3 py-1 text-xs font-bold">
+                            🎯 YKS'ye <span class="text-[#ec9731] font-black text-sm"><?php echo $yksLeft; ?></span> gün
+                        </span>
+                        <?php endif; ?>
+                        <?php if ($lgsLeft >= 0): ?>
+                        <span class="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 rounded-full px-3 py-1 text-xs font-bold">
+                            📘 LGS'ye <span class="text-[#ec9731] font-black text-sm"><?php echo $lgsLeft; ?></span> gün
+                        </span>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <?php
                     $dayNamesTR = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];

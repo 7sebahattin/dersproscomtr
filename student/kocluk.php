@@ -87,6 +87,45 @@ if (!$has_coach) {
 // Öğrenci Seviyesi
 $student_level = $selected_student['school_level'] ?? 'Lise';
 
+// ── Sınav geri sayımı + haftalık karne ───────────────────────────────────────
+require_once __DIR__ . '/../app_settings_lib.php';
+$examDates = exam_dates($pdo);
+$examLabel = ($student_level === 'Ortaokul') ? 'LGS' : 'YKS';
+$examLeft  = exam_days_left($examDates[$examLabel]);
+
+// Haftalık karne: Pazartesi/Salı günleri GEÇEN haftanın özeti gösterilir
+// (öğrenci kapatabilir — localStorage, JS tarafında)
+$karne = null;
+$dowN = (int)date('N'); // 1=Pzt ... 7=Paz
+if ($dowN <= 2) {
+    $kMon = date('Y-m-d', strtotime('monday last week'));
+    $kSun = date('Y-m-d', strtotime($kMon . ' +6 days'));
+    try {
+        $kq = $pdo->prepare("
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN status IN ('yapildi','yarim') THEN 1 ELSE 0 END) AS done,
+                   SUM(CASE WHEN action_type='soru' AND status='yapildi' THEN amount ELSE 0 END) AS soru,
+                   SUM(CASE WHEN action_type='konu' AND status='yapildi' THEN amount ELSE 0 END) AS konu_dk
+            FROM schedule_items WHERE student_id = ? AND date BETWEEN ? AND ?");
+        $kq->execute([$sid, $kMon, $kSun]);
+        $ks = $kq->fetch(PDO::FETCH_ASSOC) ?: [];
+        if ((int)($ks['total'] ?? 0) > 0) {
+            $kTotal = (int)$ks['total'];
+            $kDone  = (int)($ks['done'] ?? 0);
+            $kPct   = (int)round(100 * $kDone / $kTotal);
+            if     ($kPct >= 90) { $kMsg = 'Muhteşem bir hafta! 🏆 Bu tempoyu koru.';                 $kTone = 'green'; }
+            elseif ($kPct >= 70) { $kMsg = 'Çok iyi gidiyorsun! 💪 Küçük bir gayretle zirvedesin.';   $kTone = 'green'; }
+            elseif ($kPct >= 40) { $kMsg = 'Fena değil — bu hafta çıtayı biraz daha yükselt. 🎯';     $kTone = 'amber'; }
+            else                 { $kMsg = 'Yeni hafta yeni başlangıç — planına sadık kal! 🚀';       $kTone = 'red';   }
+            $karne = [
+                'week' => $kMon, 'total' => $kTotal, 'done' => $kDone, 'pct' => $kPct,
+                'soru' => (int)($ks['soru'] ?? 0), 'konu_dk' => (int)($ks['konu_dk'] ?? 0),
+                'msg' => $kMsg, 'tone' => $kTone,
+            ];
+        }
+    } catch (Throwable $e) { $karne = null; }
+}
+
 // DEĞİŞKENLER
 $message = '';
 $schedule_items = [];
@@ -236,9 +275,54 @@ try {
 
     <div class="flex flex-col md:flex-row gap-4">
         <div class="flex-grow overflow-hidden">
+            <?php if ($karne): ?>
+            <!-- 📋 HAFTALIK KARNE — Pzt/Salı görünür, ✕ ile o haftalık kapanır (localStorage) -->
+            <?php
+                $ktBar = $karne['tone'] === 'green' ? 'bg-emerald-400' : ($karne['tone'] === 'amber' ? 'bg-[#ec9731]' : 'bg-red-400');
+            ?>
+            <div id="weeklyKarne" class="hidden mb-4 rounded-2xl overflow-hidden shadow-lg border border-[#1e2e7a] bg-gradient-to-r from-[#223488] to-[#314595] text-white">
+                <div class="px-5 py-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-widest text-[#ec9731]">📋 Geçen Haftanın Karnesi</p>
+                            <p class="text-sm font-bold mt-1"><?php echo htmlspecialchars($karne['msg']); ?></p>
+                        </div>
+                        <button type="button" onclick="karneClose()" class="shrink-0 text-white/50 hover:text-white text-sm font-black px-1" title="Bu haftalık kapat">✕</button>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-5 gap-y-1 mt-3">
+                        <span class="text-xs font-bold text-blue-100"><b class="text-white text-base font-black"><?php echo $karne['done']; ?>/<?php echo $karne['total']; ?></b> görev</span>
+                        <span class="text-xs font-bold text-blue-100"><b class="text-white text-base font-black"><?php echo number_format($karne['soru']); ?></b> soru</span>
+                        <?php if ($karne['konu_dk'] > 0): ?>
+                        <span class="text-xs font-bold text-blue-100"><b class="text-white text-base font-black"><?php echo number_format($karne['konu_dk']); ?></b> dk konu</span>
+                        <?php endif; ?>
+                        <span class="ml-auto text-lg font-black text-[#ec9731]">%<?php echo $karne['pct']; ?></span>
+                    </div>
+                    <div class="h-2 rounded-full bg-black/25 overflow-hidden mt-2">
+                        <div class="h-full rounded-full <?php echo $ktBar; ?>" style="width:<?php echo $karne['pct']; ?>%"></div>
+                    </div>
+                </div>
+            </div>
+            <script>
+            (function(){
+                var key = 'karne:<?php echo (int)$sid; ?>:<?php echo $karne['week']; ?>';
+                var el = document.getElementById('weeklyKarne');
+                try { if (!localStorage.getItem(key)) el.classList.remove('hidden'); } catch(e){ el.classList.remove('hidden'); }
+                window.karneClose = function(){
+                    el.classList.add('hidden');
+                    try { localStorage.setItem(key, '1'); } catch(e){}
+                };
+            })();
+            </script>
+            <?php endif; ?>
+
             <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                <h1 class="text-lg font-bold text-slate-800">
+                <h1 class="text-lg font-bold text-slate-800 flex items-center gap-2.5 flex-wrap">
                     Hoşgeldin, <?php echo htmlspecialchars($selected_student['first_name'] ?? ''); ?> 👋
+                    <?php if ($examLeft >= 0): ?>
+                    <span class="inline-flex items-center gap-1 bg-[#223488] text-white rounded-full px-3 py-1 text-[11px] font-bold shadow-sm" title="<?php echo $examLabel; ?> tarihi: <?php echo date('d.m.Y', strtotime($examDates[$examLabel])); ?>">
+                        🎯 <?php echo $examLabel; ?>'ye <span class="text-[#ec9731] font-black text-sm"><?php echo $examLeft; ?></span> gün
+                    </span>
+                    <?php endif; ?>
                 </h1>
                 <div class="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
                     <button onclick="openTab('schedule')" id="tab-schedule" class="px-4 py-1.5 rounded-lg font-bold text-xs transition bg-slate-800 text-white shadow-sm flex items-center gap-2">📅 Program</button>
