@@ -126,6 +126,43 @@ if ($dowN <= 2) {
     } catch (Throwable $e) { $karne = null; }
 }
 
+// ── 🏅 Rozetler (başarımlar) — mevcut verilerden anlık hesap, ek tablo yok ────
+$badges = [];
+try {
+    $bq = $pdo->prepare("
+        SELECT SUM(CASE WHEN action_type='soru' AND status='yapildi' THEN amount ELSE 0 END) AS soru,
+               SUM(CASE WHEN action_type='konu' AND status='yapildi' THEN amount ELSE 0 END) AS konu_dk
+        FROM schedule_items WHERE student_id = ?");
+    $bq->execute([$sid]);
+    $bs = $bq->fetch(PDO::FETCH_ASSOC) ?: [];
+    $bSoru   = (int)($bs['soru'] ?? 0);
+    $bKonu   = (int)($bs['konu_dk'] ?? 0);
+    $bStreak = (int)($selected_student['current_streak'] ?? 0);
+    $bDeneme = 0;
+    try { $dq = $pdo->prepare("SELECT COUNT(*) FROM quiz_results WHERE student_id = ?"); $dq->execute([$sid]); $bDeneme = (int)$dq->fetchColumn(); } catch (Throwable $e) {}
+
+    // Tam Hafta: son TAMAMLANMIŞ haftada tüm görevler yapıldı mı?
+    $twMon = date('Y-m-d', strtotime('monday last week'));
+    $twSun = date('Y-m-d', strtotime($twMon . ' +6 days'));
+    $tw = $pdo->prepare("SELECT COUNT(*) t, SUM(status='yapildi') d FROM schedule_items WHERE student_id = ? AND date BETWEEN ? AND ?");
+    $tw->execute([$sid, $twMon, $twSun]);
+    $twr = $tw->fetch(PDO::FETCH_ASSOC) ?: [];
+    $fullWeek = ((int)($twr['t'] ?? 0) > 0 && (int)$twr['t'] === (int)($twr['d'] ?? 0));
+
+    // Kademeli rozet: kazanılan en yüksek eşik + bir sonraki hedef
+    $tierBadge = function (string $icon, string $name, int $val, array $tiers, string $unit) {
+        $earned = null; $next = null;
+        foreach ($tiers as $t) { if ($val >= $t) $earned = $t; elseif ($next === null) $next = $t; }
+        return ['icon' => $icon, 'name' => $name, 'val' => $val, 'earned' => $earned, 'next' => $next, 'unit' => $unit];
+    };
+    $badges[] = $tierBadge('💯', 'Soru',   $bSoru,   [100, 1000, 5000, 10000], 'soru');
+    $badges[] = $tierBadge('📚', 'Konu',   $bKonu,   [300, 1000, 3000],        'dk');
+    $badges[] = $tierBadge('🔥', 'Seri',   $bStreak, [3, 7, 30],               'gün');
+    $badges[] = $tierBadge('📝', 'Deneme', $bDeneme, [5, 15, 30],              'deneme');
+    $badges[] = ['icon' => '🏆', 'name' => 'Tam Hafta', 'val' => $fullWeek ? 1 : 0,
+                 'earned' => $fullWeek ? 1 : null, 'next' => $fullWeek ? null : 1, 'unit' => '', 'special' => true];
+} catch (Throwable $e) { $badges = []; }
+
 // DEĞİŞKENLER
 $message = '';
 $schedule_items = [];
@@ -330,6 +367,31 @@ try {
                     <button onclick="openTab('exams')" id="tab-exams" class="px-4 py-1.5 rounded-lg font-bold text-xs transition text-slate-500 hover:bg-slate-50 flex items-center gap-2">📝 Denemeler</button>
                 </div>
             </div>
+
+            <?php if (!empty($badges)): ?>
+            <!-- 🏅 Rozetler: kazanılan dolu/lacivert, sıradaki hedef soluk + "kalan" bilgisiyle -->
+            <div class="flex items-center gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">
+                <span class="shrink-0 text-[10px] font-black uppercase text-slate-400 tracking-wider">🏅 Rozetlerim</span>
+                <?php foreach ($badges as $b):
+                    $on = $b['earned'] !== null;
+                    if (!empty($b['special'])) {
+                        $label = 'Tam Hafta';
+                        $sub   = $on ? 'geçen hafta %100!' : 'haftayı %100 bitir';
+                    } else {
+                        $label = $b['name'] . ' ' . number_format($on ? $b['earned'] : $b['next']);
+                        $sub   = $on ? number_format($b['val']) . ' ' . $b['unit']
+                                     : number_format($b['next'] - $b['val']) . ' ' . $b['unit'] . ' kaldı';
+                    }
+                ?>
+                <span class="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border whitespace-nowrap <?php echo $on ? 'bg-[#223488] text-white border-[#223488] shadow-sm' : 'bg-white text-slate-400 border-slate-200'; ?>"
+                      title="<?php echo htmlspecialchars($b['name'] . ': ' . number_format($b['val']) . ($b['unit'] ? ' ' . $b['unit'] : '')); ?>">
+                    <span class="<?php echo $on ? '' : 'grayscale opacity-50'; ?>"><?php echo $b['icon']; ?></span>
+                    <?php echo htmlspecialchars($label); ?>
+                    <span class="text-[9px] font-semibold <?php echo $on ? 'text-blue-200' : 'text-slate-400'; ?>"><?php echo htmlspecialchars($sub); ?></span>
+                </span>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
 
             <?php include __DIR__ . '/program.php'; ?>
             <?php include __DIR__ . '/rapor.php'; ?>

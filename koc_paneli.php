@@ -119,6 +119,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
     $itemId = (int)($_POST['schedule_id'] ?? $_POST['item_id'] ?? 0);
     $toDate = $_POST['to_date'] ?? $_POST['new_date'] ?? '';
 
+    // A0. TOPLU DURUM: bir günün BEKLEYEN görevlerini tek istekte 'yapıldı' yap.
+    //     Yalnızca 'bekliyor' değişir — yarım/yapılmadı/yapıldı işaretlenenlere
+    //     dokunulmaz (öğrencinin girdiği gerçekleşen/doğru-yanlış verisi korunur).
+    if ($action === 'bulk_status_day') {
+        $day = (string)($_POST['date'] ?? '');
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $day)) { echo json_encode(['ok' => false, 'error' => 'Geçersiz tarih.']); exit; }
+        try {
+            $up = $pdo->prepare("UPDATE schedule_items SET status = 'yapildi' WHERE student_id = ? AND date = ? AND status = 'bekliyor'");
+            $up->execute([$sid, $day]);
+            echo json_encode(['ok' => true, 'changed' => $up->rowCount()]); exit;
+        } catch (Exception $e) { echo json_encode(['ok' => false, 'error' => 'Güncelleme hatası.']); exit; }
+    }
+
     // A. TAŞIMA
     if ($action === 'move_schedule') {
         try {
