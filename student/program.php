@@ -42,16 +42,23 @@
             $englishDay = date('l', strtotime($wd));
             $turkishDay = $gunlerTR[$englishDay] ?? $englishDay;
             $dayItems   = $schedule_items[$wd] ?? [];
-            $totalCount = is_array($dayItems) ? count($dayItems) : 0;
-            $doneCount  = 0;
-            $pendingCount = 0;
-            if ($totalCount > 0) {
-                foreach ($dayItems as $di) {
-                    if (($di['status'] ?? '') === 'yapildi') $doneCount++;
-                    if (($di['status'] ?? 'bekliyor') === 'bekliyor') $pendingCount++;
-                }
+            // Günün BEKLEYEN görevleri — ✓✓ modalında seçmeli listelenir
+            $pendingList = [];
+            foreach ($dayItems as $di) {
+                if (($di['status'] ?? 'bekliyor') !== 'bekliyor') continue;
+                $pTitle = $di['edu_subject_name'] ?? (!empty($di['topic_name']) ? ($di['subject_name'] ?? '') : ($di['custom_subject'] ?? ''));
+                $pSub   = $di['edu_topic_name'] ?? (!empty($di['topic_name']) ? ($di['topic_name'] ?? '') : ($di['custom_topic'] ?? ''));
+                $pType  = $di['action_type'] ?? 'soru';
+                $pAmt   = (isset($di['target_amount']) && $di['target_amount'] !== null && $di['target_amount'] !== '') ? (int)$di['target_amount'] : (int)($di['amount'] ?? 0);
+                $pendingList[] = [
+                    'id'    => (int)$di['id'],
+                    'title' => trim($pTitle) !== '' ? $pTitle : 'Genel Çalışma',
+                    'sub'   => (string)$pSub,
+                    'unit'  => $pType === 'konu' ? 'dk' : ($pType === 'video' ? 'video' : 'soru'),
+                    'amount'=> $pAmt,
+                ];
             }
-            $progress = ($totalCount > 0) ? (int)round(($doneCount / $totalCount) * 100) : 0;
+            $pendingCount = count($pendingList);
         ?>
             <div class="flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-full min-h-[350px] transition-all hover:shadow-md">
                 <div class="relative bg-gradient-to-r from-[#223488] to-[#314595] text-white px-3 py-3 xl:px-2.5 xl:py-2.5 border-b border-[#1e2e7a]">
@@ -66,31 +73,13 @@
                                 <div class="text-[10px] font-medium text-blue-100/80 truncate mt-0.5">Günlük Plan</div>
                             </div>
                         </div>
-                        <div class="flex items-center gap-1.5 flex-shrink-0">
-                            <?php if ($pendingCount > 0): ?>
-                            <!-- ✓✓ Toplu: günün bekleyen görevlerini tek dokunuşla 'yapıldı' işaretle -->
-                            <form method="POST" class="m-0" onsubmit="return confirm('<?php echo $turkishDay; ?> gününün bekleyen <?php echo $pendingCount; ?> görevi YAPILDI olarak işaretlensin mi?');">
-                                <input type="hidden" name="bulk_day_done" value="1">
-                                <input type="hidden" name="day" value="<?php echo $wd; ?>">
-                                <button type="submit"
-                                        class="w-8 h-8 rounded-full bg-white/15 hover:bg-emerald-500 border border-white/25 hover:border-emerald-400 text-white text-[11px] font-black flex items-center justify-center transition active:scale-90"
-                                        title="Günün tüm bekleyen görevlerini yapıldı işaretle (<?php echo $pendingCount; ?> görev)">✓✓</button>
-                            </form>
-                            <?php endif; ?>
-                            <div class="flex flex-col items-end gap-1">
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ec9731] text-white shadow-sm border border-orange-400/50 whitespace-nowrap"><?php echo $totalCount; ?> Görev</span>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/20 text-white border border-white/10">✅ <?php echo $doneCount; ?></span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mt-2.5">
-                        <div class="flex items-center justify-between text-[10px] font-bold text-blue-100 mb-1">
-                            <span>İlerleme</span>
-                            <span>%<?php echo $progress; ?></span>
-                        </div>
-                        <div class="h-1.5 rounded-full bg-black/20 overflow-hidden">
-                            <div class="h-full rounded-full bg-[#ec9731] transition-all duration-500 ease-out shadow-[0_0_10px_rgba(236,151,49,0.5)]" style="width: <?php echo $progress; ?>%"></div>
-                        </div>
+                        <?php if ($pendingCount > 0): ?>
+                        <!-- ✓✓ Toplu işaretle: modal açar, öğrenci istediği görevleri seçip yapıldı yapar -->
+                        <button type="button"
+                                onclick='openBulkDone(<?php echo htmlspecialchars(json_encode(["day"=>$wd,"dayName"=>$turkishDay,"items"=>$pendingList], JSON_UNESCAPED_UNICODE), ENT_QUOTES, "UTF-8"); ?>)'
+                                class="flex-shrink-0 w-8 h-8 rounded-full bg-white/15 hover:bg-emerald-500 border border-white/25 hover:border-emerald-400 text-white text-[11px] font-black flex items-center justify-center transition active:scale-90"
+                                title="Bu günün bekleyen görevlerini seçerek yapıldı işaretle (<?php echo $pendingCount; ?> görev)">✓✓</button>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -228,4 +217,82 @@
             </div>
         <?php endforeach; ?>
     </div>
+
+    <!-- ✓✓ TOPLU İŞARETLE MODALI: günün bekleyen görevleri seçmeli listelenir -->
+    <div id="bulkDoneModal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 flex flex-col max-h-[85vh]">
+            <div class="bg-gradient-to-r from-[#223488] to-[#314595] text-white px-5 py-4 flex items-center justify-between">
+                <div>
+                    <h3 class="font-black text-base">✅ Görevleri İşaretle</h3>
+                    <p id="bulkDoneSubtitle" class="text-[11px] text-blue-100 mt-0.5"></p>
+                </div>
+                <button type="button" onclick="closeBulkDone()" class="text-white/60 hover:text-white text-xl font-black leading-none">✕</button>
+            </div>
+            <form method="POST" id="bulkDoneForm" class="flex flex-col min-h-0">
+                <input type="hidden" name="bulk_day_done" value="1">
+                <div class="px-5 py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <span class="text-[11px] font-bold text-slate-500">Yaptığın görevleri seç:</span>
+                    <button type="button" onclick="bulkToggleAll()" id="bulkToggleAllBtn" class="text-[11px] font-black text-[#223488] hover:underline">Tümünü Seç</button>
+                </div>
+                <div id="bulkDoneList" class="overflow-y-auto p-3 space-y-2 flex-grow"></div>
+                <div class="p-4 border-t border-slate-100 flex items-center gap-2">
+                    <button type="button" onclick="closeBulkDone()" class="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition">Vazgeç</button>
+                    <button type="submit" id="bulkDoneSubmit" class="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm transition">Yapıldı İşaretle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+        var modal = document.getElementById('bulkDoneModal');
+        var list  = document.getElementById('bulkDoneList');
+        var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+
+        window.openBulkDone = function(data){
+            document.getElementById('bulkDoneSubtitle').textContent =
+                (data.dayName || '') + ' — ' + data.items.length + ' bekleyen görev';
+            list.innerHTML = '';
+            data.items.forEach(function(it){
+                var amt = it.amount ? ('<span class="text-[10px] font-black text-white bg-[#223488] rounded px-1.5 py-0.5 ml-auto shrink-0">' + it.amount + ' ' + esc(it.unit) + '</span>') : '';
+                var subLine = it.sub ? ('<div class="text-[11px] text-slate-500 truncate">' + esc(it.sub) + '</div>') : '';
+                var row = document.createElement('label');
+                row.className = 'flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 hover:border-[#223488]/40 hover:bg-slate-50 cursor-pointer transition';
+                row.innerHTML =
+                    '<input type="checkbox" name="done_ids[]" value="' + it.id + '" checked class="w-5 h-5 accent-emerald-500 shrink-0">' +
+                    '<div class="min-w-0 flex-grow">' +
+                        '<div class="text-sm font-bold text-slate-800 truncate">' + esc(it.title) + '</div>' +
+                        subLine +
+                    '</div>' + amt;
+                list.appendChild(row);
+            });
+            updateToggleLabel();
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+        window.closeBulkDone = function(){
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+        window.bulkToggleAll = function(){
+            var boxes = list.querySelectorAll('input[type=checkbox]');
+            var allChecked = Array.prototype.every.call(boxes, function(b){ return b.checked; });
+            boxes.forEach(function(b){ b.checked = !allChecked; });
+            updateToggleLabel();
+        };
+        function updateToggleLabel(){
+            var boxes = list.querySelectorAll('input[type=checkbox]');
+            var allChecked = boxes.length > 0 && Array.prototype.every.call(boxes, function(b){ return b.checked; });
+            document.getElementById('bulkToggleAllBtn').textContent = allChecked ? 'Tümünü Kaldır' : 'Tümünü Seç';
+        }
+        list.addEventListener('change', updateToggleLabel);
+        modal.addEventListener('click', function(e){ if (e.target === modal) window.closeBulkDone(); });
+        document.getElementById('bulkDoneForm').addEventListener('submit', function(e){
+            if (!list.querySelector('input[type=checkbox]:checked')) {
+                e.preventDefault();
+                alert('En az bir görev seçmelisin.');
+            }
+        });
+    })();
+    </script>
 </div>

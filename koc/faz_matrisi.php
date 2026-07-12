@@ -32,11 +32,10 @@ try {
 } catch (Throwable $e) { $students = []; }
 
 $liseStudents = array_values(array_filter($students, fn($s) => ($s['school_level'] ?? 'Lise') !== 'Ortaokul'));
-$ortaStudents = array_values(array_filter($students, fn($s) => ($s['school_level'] ?? 'Lise') === 'Ortaokul'));
 
-// ── Konu başına görev sayıları (tüm öğrenciler, 2 sorgu) ─────────────────────
-// $cntEdu[student_id][edu_topic_id] = adet;  $cntOld[student_id][topic_id] = adet
-$cntEdu = []; $cntOld = [];
+// ── Konu başına görev sayıları (tüm öğrenciler, tek sorgu) ───────────────────
+// $cntEdu[student_id][edu_topic_id] = adet  (yalnızca yeni koçluk/müfredat sistemi)
+$cntEdu = [];
 if ($students) {
     $ids = array_map(fn($s) => (int)$s['id'], $students);
     $in  = implode(',', $ids);
@@ -46,19 +45,13 @@ if ($students) {
                               GROUP BY student_id, edu_topic_id") as $r) {
             $cntEdu[(int)$r['student_id']][(int)$r['k']] = (int)$r['c'];
         }
-        foreach ($pdo->query("SELECT student_id, topic_id k, COUNT(*) c FROM schedule_items
-                              WHERE topic_id IS NOT NULL AND student_id IN ($in)
-                              GROUP BY student_id, topic_id") as $r) {
-            $cntOld[(int)$r['student_id']][(int)$r['k']] = (int)$r['c'];
-        }
     } catch (Throwable $e) {}
 }
 
-// ── Müfredat sütunları ────────────────────────────────────────────────────────
-// Her sütun: ['key','name','category','src'=>'edu'|'old','topics'=>[id,...]]
-$colsLise = []; $colsOrta = [];
+// ── Müfredat sütunları (yalnızca yeni sistem: TYT/AYT) ───────────────────────
+// Her sütun: ['name','category','topics'=>[id,...]]
+$colsLise = [];
 try {
-    // 1) YENİ müfredat (TYT/AYT) — Lise/Mezun matrisi ana sütunları
     $eduRows = $pdo->query("
         SELECT et.id topic_id, es.id subject_id, es.lesson_name, ec.name category
         FROM education_topics et
@@ -68,38 +61,8 @@ try {
         ORDER BY ec.name, es.display_order, es.lesson_name")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($eduRows as $r) {
         $key = 'edu_' . $r['subject_id'];
-        if (!isset($colsLise[$key])) $colsLise[$key] = ['name' => $r['lesson_name'], 'category' => $r['category'], 'src' => 'edu', 'topics' => []];
+        if (!isset($colsLise[$key])) $colsLise[$key] = ['name' => $r['lesson_name'], 'category' => $r['category'], 'topics' => []];
         $colsLise[$key]['topics'][] = (int)$r['topic_id'];
-    }
-
-    // 2) ESKİ koçluk müfredatı — yalnızca hâlâ kullanılan dersler (görev varsa)
-    $oldRows = $pdo->query("
-        SELECT t.id topic_id, s.id subject_id, s.name lesson_name, s.category
-        FROM coaching_topics t
-        JOIN coaching_subjects s ON t.subject_id = s.id
-        ORDER BY s.category, s.name")->fetchAll(PDO::FETCH_ASSOC);
-    $oldCols = [];
-    foreach ($oldRows as $r) {
-        $key = 'old_' . $r['subject_id'];
-        if (!isset($oldCols[$key])) $oldCols[$key] = ['name' => $r['lesson_name'], 'category' => $r['category'], 'src' => 'old', 'topics' => []];
-        $oldCols[$key]['topics'][] = (int)$r['topic_id'];
-    }
-    $usedOld = function (array $col, array $group) use ($cntOld): bool {
-        foreach ($group as $s) {
-            $c = $cntOld[(int)$s['id']] ?? [];
-            foreach ($col['topics'] as $tid) if (!empty($c[$tid])) return true;
-        }
-        return false;
-    };
-    foreach ($oldCols as $key => $col) {
-        $cat = mb_strtoupper(trim($col['category'] ?? ''), 'UTF-8');
-        if ($cat === 'LGS') {
-            // LGS: Ortaokul matrisinin ana müfredatı — her zaman göster
-            $colsOrta[$key] = $col;
-        } elseif ($usedOld($col, $liseStudents)) {
-            // TYT/AYT eski dersler: yalnızca görev verilmiş olanlar (geçmiş veri)
-            $colsLise[$key] = $col;
-        }
     }
 } catch (Throwable $e) {}
 
@@ -139,14 +102,13 @@ $fmCell = function (array $topicIds, array $cnts): array {
 };
 
 // Matris satırlarını önceden hesapla (render sade kalsın)
-$buildMatrix = function (array $group, array $cols) use ($fmCell, $fmRelevant, $cntEdu, $cntOld): array {
+$buildMatrix = function (array $group, array $cols) use ($fmCell, $fmRelevant, $cntEdu): array {
     $rows = [];
     foreach ($group as $stu) {
         $sidX = (int)$stu['id'];
         $cells = [];
         foreach ($cols as $key => $col) {
-            $cnts = $col['src'] === 'edu' ? ($cntEdu[$sidX] ?? []) : ($cntOld[$sidX] ?? []);
-            $cell = $fmCell($col['topics'], $cnts);
+            $cell = $fmCell($col['topics'], $cntEdu[$sidX] ?? []);
             $cell['relevant'] = $fmRelevant($col, $stu);
             $cells[$key] = $cell;
         }
@@ -155,7 +117,6 @@ $buildMatrix = function (array $group, array $cols) use ($fmCell, $fmRelevant, $
     return $rows;
 };
 $matLise = $buildMatrix($liseStudents, $colsLise);
-$matOrta = $buildMatrix($ortaStudents, $colsOrta);
 
 // Hücre görünümü (renk sınıfları)
 function fm_cell_html(array $c): string {
@@ -214,10 +175,8 @@ function fm_cell_html(array $c): string {
     <?php endif; ?>
 
     <?php
-    // İki grup: Lise/Mezun (TYT+AYT) ve Ortaokul (LGS)
     $groups = [];
     if ($liseStudents) $groups[] = ['title' => '🎓 Lise / Mezun', 'cols' => $colsLise, 'rows' => $matLise];
-    if ($ortaStudents) $groups[] = ['title' => '🎒 Ortaokul (LGS)', 'cols' => $colsOrta, 'rows' => $matOrta];
     foreach ($groups as $g): if (empty($g['cols'])) continue; ?>
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
         <div class="px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
@@ -232,7 +191,7 @@ function fm_cell_html(array $c): string {
                         <?php foreach ($g['cols'] as $col): ?>
                         <th title="<?php echo htmlspecialchars($col['name'] . ' (' . $col['category'] . ') · ' . count($col['topics']) . ' konu'); ?>">
                             <?php echo htmlspecialchars(mb_strimwidth($col['name'], 0, 14, '…', 'UTF-8')); ?>
-                            <span class="fm-cat"><?php echo htmlspecialchars($col['category']); ?><?php echo $col['src'] === 'old' ? ' · ESKİ' : ''; ?></span>
+                            <span class="fm-cat"><?php echo htmlspecialchars($col['category']); ?></span>
                         </th>
                         <?php endforeach; ?>
                     </tr>
@@ -260,7 +219,6 @@ function fm_cell_html(array $c): string {
     <p class="text-[10px] text-slate-400 font-medium">
         Faz N = müfredattaki her konuya en az N kez görev verilmesi; Faz 1 %100 olunca otomatik Faz 2 başlar (5. faza kadar).
         AYT sütunları öğrencinin alanına/sınıfına göre değerlendirilir; alan dışı dersler "—" ile soluk gösterilir.
-        "ESKİ" etiketli sütunlar eski koçluk müfredatından olup yalnızca görev verilmişse listelenir.
     </p>
 </div>
 

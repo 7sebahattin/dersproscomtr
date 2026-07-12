@@ -454,7 +454,6 @@ include __DIR__ . '/header.php';
                             <span class="rotb-icon text-2xl leading-none">🏅</span>
                         </div>
                         <div class="text-left">
-                            <div class="text-[9px] text-blue-200 uppercase font-bold tracking-wider">🏅 Rozetlerim</div>
                             <div class="rotb-label font-black leading-tight text-white text-sm whitespace-nowrap"></div>
                             <div class="rotb-sub text-[10px] font-semibold text-blue-200 whitespace-nowrap"></div>
                         </div>

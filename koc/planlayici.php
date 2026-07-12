@@ -150,7 +150,6 @@ foreach (($raw_items ?? []) as $it) {
                             <span class="text-[10px] font-black uppercase"><?php echo htmlspecialchars($dayName); ?></span>
                         </div>
                         <div class="flex items-center gap-1.5">
-                            <button type="button" class="ps-day-done text-[10px] font-black bg-white/10 hover:bg-emerald-500 border border-white/20 rounded px-1.5 py-0.5 transition" data-date="<?php echo $wd; ?>" title="Bu günün bekleyen görevlerinin tümünü YAPILDI işaretle">✓✓</button>
                             <span class="ps-col-count text-[9px] font-bold bg-white/15 rounded px-1.5 py-0.5">0</span>
                         </div>
                     </div>
@@ -1006,27 +1005,6 @@ foreach (($raw_items ?? []) as $it) {
             alert('✅ ' + j.students + ' öğrenciye ' + j.created + ' görev eklendi.' + (j.skipped ? ' (' + j.skipped + ' geçersiz kalem atlandı)' : ''));
         }).catch(function(){ btn.disabled = false; btn.textContent = 'Uygula'; alert('Bağlantı hatası.'); });
     };
-
-    // ── ✓✓ Toplu durum: günün BEKLEYEN görevlerini tek tıkla 'yapıldı' yap ──
-    document.querySelectorAll('#plannerStudio .ps-day-done').forEach(function(btn){
-        btn.addEventListener('click', function(){
-            var day = btn.dataset.date;
-            var pending = cards.filter(function(c){ return c.date === day && !c.deleted && c.id && c.status === 'bekliyor'; });
-            if (!pending.length) { alert('Bu günde kayıtlı BEKLEYEN görev yok. (Kaydedilmemiş taslak kartlar önce "Haftayı Kaydet" ile kaydedilmeli.)'); return; }
-            if (!confirm(pending.length + ' bekleyen görev YAPILDI olarak işaretlenecek. (Yarım/yapılmadı işaretliler etkilenmez.) Devam?')) return;
-            toolPost({ ajax: 'bulk_status_day', date: day }).then(function(j){
-                if (!j.ok) { alert(j.error || 'Güncellenemedi.'); return; }
-                // Yerel durumları da güncelle — DEĞİŞTİ rozeti tetiklenmesin diye
-                // hem kartta hem sunucu anlık görüntüsünde (original) işle.
-                pending.forEach(function(c){
-                    c.status = 'yapildi';
-                    if (original[c.id]) original[c.id].status = 'yapildi';
-                });
-                renderBoard();
-                setStatus('✓ ' + j.changed + ' görev yapıldı işaretlendi', 'bg-white/10');
-            }).catch(function(){ alert('Bağlantı hatası.'); });
-        });
-    });
 
     // Çevrimiçi/çevrimdışı durum yansıması
     window.addEventListener('offline', function(){ setStatus('⚠ Çevrimdışı — taslak yerelde güvende', 'bg-amber-500/40'); });
