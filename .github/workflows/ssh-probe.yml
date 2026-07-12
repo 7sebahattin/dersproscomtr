@@ -1,0 +1,32 @@
+name: SSH Destek Testi
+
+# AMAÇ: Hosting'in SSH/rsync destekleyip desteklemediğini öğrenmek.
+# FTP'nin aralıklı "control socket timeout" sorunu SSH+rsync'e geçilerek
+# kökten çözülebilir — ama önce hosting'in SSH verdiğinden emin olmalıyız.
+#
+# ÇALIŞTIRMA: GitHub → Actions → "SSH Destek Testi" → "Run workflow".
+# Sonuç yeşilse SSH var demektir (log'da rsync sürümü de görünür) →
+# deploy'u rsync'e taşıyabiliriz. Kırmızıysa hosting SSH vermiyordur,
+# FTP + 6 deneme düzeninde kalırız.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 22 portuna SSH bağlantısı dene
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+          echo "SSH deneniyor (port 22)..."
+          if sshpass -p "${{ secrets.FTP_PASSWORD }}" \
+             ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -p 22 \
+             "${{ secrets.FTP_USERNAME }}@${{ secrets.FTP_SERVER }}" \
+             'echo "SSH-BAGLANTI-OK"; command -v rsync >/dev/null && rsync --version | head -1 || echo "RSYNC-YOK (yine de sftp/scp kullanilabilir)"'; then
+            echo "✅ Hosting SSH destekliyor — deploy rsync/scp'ye taşınabilir."
+          else
+            echo "❌ SSH bağlantısı kurulamadı — hosting büyük olasılıkla SSH vermiyor (FTP'de kalınır)."
+            exit 1
+          fi

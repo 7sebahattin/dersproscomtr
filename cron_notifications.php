@@ -68,6 +68,16 @@ try {
     if ($genCount > 0) cron_log("  [ÖDEME] $genCount adet vadesi geçmiş seans borç olarak eklendi.");
 } catch (Throwable $e) { /* ödeme tablosu yoksa yok say */ }
 
+// ── Günlük bakım: 90 günden eski bildirim loglarını temizle (günde 1 kez) ────
+require_once __DIR__ . '/app_settings_lib.php';
+try {
+    if (app_setting_get($pdo, 'last_log_prune') !== date('Y-m-d')) {
+        $delCnt = $pdo->exec("DELETE FROM push_notification_log WHERE scheduled_date < DATE_SUB(CURDATE(), INTERVAL 90 DAY)");
+        app_setting_set($pdo, 'last_log_prune', date('Y-m-d'));
+        if ($delCnt) cron_log("  [BAKIM] $delCnt eski bildirim log kaydı silindi (>90 gün).");
+    }
+} catch (Throwable $e) { /* log tablosu yoksa yok say */ }
+
 // ── Bildirim Ayarları: DB'den oku, yoksa varsayılan kullan ───────────────────
 function get_notif_setting(PDO $pdo, int $teacher_id, int $student_id, string $scenario): array {
     static $cache = [];

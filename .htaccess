@@ -48,6 +48,10 @@ RewriteRule ^uploads/receipts/ - [F,L]
 # Composer kütüphane dosyalarına doğrudan web erişimi gereksiz — kapat.
 RewriteRule ^vendor/ - [F,L]
 
+# Veritabanı yedeklerine DOĞRUDAN erişimi engelle (indirme yalnızca
+# oturumlu admin ile admin/yedekler.php üzerinden yapılır).
+RewriteRule ^backups/ - [F,L]
+
 # LiteSpeed sunucu önbelleği (LSCache) .php sayfalarını devre dışı bırakır.
 # Site tamamen oturum tabanlı/dinamik olduğundan sayfa önbelleklenmesi
 # deploy sonrası değişikliklerin (header/footer gibi) gecikmeli görünmesine yol açar.
