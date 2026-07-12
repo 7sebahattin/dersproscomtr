@@ -115,6 +115,18 @@
             }
         };
 
+        // ✓✓ Toplu durum (eski tablo): günün bekleyen görevlerini yapıldı yap
+        window.bulkDayDone = async function(day, btn){
+            if (!confirm('Bu günün BEKLEYEN görevlerinin tümü YAPILDI olarak işaretlenecek. (Yarım/yapılmadı işaretliler etkilenmez.) Devam?')) return;
+            if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+            try {
+                const j = await postScheduleAjax({ ajax: 'bulk_status_day', date: day });
+                if (j && j.ok) { location.reload(); return; }
+                alert((j && j.error) || 'Güncellenemedi.');
+            } catch(e) { alert('Bağlantı hatası.'); }
+            if (btn) { btn.disabled = false; btn.textContent = '✓✓ Tümü'; }
+        };
+
         // Eski tablo artık yalnızca mobil/tablette görünüyor; oradaki dokunmatik
         // sürükle-bırak sorun çıkardığı için Sortable YALNIZCA masaüstü işaretçide
         // (fine pointer) etkin. Masaüstünde asıl arayüz zaten Planlama Stüdyosu.

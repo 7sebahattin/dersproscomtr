@@ -44,8 +44,12 @@
             $dayItems   = $schedule_items[$wd] ?? [];
             $totalCount = is_array($dayItems) ? count($dayItems) : 0;
             $doneCount  = 0;
+            $pendingCount = 0;
             if ($totalCount > 0) {
-                foreach ($dayItems as $di) { if (($di['status'] ?? '') === 'yapildi') $doneCount++; }
+                foreach ($dayItems as $di) {
+                    if (($di['status'] ?? '') === 'yapildi') $doneCount++;
+                    if (($di['status'] ?? 'bekliyor') === 'bekliyor') $pendingCount++;
+                }
             }
             $progress = ($totalCount > 0) ? (int)round(($doneCount / $totalCount) * 100) : 0;
         ?>
@@ -62,9 +66,21 @@
                                 <div class="text-[10px] font-medium text-blue-100/80 truncate mt-0.5">Günlük Plan</div>
                             </div>
                         </div>
-                        <div class="flex flex-col items-end gap-1 flex-shrink-0">
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ec9731] text-white shadow-sm border border-orange-400/50 whitespace-nowrap"><?php echo $totalCount; ?> Görev</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/20 text-white border border-white/10">✅ <?php echo $doneCount; ?></span>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <?php if ($pendingCount > 0): ?>
+                            <!-- ✓✓ Toplu: günün bekleyen görevlerini tek dokunuşla 'yapıldı' işaretle -->
+                            <form method="POST" class="m-0" onsubmit="return confirm('<?php echo $turkishDay; ?> gününün bekleyen <?php echo $pendingCount; ?> görevi YAPILDI olarak işaretlensin mi?');">
+                                <input type="hidden" name="bulk_day_done" value="1">
+                                <input type="hidden" name="day" value="<?php echo $wd; ?>">
+                                <button type="submit"
+                                        class="w-8 h-8 rounded-full bg-white/15 hover:bg-emerald-500 border border-white/25 hover:border-emerald-400 text-white text-[11px] font-black flex items-center justify-center transition active:scale-90"
+                                        title="Günün tüm bekleyen görevlerini yapıldı işaretle (<?php echo $pendingCount; ?> görev)">✓✓</button>
+                            </form>
+                            <?php endif; ?>
+                            <div class="flex flex-col items-end gap-1">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ec9731] text-white shadow-sm border border-orange-400/50 whitespace-nowrap"><?php echo $totalCount; ?> Görev</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/20 text-white border border-white/10">✅ <?php echo $doneCount; ?></span>
+                            </div>
                         </div>
                     </div>
                     <div class="mt-2.5">

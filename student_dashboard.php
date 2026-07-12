@@ -173,6 +173,62 @@ function calculateStreak($pdo, $student_id) {
 
 $streakData = calculateStreak($pdo, $sid);
 
+// ── 🎯 Sınav geri sayımı (tarih kartının altında ufak yazı) ──────────────────
+require_once __DIR__ . '/app_settings_lib.php';
+$examLabel = 'YKS'; $examLeft = -1; $examDateStr = '';
+try {
+    $lvlQ = $pdo->prepare("SELECT school_level FROM users WHERE id = ?");
+    $lvlQ->execute([$sid]);
+    $examLabel = (($lvlQ->fetchColumn() ?: 'Lise') === 'Ortaokul') ? 'LGS' : 'YKS';
+    $examDates = exam_dates($pdo);
+    $examLeft  = exam_days_left($examDates[$examLabel]);
+    $examDateStr = date('d.m.Y', strtotime($examDates[$examLabel]));
+} catch (Throwable $e) { $examLeft = -1; }
+
+// ── 🏅 Rozetler — mevcut verilerden anlık hesap; tek kartta dönerek gösterilir
+$badges = [];
+try {
+    $bq = $pdo->prepare("
+        SELECT SUM(CASE WHEN action_type='soru' AND status='yapildi' THEN amount ELSE 0 END) AS soru,
+               SUM(CASE WHEN action_type='konu' AND status='yapildi' THEN amount ELSE 0 END) AS konu_dk
+        FROM schedule_items WHERE student_id = ?");
+    $bq->execute([$sid]);
+    $bs = $bq->fetch(PDO::FETCH_ASSOC) ?: [];
+    $bSoru   = (int)($bs['soru'] ?? 0);
+    $bKonu   = (int)($bs['konu_dk'] ?? 0);
+    $bStreak = (int)$streakData['streak'];
+    $bDeneme = 0;
+    try { $dq = $pdo->prepare("SELECT COUNT(*) FROM quiz_results WHERE student_id = ?"); $dq->execute([$sid]); $bDeneme = (int)$dq->fetchColumn(); } catch (Throwable $e) {}
+
+    // Tam Hafta: son TAMAMLANMIŞ haftada tüm görevler yapıldı mı?
+    $twMon = date('Y-m-d', strtotime('monday last week'));
+    $twSun = date('Y-m-d', strtotime($twMon . ' +6 days'));
+    $tw = $pdo->prepare("SELECT COUNT(*) t, SUM(status='yapildi') d FROM schedule_items WHERE student_id = ? AND date BETWEEN ? AND ?");
+    $tw->execute([$sid, $twMon, $twSun]);
+    $twr = $tw->fetch(PDO::FETCH_ASSOC) ?: [];
+    $fullWeek = ((int)($twr['t'] ?? 0) > 0 && (int)$twr['t'] === (int)($twr['d'] ?? 0));
+
+    // Kademeli rozet: kazanılan en yüksek eşik + bir sonraki hedef
+    $tierBadge = function (string $icon, string $name, int $val, array $tiers, string $unit) {
+        $earned = null; $next = null;
+        foreach ($tiers as $t) { if ($val >= $t) $earned = $t; elseif ($next === null) $next = $t; }
+        $on = $earned !== null;
+        return [
+            'icon'  => $icon,
+            'on'    => $on,
+            'label' => $name . ' ' . number_format($on ? $earned : $next),
+            'sub'   => $on ? number_format($val) . ' ' . $unit
+                           : number_format($next - $val) . ' ' . $unit . ' kaldı',
+        ];
+    };
+    $badges[] = $tierBadge('💯', 'Soru',   $bSoru,   [100, 1000, 5000, 10000], 'soru');
+    $badges[] = $tierBadge('📚', 'Konu',   $bKonu,   [300, 1000, 3000],        'dk');
+    $badges[] = $tierBadge('🔥', 'Seri',   $bStreak, [3, 7, 30],               'gün');
+    $badges[] = $tierBadge('📝', 'Deneme', $bDeneme, [5, 15, 30],              'deneme');
+    $badges[] = ['icon' => '🏆', 'on' => $fullWeek, 'label' => 'Tam Hafta',
+                 'sub' => $fullWeek ? 'geçen hafta %100!' : 'haftayı %100 bitir'];
+} catch (Throwable $e) { $badges = []; }
+
 // ==========================================
 // 3. KARŞILAMA MESAJI MANTIĞI
 // ==========================================
@@ -315,6 +371,9 @@ include __DIR__ . '/header.php';
     .modal-enter { animation: modalPop 0.3s ease-out forwards; }
     @keyframes modalPop { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     .streak-count-anim { animation: countUp 0.4s ease-out forwards; }
+    /* 🏅 Dönen rozet: içerik yumuşak geçişle değişir */
+    .rotb-body { transition: opacity .25s ease, transform .25s ease; }
+    .rotb-fade .rotb-body { opacity: 0; transform: translateY(4px); }
 </style>
 
 <div class="min-h-screen pb-12">
@@ -341,12 +400,27 @@ include __DIR__ . '/header.php';
                     <p class="text-blue-200 text-[10px] font-bold uppercase tracking-widest mb-1">DersPROS Kontrol Paneli</p>
                     <h1 class="text-2xl md:text-4xl font-extrabold text-white">Selam, <span class="text-[#ec9731]"><?php echo htmlspecialchars($student_name); ?></span> 👋</h1>
                     <p class="text-blue-100/90 text-xs md:text-sm mt-1 max-w-sm">Hoşgeldin! Çalışmalarına göz atalım.</p>
+                    <?php if ($examLeft >= 0): ?>
+                    <p class="md:hidden text-[11px] font-bold text-[#ec9731] mt-1" title="<?php echo $examLabel; ?> tarihi: <?php echo $examDateStr; ?>">🎯 <?php echo $examLabel; ?>'ye <?php echo $examLeft; ?> gün</p>
+                    <?php endif; ?>
                 </div>
-                <div onclick="openStreakModal()" class="md:hidden flex flex-col items-center bg-white/10 backdrop-blur-md rounded-xl px-3 py-2 border border-white/20 ml-2 cursor-pointer active:scale-95 transition relative overflow-hidden <?php echo $streakData['is_active'] ? 'streak-halo-active' : ''; ?>">
-                    <?php if($streakData['is_active'] && $sv >= 7): ?><div class="absolute inset-0 bg-yellow-400/10 rounded-xl"></div><?php endif; ?>
-                    <span class="text-3xl relative z-10 <?php echo $streakData['is_active'] ? 'lightning-active' : 'lightning-inactive'; ?>">⚡</span>
-                    <span class="text-base font-black text-white relative z-10 leading-tight"><?php echo $sv; ?></span>
-                    <span class="text-[9px] font-bold uppercase tracking-wider relative z-10 <?php echo $streakData['is_active'] ? 'text-yellow-300' : 'text-slate-400'; ?>">gün</span>
+                <div class="md:hidden flex items-start gap-2 ml-2">
+                    <div onclick="openStreakModal()" class="flex flex-col items-center bg-white/10 backdrop-blur-md rounded-xl px-3 py-2 border border-white/20 cursor-pointer active:scale-95 transition relative overflow-hidden <?php echo $streakData['is_active'] ? 'streak-halo-active' : ''; ?>">
+                        <?php if($streakData['is_active'] && $sv >= 7): ?><div class="absolute inset-0 bg-yellow-400/10 rounded-xl"></div><?php endif; ?>
+                        <span class="text-3xl relative z-10 <?php echo $streakData['is_active'] ? 'lightning-active' : 'lightning-inactive'; ?>">⚡</span>
+                        <span class="text-base font-black text-white relative z-10 leading-tight"><?php echo $sv; ?></span>
+                        <span class="text-[9px] font-bold uppercase tracking-wider relative z-10 <?php echo $streakData['is_active'] ? 'text-yellow-300' : 'text-slate-400'; ?>">gün</span>
+                    </div>
+                    <?php if (!empty($badges)): ?>
+                    <!-- 🏅 Dönen rozet (mobil mini) -->
+                    <div class="rotb-wrap flex flex-col items-center bg-white/10 backdrop-blur-md rounded-xl px-2.5 py-2 border border-white/20 min-w-[76px] max-w-[96px]" title="Rozetlerim">
+                        <div class="rotb-body flex flex-col items-center">
+                            <span class="rotb-icon text-2xl leading-none">🏅</span>
+                            <span class="rotb-label text-[10px] font-black text-white leading-tight text-center mt-1 whitespace-nowrap"></span>
+                            <span class="rotb-sub text-[8px] font-bold text-blue-200 leading-tight text-center whitespace-nowrap"></span>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
             <div class="hidden md:flex items-center gap-4">
@@ -372,6 +446,21 @@ include __DIR__ . '/header.php';
                         <div class="text-[10px] font-bold <?php echo $streakData['is_active'] ? 'text-yellow-300' : 'text-blue-200'; ?> uppercase tracking-wider"><?php echo $streak_title; ?></div>
                     </div>
                 </div>
+                <?php if (!empty($badges)): ?>
+                <!-- 🏅 Dönen rozet: belli aralıklarla sıradaki rozete geçer -->
+                <div class="rotb-wrap bg-white/10 backdrop-blur-md border border-white/20 p-2 rounded-2xl flex items-center gap-3 pr-5 min-w-[185px]" title="Rozetlerim">
+                    <div class="rotb-body flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center shrink-0">
+                            <span class="rotb-icon text-2xl leading-none">🏅</span>
+                        </div>
+                        <div class="text-left">
+                            <div class="text-[9px] text-blue-200 uppercase font-bold tracking-wider">🏅 Rozetlerim</div>
+                            <div class="rotb-label font-black leading-tight text-white text-sm whitespace-nowrap"></div>
+                            <div class="rotb-sub text-[10px] font-semibold text-blue-200 whitespace-nowrap"></div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
                 <?php
                     $sdDays = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
                     $sdM = date('M');
@@ -383,6 +472,10 @@ include __DIR__ . '/header.php';
                     <div class="text-left">
                         <div class="text-xs text-blue-200 uppercase font-bold"><?php echo $sdDays[date('w')]; ?></div>
                         <div class="font-bold leading-none text-white"><?php echo ($monthsTR[$sdM] ?? $sdM) . ' ' . date('Y'); ?></div>
+                        <?php if ($examLeft >= 0): ?>
+                        <!-- 🎯 Sınav geri sayımı — tarihin hemen altında ufak yazı -->
+                        <div class="text-[10px] font-bold text-[#ec9731] mt-1" title="<?php echo $examLabel; ?> tarihi: <?php echo $examDateStr; ?>">🎯 <?php echo $examLabel; ?>'ye <?php echo $examLeft; ?> gün</div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -687,6 +780,32 @@ include __DIR__ . '/header.php';
             document.getElementById('streakInfoPopup').classList.add('hidden');
         }
     });
+
+    // 🏅 Dönen rozet: 4 saniyede bir sıradaki rozete yumuşak geçiş
+    (function(){
+        var BADGES = <?php echo json_encode($badges, JSON_UNESCAPED_UNICODE); ?>;
+        var wraps = document.querySelectorAll('.rotb-wrap');
+        if (!BADGES.length || !wraps.length) return;
+        var i = 0;
+        function render() {
+            var b = BADGES[i];
+            wraps.forEach(function(w){
+                var ic = w.querySelector('.rotb-icon'), lb = w.querySelector('.rotb-label'), sb = w.querySelector('.rotb-sub');
+                if (ic) { ic.textContent = b.icon; ic.style.filter = b.on ? '' : 'grayscale(1)'; ic.style.opacity = b.on ? '1' : '.5'; }
+                if (lb) { lb.textContent = b.label; lb.style.opacity = b.on ? '1' : '.6'; }
+                if (sb) { sb.textContent = b.sub; }
+            });
+        }
+        render();
+        setInterval(function(){
+            wraps.forEach(function(w){ w.classList.add('rotb-fade'); });
+            setTimeout(function(){
+                i = (i + 1) % BADGES.length;
+                render();
+                wraps.forEach(function(w){ w.classList.remove('rotb-fade'); });
+            }, 250);
+        }, 4000);
+    })();
 
     function openStreakModal() {
         document.getElementById('streakDetailsModal').classList.remove('hidden');

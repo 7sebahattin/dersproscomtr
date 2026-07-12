@@ -87,11 +87,8 @@ if (!$has_coach) {
 // Öğrenci Seviyesi
 $student_level = $selected_student['school_level'] ?? 'Lise';
 
-// ── Sınav geri sayımı + haftalık karne ───────────────────────────────────────
-require_once __DIR__ . '/../app_settings_lib.php';
-$examDates = exam_dates($pdo);
-$examLabel = ($student_level === 'Ortaokul') ? 'LGS' : 'YKS';
-$examLeft  = exam_days_left($examDates[$examLabel]);
+// ── Haftalık karne ───────────────────────────────────────────────────────────
+// (Sınav geri sayımı ve rozetler ana sayfaya taşındı: student_dashboard.php)
 
 // Haftalık karne: Pazartesi/Salı günleri GEÇEN haftanın özeti gösterilir
 // (öğrenci kapatabilir — localStorage, JS tarafında)
@@ -182,6 +179,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $upd->execute([$status, $amount, $finalTarget, $correct_count, $wrong_count, $sched_id, $sid]);
 
             $message = "Durum ve miktar güncellendi.";
+        }
+    }
+
+    // A2. TOPLU GÜN BİTTİ: o günün BEKLEYEN görevlerini tek tıkla 'yapıldı' yap.
+    //     Yarım/yapılmadı/yapıldı işaretlenmiş görevlere dokunulmaz — öğrencinin
+    //     girdiği gerçekleşen/doğru-yanlış verisi korunur.
+    if (isset($_POST['bulk_day_done'])) {
+        $bulkDay = (string)($_POST['day'] ?? '');
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $bulkDay)) {
+            $bd = $pdo->prepare("UPDATE schedule_items SET status = 'yapildi' WHERE student_id = ? AND date = ? AND status = 'bekliyor'");
+            $bd->execute([$sid, $bulkDay]);
+            $n = $bd->rowCount();
+            $message = $n > 0 ? "$n görev yapıldı olarak işaretlendi. 🎉" : "Bu günde bekleyen görev yoktu.";
         }
     }
 
@@ -318,11 +328,6 @@ try {
             <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                 <h1 class="text-lg font-bold text-slate-800 flex items-center gap-2.5 flex-wrap">
                     Hoşgeldin, <?php echo htmlspecialchars($selected_student['first_name'] ?? ''); ?> 👋
-                    <?php if ($examLeft >= 0): ?>
-                    <span class="inline-flex items-center gap-1 bg-[#223488] text-white rounded-full px-3 py-1 text-[11px] font-bold shadow-sm" title="<?php echo $examLabel; ?> tarihi: <?php echo date('d.m.Y', strtotime($examDates[$examLabel])); ?>">
-                        🎯 <?php echo $examLabel; ?>'ye <span class="text-[#ec9731] font-black text-sm"><?php echo $examLeft; ?></span> gün
-                    </span>
-                    <?php endif; ?>
                 </h1>
                 <div class="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
                     <button onclick="openTab('schedule')" id="tab-schedule" class="px-4 py-1.5 rounded-lg font-bold text-xs transition bg-slate-800 text-white shadow-sm flex items-center gap-2">📅 Program</button>
