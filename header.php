@@ -261,6 +261,7 @@ try {
                                 </div>
                                 <?php if ($myRole === 'teacher'): ?>
                                     <a href="<?php echo $B; ?>/koc/ogrencilerim.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">👥 Öğrencilerim</a>
+                                    <a href="<?php echo $B; ?>/koc/faz_matrisi.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🗺️ Faz Matrisi</a>
                                     <a href="<?php echo $B; ?>/koc/bildirim_ayarlari.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🔔 Bildirim Ayarları</a>
                                     <a href="<?php echo $B; ?>/koc/odemeler.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">💰 Ödeme Yönetimi</a>
                                     <a href="<?php echo $B; ?>/koc/mufredat_v2.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">📝 Müfredat Yükle</a>
@@ -397,6 +398,9 @@ try {
             <div class="space-y-2">
                 <a href="<?php echo $B; ?>/koc/ogrencilerim.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
                     <span class="text-lg">👥</span> Öğrencilerim
+                </a>
+                <a href="<?php echo $B; ?>/koc/faz_matrisi.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
+                    <span class="text-lg">🗺️</span> Faz Matrisi
                 </a>
                 <a href="<?php echo $B; ?>/koc/bildirim_ayarlari.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
                     <span class="text-lg">🔔</span> Bildirim Ayarları
