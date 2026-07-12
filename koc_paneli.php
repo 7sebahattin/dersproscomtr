@@ -770,7 +770,7 @@ try { $all_subjects = $pdo->query("SELECT * FROM coaching_subjects ORDER BY cate
                         class="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition" title="Diğer işlemler">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
                 </button>
-                <div id="kocMoreMenu" class="hidden absolute left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 z-[60]">
+                <div id="kocMoreMenu" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 z-[60]">
                     <button onclick="document.getElementById('kocMoreMenu').classList.add('hidden'); sendWhatsappReport();"
                             class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 rounded-lg hover:bg-green-50 transition">
                         <span class="text-lg leading-none">💬</span> Veliye Mesaj At</button>
