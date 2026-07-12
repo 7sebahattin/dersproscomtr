@@ -182,16 +182,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // A2. TOPLU GÜN BİTTİ: o günün BEKLEYEN görevlerini tek tıkla 'yapıldı' yap.
-    //     Yarım/yapılmadı/yapıldı işaretlenmiş görevlere dokunulmaz — öğrencinin
-    //     girdiği gerçekleşen/doğru-yanlış verisi korunur.
+    // A2. TOPLU GÜN BİTTİ: öğrencinin ✓✓ modalında SEÇTİĞİ bekleyen görevleri
+    //     'yapıldı' yap. Yalnızca gönderilen ID'ler + hâlâ 'bekliyor' olanlar
+    //     değişir (yarım/yapılmadı/veri girilmiş görevlere dokunulmaz).
     if (isset($_POST['bulk_day_done'])) {
-        $bulkDay = (string)($_POST['day'] ?? '');
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $bulkDay)) {
-            $bd = $pdo->prepare("UPDATE schedule_items SET status = 'yapildi' WHERE student_id = ? AND date = ? AND status = 'bekliyor'");
-            $bd->execute([$sid, $bulkDay]);
+        $ids = $_POST['done_ids'] ?? [];
+        if (!is_array($ids)) $ids = [];
+        $ids = array_values(array_filter(array_map('intval', $ids), fn($v) => $v > 0));
+        if ($ids) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            $bd = $pdo->prepare("UPDATE schedule_items SET status = 'yapildi'
+                                 WHERE student_id = ? AND status = 'bekliyor' AND id IN ($ph)");
+            $bd->execute(array_merge([$sid], $ids));
             $n = $bd->rowCount();
-            $message = $n > 0 ? "$n görev yapıldı olarak işaretlendi. 🎉" : "Bu günde bekleyen görev yoktu.";
+            $message = $n > 0 ? "$n görev yapıldı olarak işaretlendi. 🎉" : "Seçilen görevler zaten güncellenmişti.";
+        } else {
+            $message = "İşaretlenecek görev seçilmedi.";
         }
     }
 

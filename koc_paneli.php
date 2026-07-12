@@ -119,19 +119,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
     $itemId = (int)($_POST['schedule_id'] ?? $_POST['item_id'] ?? 0);
     $toDate = $_POST['to_date'] ?? $_POST['new_date'] ?? '';
 
-    // A0. TOPLU DURUM: bir günün BEKLEYEN görevlerini tek istekte 'yapıldı' yap.
-    //     Yalnızca 'bekliyor' değişir — yarım/yapılmadı/yapıldı işaretlenenlere
-    //     dokunulmaz (öğrencinin girdiği gerçekleşen/doğru-yanlış verisi korunur).
-    if ($action === 'bulk_status_day') {
-        $day = (string)($_POST['date'] ?? '');
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $day)) { echo json_encode(['ok' => false, 'error' => 'Geçersiz tarih.']); exit; }
-        try {
-            $up = $pdo->prepare("UPDATE schedule_items SET status = 'yapildi' WHERE student_id = ? AND date = ? AND status = 'bekliyor'");
-            $up->execute([$sid, $day]);
-            echo json_encode(['ok' => true, 'changed' => $up->rowCount()]); exit;
-        } catch (Exception $e) { echo json_encode(['ok' => false, 'error' => 'Güncelleme hatası.']); exit; }
-    }
-
     // A. TAŞIMA
     if ($action === 'move_schedule') {
         try {
@@ -707,24 +694,8 @@ if ($sid) {
             }
         } catch (Exception $e) {}
 
-        // 1) ESKİ koçluk müfredatı (topic_id bazlı) — dokunulmadı
-        $catFilter = ($student_level == 'Ortaokul') ? "category = 'LGS'" : "category IN ('TYT', 'AYT')";
-        $subs = $pdo->query("SELECT * FROM coaching_subjects WHERE $catFilter ORDER BY category, name")->fetchAll();
-        foreach($subs as $sub) {
-            $tops = $pdo->prepare("SELECT * FROM coaching_topics WHERE subject_id = ?"); $tops->execute([$sub['id']]); $t_list = $tops->fetchAll();
-            $sub_data = ['subject_name'=>$sub['name'], 'name'=>$sub['name'], 'category'=>$sub['category'], 'src'=>'old', 'topics'=>[], 'q_total'=>0, 't_total'=>0, 'v_total'=>0];
-            foreach($t_list as $t) {
-                $stats = $topic_stats[$t['id']] ?? ['total_questions'=>0, 'total_topics'=>0, 'total_videos'=>0, 'history'=>[]];
-                $sub_data['q_total'] += $stats['total_questions'];
-                $sub_data['t_total'] += $stats['total_topics'];
-                $sub_data['v_total'] += ($stats['total_videos'] ?? 0);
-                $asgC = (int)($assigned_topics[(string)$t['id']] ?? 0);
-                $sub_data['topics'][] = ['id'=>$t['id'], 'name'=>$t['name'], 'q_count'=>$stats['total_questions'], 't_count'=>$stats['total_topics'], 'v_count'=>($stats['total_videos'] ?? 0), 'history'=>$stats['history'], 'assigned'=>$asgC > 0, 'asg_count'=>$asgC];
-            }
-            $progress_data[] = $sub_data;
-        }
-
-        // 2) YENİ müfredat (edu_topic_id bazlı) — TYT/AYT sekmelerinde aynı yapıda ek kartlar
+        // YENİ müfredat (edu_topic_id bazlı) — eski koçluk müfredatı artık kullanılmıyor,
+        // yalnızca yeni sistem gösterilir.
         if ($student_level !== 'Ortaokul') {
             $eduCats = $pdo->query("SELECT id, name FROM education_categories WHERE name IN ('TYT','AYT') ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($eduCats as $eduCat) {

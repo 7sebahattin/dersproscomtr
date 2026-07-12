@@ -115,11 +115,6 @@
                                 </div>
                             </div>
                         </div>
-                        <?php if ($totalCount > $doneCount): ?>
-                        <button type="button" onclick="bulkDayDone('<?php echo $wd; ?>', this)"
-                                class="shrink-0 text-[10px] font-black bg-white/10 hover:bg-emerald-500 border border-white/20 rounded-lg px-2 py-1 transition"
-                                title="Bu günün bekleyen görevlerinin tümünü YAPILDI işaretle">✓✓ Tümü</button>
-                        <?php endif; ?>
                     </div>
 
                     <div class="mt-3">

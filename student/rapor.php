@@ -112,23 +112,6 @@ if ($sid > 0 && isset($pdo)) {
     .kpi-card:hover { border-color: var(--atla-blue-dark); transform: translateY(-2px); }
 </style>
 
-<div class="bg-[#223488] rounded-2xl p-6 mb-6 text-white shadow-xl relative overflow-hidden">
-    <div class="absolute top-0 right-0 p-4 opacity-10 text-9xl transform rotate-12 translate-x-10 -translate-y-10">📊</div>
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-10">
-        <div>
-            <h2 class="text-2xl font-black mb-1 tracking-tight">Genel Durum Raporu</h2>
-            <p class="text-blue-200 text-sm flex items-center gap-2 font-medium">
-                <span class="w-2 h-2 rounded-full bg-[#ec9731] animate-pulse"></span>
-                <?php echo htmlspecialchars($studentName); ?>
-            </p>
-        </div>
-        <div class="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 shadow-inner">
-            <span class="text-xs text-blue-100 mr-2 font-bold uppercase tracking-wider">Seviye</span>
-            <span class="bg-white text-[#223488] px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider shadow-sm"><?php echo htmlspecialchars($lvl); ?></span>
-        </div>
-    </div>
-</div>
-
 <div class="analysis-container pb-10">
     
     <div class="analysis-card mb-6 animate-fadeIn">
