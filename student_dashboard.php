@@ -600,7 +600,7 @@ include __DIR__ . '/header.php';
 </div>
 
 <div id="streakDetailsModal" class="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 hidden transition-opacity duration-300">
-    <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl border border-slate-200 overflow-hidden relative transform scale-100 modal-enter">
+    <div class="bg-white rounded-3xl w-full max-w-sm max-h-[88vh] shadow-2xl border border-slate-200 overflow-y-auto overflow-x-hidden relative transform scale-100 modal-enter">
         <div class="relative overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e 0%, #223488 60%, #2d3a8c 100%);">
             <!-- Arka plan parıltı efekti (pointer-events kapalı — butona engel olmasın) -->
             <?php if($streakData['is_active']): ?>
