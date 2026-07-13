@@ -413,11 +413,11 @@ include __DIR__ . '/header.php';
                     </div>
                     <?php if (!empty($badges)): ?>
                     <!-- 🏅 Dönen rozet (mobil mini) -->
-                    <div class="rotb-wrap flex flex-col items-center bg-white/10 backdrop-blur-md rounded-xl px-2.5 py-2 border border-white/20 min-w-[76px] max-w-[96px]" title="Rozetlerim">
-                        <div class="rotb-body flex flex-col items-center">
+                    <div class="rotb-wrap flex flex-col items-center bg-white/10 backdrop-blur-md rounded-xl px-2.5 py-2 border border-white/20 w-[84px] overflow-hidden" title="Rozetlerim">
+                        <div class="rotb-body flex flex-col items-center w-full">
                             <span class="rotb-icon text-2xl leading-none">🏅</span>
-                            <span class="rotb-label text-[10px] font-black text-white leading-tight text-center mt-1 whitespace-nowrap"></span>
-                            <span class="rotb-sub text-[8px] font-bold text-blue-200 leading-tight text-center whitespace-nowrap"></span>
+                            <span class="rotb-label block w-full truncate text-[10px] font-black text-white leading-tight text-center mt-1"></span>
+                            <span class="rotb-sub block w-full truncate text-[8px] font-bold text-blue-200 leading-tight text-center"></span>
                         </div>
                     </div>
                     <?php endif; ?>
@@ -448,14 +448,14 @@ include __DIR__ . '/header.php';
                 </div>
                 <?php if (!empty($badges)): ?>
                 <!-- 🏅 Dönen rozet: belli aralıklarla sıradaki rozete geçer -->
-                <div class="rotb-wrap bg-white/10 backdrop-blur-md border border-white/20 p-2 rounded-2xl flex items-center gap-3 pr-5 min-w-[185px]" title="Rozetlerim">
-                    <div class="rotb-body flex items-center gap-3">
+                <div class="rotb-wrap bg-white/10 backdrop-blur-md border border-white/20 p-2 rounded-2xl flex items-center gap-3 pr-5 min-w-[185px] max-w-[220px] overflow-hidden" title="Rozetlerim">
+                    <div class="rotb-body flex items-center gap-3 min-w-0">
                         <div class="w-10 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center shrink-0">
                             <span class="rotb-icon text-2xl leading-none">🏅</span>
                         </div>
-                        <div class="text-left">
-                            <div class="rotb-label font-black leading-tight text-white text-sm whitespace-nowrap"></div>
-                            <div class="rotb-sub text-[10px] font-semibold text-blue-200 whitespace-nowrap"></div>
+                        <div class="text-left min-w-0">
+                            <div class="rotb-label truncate font-black leading-tight text-white text-sm"></div>
+                            <div class="rotb-sub truncate text-[10px] font-semibold text-blue-200"></div>
                         </div>
                     </div>
                 </div>
