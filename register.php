@@ -8,6 +8,26 @@ try {
     $pdo->exec("ALTER TABLE users MODIFY COLUMN role ENUM('student','teacher','admin','superuser','parent') DEFAULT 'student'");
 } catch (Exception $e) {}
 
+// grade/track kolonları (koc/ogrencilerim.php ile aynı şema — idempotent)
+try {
+    if ($pdo->query("SHOW COLUMNS FROM users LIKE 'grade'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN grade VARCHAR(10) DEFAULT NULL");
+    }
+    if ($pdo->query("SHOW COLUMNS FROM users LIKE 'track'")->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN track VARCHAR(20) DEFAULT NULL");
+    }
+} catch (Exception $e) {}
+
+// Sınıf/Alan doğrulama — koc/ogrencilerim.php'deki öğretmen kaydıyla BİREBİR aynı
+// mantık: grade seviyeye uygun mu, track yalnızca Lise 11/12/Mezun'da geçerli mi.
+function reg_validate_grade_track(string $level, string $grade, string $track): array {
+    $validGrades = ($level === 'Ortaokul') ? ['5','6','7','8'] : ['9','10','11','12','Mezun'];
+    if (!in_array($grade, $validGrades, true)) $grade = null;
+    $trackAllowed = ($level !== 'Ortaokul' && in_array($grade, ['11','12','Mezun'], true));
+    if (!$trackAllowed || !in_array($track, ['Sayısal','Sözel','Eşit Ağırlık'], true)) $track = null;
+    return [$grade, $track];
+}
+
 $error   = '';
 $success = '';
 
@@ -25,6 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Rol'e göre ek alanlar
     $school_level = null;
+    $grade        = null;
+    $track        = null;
     $parent_name  = null;
     $parent_phone = null;
     $branch       = null;
@@ -32,7 +54,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($role === 'student') {
         $lvl = $_POST['school_level'] ?? 'Lise';
-        $school_level = in_array($lvl, ['Lise', 'LGS']) ? $lvl : 'Lise';
+        $school_level = in_array($lvl, ['Lise', 'Ortaokul']) ? $lvl : 'Lise';
+        [$grade, $track] = reg_validate_grade_track($school_level, trim($_POST['grade'] ?? ''), trim($_POST['track'] ?? ''));
         $parent_name  = trim($_POST['parent_name']  ?? '');
         $parent_phone = trim($_POST['parent_phone'] ?? '');
     }
@@ -62,11 +85,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Yeni üyeler doğrudan is_active=1 olur (öğrenci ve öğretmen dahil).
             // Onay zorunluluğuna geri dönmek için aşağıdaki VALUES sonundaki 1 -> 0 yapılır.
             $stmt = $pdo->prepare("
-                INSERT INTO users (username, email, password, first_name, last_name, phone, role, school_level, parent_name, parent_phone, branch, bio, is_active, date_joined)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
+                INSERT INTO users (username, email, password, first_name, last_name, phone, role, school_level, grade, track, parent_name, parent_phone, branch, bio, is_active, date_joined)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
             ");
 
-            if ($stmt->execute([$username, $email, $hashed, $first_name, $last_name, $phone, $role, $school_level, $parent_name, $parent_phone, $branch, $bio])) {
+            if ($stmt->execute([$username, $email, $hashed, $first_name, $last_name, $phone, $role, $school_level, $grade, $track, $parent_name, $parent_phone, $branch, $bio])) {
 
                 // Admin'lere bildirim maili
                 $role_labels = ['student' => 'Öğrenci', 'teacher' => 'Öğretmen', 'parent' => 'Veli'];
@@ -79,6 +102,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <strong>Telefon:</strong> {$phone}<br>
                     <strong>Rol:</strong> {$role_label}<br>
                     " . ($school_level ? "<strong>Seviye:</strong> {$school_level}<br>"         : "") . "
+                    " . ($grade        ? "<strong>Sınıf:</strong> {$grade}<br>"           : "") . "
+                    " . ($track        ? "<strong>Alan:</strong> {$track}<br>"            : "") . "
                     " . ($parent_name  ? "<strong>Veli Adı:</strong> {$parent_name}<br>"  : "") . "
                     " . ($parent_phone ? "<strong>Veli Tel:</strong> {$parent_phone}<br>" : "") . "
                     " . ($branch       ? "<strong>Branş:</strong> {$branch}<br>"          : "") . "
@@ -252,15 +277,34 @@ include 'header.php';
                         <label class="cursor-pointer">
                             <input type="radio" name="school_level" value="Lise" class="sr-only" id="level_lise" <?= (($_POST['school_level'] ?? 'Lise') === 'Lise') ? 'checked' : '' ?>>
                             <div class="level-btn border-2 border-slate-200 bg-white rounded-xl py-2.5 text-center text-sm font-bold text-slate-600 transition-all hover:border-[#223488]/40 peer-checked:border-[#223488]" id="lbl_lise">
-                                🏫 Lise
+                                🎓 Lise (TYT/AYT)
                             </div>
                         </label>
                         <label class="cursor-pointer">
-                            <input type="radio" name="school_level" value="LGS" class="sr-only" id="level_lgs" <?= (($_POST['school_level'] ?? '') === 'LGS') ? 'checked' : '' ?>>
+                            <input type="radio" name="school_level" value="Ortaokul" class="sr-only" id="level_lgs" <?= (($_POST['school_level'] ?? '') === 'Ortaokul') ? 'checked' : '' ?>>
                             <div class="level-btn border-2 border-slate-200 bg-white rounded-xl py-2.5 text-center text-sm font-bold text-slate-600 transition-all hover:border-[#223488]/40" id="lbl_lgs">
-                                📚 LGS
+                                🎒 Ortaokul (LGS)
                             </div>
                         </label>
+                    </div>
+                </div>
+
+                <!-- SINIF + ALAN — koc/ogrencilerim.php'deki öğretmen kaydıyla aynı mantık -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">Sınıf</label>
+                        <select name="grade" id="reg_grade_sel" onchange="syncGradeTrack()"
+                                class="w-full border border-slate-300 rounded-xl px-3 py-2.5 bg-white text-sm focus-atla"></select>
+                    </div>
+                    <div id="reg_track_wrap">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">Alan</label>
+                        <select name="track" id="reg_track_sel"
+                                class="w-full border border-slate-300 rounded-xl px-3 py-2.5 bg-white text-sm focus-atla">
+                            <option value="Sayısal">🔢 Sayısal</option>
+                            <option value="Eşit Ağırlık">⚖️ Eşit Ağırlık</option>
+                            <option value="Sözel">📖 Sözel</option>
+                        </select>
+                        <p id="reg_track_hint" class="hidden text-[10px] text-slate-400 mt-1 ml-1"></p>
                     </div>
                 </div>
                 <!-- VELİ BİLGİLERİ -->
@@ -355,8 +399,35 @@ document.querySelectorAll('input[name="school_level"]').forEach(function(radio) 
         document.getElementById('lbl_lise').classList.toggle('bg-indigo-50',     document.getElementById('level_lise').checked);
         document.getElementById('lbl_lgs').classList.toggle('border-[#223488]',  document.getElementById('level_lgs').checked);
         document.getElementById('lbl_lgs').classList.toggle('bg-indigo-50',      document.getElementById('level_lgs').checked);
+        syncGradeTrack();
     });
 });
+
+// Sınıf/Alan senkronizasyonu — koc/ogrencilerim.php'deki öğretmen kaydıyla BİREBİR aynı mantık:
+// Lise: 9,10 (alan yok) · 11,12,Mezun (Sayısal/Sözel/Eşit Ağırlık). Ortaokul: 5-8, alan yok (LGS).
+function syncGradeTrack(keepGrade) {
+    var lise = document.getElementById('level_lise');
+    var level = (lise && lise.checked) ? 'Lise' : 'Ortaokul';
+    var gradeSel = document.getElementById('reg_grade_sel');
+    var trackSel = document.getElementById('reg_track_sel');
+    var hint     = document.getElementById('reg_track_hint');
+    if (!gradeSel || !trackSel) return;
+
+    var grades = (level === 'Ortaokul') ? ['5','6','7','8'] : ['9','10','11','12','Mezun'];
+    var cur = keepGrade !== undefined ? keepGrade : gradeSel.value;
+    gradeSel.innerHTML = grades.map(function(g) {
+        return '<option value="' + g + '">' + (g === 'Mezun' ? '🎓 Mezun' : g + '. Sınıf') + '</option>';
+    }).join('');
+    gradeSel.value = grades.indexOf(cur) !== -1 ? cur : grades[0];
+
+    var trackOk = (level !== 'Ortaokul' && ['11','12','Mezun'].indexOf(gradeSel.value) !== -1);
+    trackSel.disabled = !trackOk;
+    trackSel.closest('div').classList.toggle('opacity-40', !trackOk);
+    if (hint) {
+        hint.classList.toggle('hidden', trackOk);
+        hint.textContent = (level === 'Ortaokul') ? 'Ortaokulda alan: LGS' : '9-10. sınıfta alan seçilmez';
+    }
+}
 
 // Şifre eşleşme kontrolü
 function checkPw() {
@@ -388,6 +459,8 @@ function checkPw() {
     if (lgs && lgs.checked) {
         document.getElementById('lbl_lgs').classList.add('border-[#223488]','bg-indigo-50');
     }
+
+    syncGradeTrack();
 })();
 </script>
 

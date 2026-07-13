@@ -216,9 +216,11 @@ try {
             </a>
 
             <div class="hidden lg:flex items-center space-x-1 text-sm font-medium">
+                <?php if ($isLoggedIn): ?>
                 <a href="<?php echo $B; ?>/index.php" class="text-slate-600 hover:text-blue-600 transition px-3 py-2 rounded-lg hover:bg-slate-50">🏠 Anasayfa</a>
                 <a href="<?php echo $B; ?>/denemeler.php" class="text-slate-600 hover:text-blue-600 transition px-3 py-2 rounded-lg hover:bg-slate-50">📝 Denemeler</a>
-                
+                <?php endif; ?>
+
                 <?php if (false): // Geçici olarak gizlendi ?>
     <a href="<?php echo $canliDersLink; ?>" class="text-slate-600 hover:text-blue-600 transition px-3 py-2 rounded-lg hover:bg-slate-50 relative">
         🔴 Özel Ders
