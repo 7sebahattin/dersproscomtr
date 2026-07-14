@@ -238,7 +238,13 @@ if ($selected_student) {
 .odm-modal.active{display:flex}
 .odm-modal-c{background:#fff;border-radius:18px;width:100%;max-width:440px;overflow:hidden}
 .stat-tile{background:#fff;border:1px solid var(--border);border-left-width:4px;border-radius:14px;padding:.9rem 1rem}
+.tbl-scroll{-webkit-overflow-scrolling:touch}
 @media (max-width:900px){ .odm-grid{grid-template-columns:1fr !important} .odm-side{position:static !important} }
+@media (max-width:640px){
+  .odm-wrap{padding:10px}
+  .odm-card{border-radius:14px}
+  .odm-btn{font-size:.76rem;padding:0 .8rem}
+}
 </style>
 
 <div id="odmToast" aria-live="polite"></div>
@@ -303,7 +309,7 @@ if ($selected_student) {
         <div class="odm-card p-4 lg:col-span-2">
           <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <h3 class="font-extrabold text-slate-800">📅 Ödeme Atanmamış Seanslar</h3>
-            <form method="POST" class="flex items-center gap-2 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+            <form method="POST" class="flex flex-wrap items-center gap-2 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
               <input type="hidden" name="action" value="update_price">
               <label class="text-xs font-bold text-slate-500 whitespace-nowrap">Seans Ücreti</label>
               <input type="number" name="new_price" id="global_lesson_price" value="<?= $oh($data['lesson_price']) ?>" step="0.01" class="w-20 text-center font-bold text-sm border border-slate-200 rounded-lg px-1 py-1 outline-none focus:border-[color:var(--atla-primary)]">
@@ -329,7 +335,7 @@ if ($selected_student) {
           <form method="POST" class="space-y-2.5">
             <input type="hidden" name="action" value="add_manual">
             <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" class="odm-input js-upper" required placeholder="Örn: Şubat ek ödeme"></div>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div><label class="text-xs font-bold text-slate-500 block mb-1">Tutar ₺</label><input type="number" step="0.01" name="amount" class="odm-input" required></div>
               <div><label class="text-xs font-bold text-slate-500 block mb-1">Vade</label><input type="date" name="due_date" class="odm-input" required value="<?= date('Y-m-d') ?>"></div>
             </div>
@@ -352,7 +358,8 @@ if ($selected_student) {
           </div>
         </div>
         <?php if(!empty($data['payments'])): ?>
-        <div class="overflow-x-auto">
+        <p class="md:hidden text-[10px] font-bold text-slate-400 mb-1.5">👉 Tabloyu yana kaydırarak Tutar/Durum/İşlem sütunlarını görebilirsiniz</p>
+        <div class="tbl-scroll overflow-x-auto">
           <table class="odm-table" id="paymentsTable">
             <thead><tr>
               <th style="width:28px"><input type="checkbox" onchange="toggleAll(this)"></th>
@@ -479,7 +486,7 @@ if ($selected_student) {
     <form method="POST" class="p-5 space-y-3">
       <input type="hidden" name="action" value="update"><input type="hidden" name="id" id="edit_id">
       <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" id="edit_desc" class="odm-input js-upper"></div>
-      <div class="grid grid-cols-2 gap-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div><label class="text-xs font-bold text-slate-500 block mb-1">Tutar</label><input type="number" step="0.01" name="amount" id="edit_amount" class="odm-input"></div>
         <div><label class="text-xs font-bold text-slate-500 block mb-1">Vade</label><input type="date" name="due_date" id="edit_due" class="odm-input"></div>
       </div>
@@ -501,7 +508,7 @@ if ($selected_student) {
     <form method="POST" class="p-5 space-y-3">
       <input type="hidden" name="action" value="add_manual">
       <div><label class="text-xs font-bold text-slate-500 block mb-1">Açıklama</label><input type="text" name="description" id="add_desc" class="odm-input js-upper" required></div>
-      <div class="grid grid-cols-2 gap-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div><label class="text-xs font-bold text-slate-500 block mb-1">Tutar</label><input type="number" step="0.01" name="amount" id="add_amount" class="odm-input" required></div>
         <div><label class="text-xs font-bold text-slate-500 block mb-1">Vade</label><input type="date" name="due_date" id="add_due" class="odm-input" required></div>
       </div>
