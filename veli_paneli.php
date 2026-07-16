@@ -136,7 +136,7 @@ $gunlerTR = ['Sunday'=>'Pazar','Monday'=>'Pazartesi','Tuesday'=>'Salı','Wednesd
                 <div>
                     <h1 class="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
                         <span class="w-3 h-3 rounded-full bg-green-500 animate-pulse"></span>
-                        <?php echo $selected_student['first_name'] . ' ' . $selected_student['last_name']; ?>
+                        <?php echo htmlspecialchars($selected_student['first_name'] . ' ' . $selected_student['last_name']); ?>
                     </h1>
                     <p class="text-slate-500 text-xs font-bold pl-6"><?php echo $selected_student['school_level'] ?? 'Öğrenci'; ?> Seviyesi</p>
                 </div>

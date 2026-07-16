@@ -53,27 +53,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload'])) {
     if (!file_exists('../uploads')) { mkdir('../uploads', 0777, true); }
 
     if (isset($_FILES['file']) && $_FILES['file']['error'] == 0) {
-        $orjName = $_FILES['file']['name'];
-        $cleanName = preg_replace('/[^a-zA-Z0-9._-]/', '', str_replace(' ', '_', $orjName));
-        $file_name = time() . '_' . $cleanName;
-        $target_path = '../uploads/' . $file_name;
+        // Güvenlik: uzantı değil GERÇEK dosya içeriği (MIME) doğrulanır; dosya adı
+        // tamamen sunucu tarafında rastgele üretilir (yüklenen isim asla kullanılmaz).
+        // Bu, uzantı sahteciliğiyle .php/.phtml gibi çalıştırılabilir dosya yüklenmesini engeller.
+        $allowedMime = [
+            'application/pdf' => 'pdf',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'application/vnd.ms-powerpoint' => 'ppt',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
+            'application/vnd.ms-excel' => 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'video/mp4' => 'mp4',
+        ];
+        $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : null;
+        $mime  = $finfo ? finfo_file($finfo, $_FILES['file']['tmp_name']) : null;
+        if ($finfo) finfo_close($finfo);
 
-        if (move_uploaded_file($_FILES['file']['tmp_name'], $target_path)) {
-            try {
-                // SQL GÜNCELLENDİ: grade_id eklendi
-                $stmt = $pdo->prepare("INSERT INTO materials (title, type, file_path, grade_id) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$title, $type, 'uploads/' . $file_name, $grade_id]);
-                $message = "<div class='bg-green-100 text-green-700 p-3 rounded mb-4'>✅ Dosya başarıyla yüklendi!</div>";
-            } catch (PDOException $e) {
-                // Hata kodunu yakalayıp insani dile çevirelim
-                if ($e->getCode() == '23000') {
-                    $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>❌ Hata: Lütfen geçerli bir SINIF (Grade) seçtiğinizden emin olun.</div>";
-                } else {
-                    $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>Veritabanı Hatası: " . $e->getMessage() . "</div>";
-                }
-            }
+        if ($_FILES['file']['size'] > 20 * 1024 * 1024) {
+            $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>❌ Dosya çok büyük (maks. 20MB).</div>";
+        } elseif (!$mime || !isset($allowedMime[$mime])) {
+            $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>❌ Desteklenmeyen dosya türü. İzin verilenler: PDF, Word, Excel, PowerPoint, resim, MP4.</div>";
         } else {
-            $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>❌ Dosya taşınamadı.</div>";
+            $file_name = 'mat_' . bin2hex(random_bytes(10)) . '.' . $allowedMime[$mime];
+            $target_path = '../uploads/' . $file_name;
+
+            if (move_uploaded_file($_FILES['file']['tmp_name'], $target_path)) {
+                try {
+                    // SQL GÜNCELLENDİ: grade_id eklendi
+                    $stmt = $pdo->prepare("INSERT INTO materials (title, type, file_path, grade_id) VALUES (?, ?, ?, ?)");
+                    $stmt->execute([$title, $type, 'uploads/' . $file_name, $grade_id]);
+                    $message = "<div class='bg-green-100 text-green-700 p-3 rounded mb-4'>✅ Dosya başarıyla yüklendi!</div>";
+                } catch (PDOException $e) {
+                    // Hata kodunu yakalayıp insani dile çevirelim (ham hata mesajı asla kullanıcıya gösterilmez)
+                    if ($e->getCode() == '23000') {
+                        $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>❌ Hata: Lütfen geçerli bir SINIF (Grade) seçtiğinizden emin olun.</div>";
+                    } else {
+                        error_log('materyal.php DB error: ' . $e->getMessage());
+                        $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>Veritabanı hatası oluştu. Lütfen tekrar deneyin.</div>";
+                    }
+                }
+            } else {
+                $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>❌ Dosya taşınamadı.</div>";
+            }
         }
     } else {
         $message = "<div class='bg-yellow-100 text-yellow-700 p-3 rounded mb-4'>⚠️ Lütfen bir dosya seçin.</div>";
@@ -185,7 +210,7 @@ try {
                     <?php foreach ($materials as $m): ?>
                     <tr class="hover:bg-slate-50">
                         <td class="px-6 py-4"><span class="bg-slate-100 px-2 py-1 rounded text-xs font-bold"><?= strtoupper($m['type']) ?></span></td>
-                        <td class="px-6 py-4 font-medium"><a href="/<?= $m['file_path'] ?>" target="_blank" class="hover:text-indigo-600 underline"><?= htmlspecialchars($m['title']) ?></a></td>
+                        <td class="px-6 py-4 font-medium"><a href="/<?= htmlspecialchars($m['file_path']) ?>" target="_blank" class="hover:text-indigo-600 underline"><?= htmlspecialchars($m['title']) ?></a></td>
                         <td class="px-6 py-4 text-sm text-slate-600"><?= htmlspecialchars($m['grade_name'] ?? '-') ?></td>
                         <td class="px-6 py-4 text-sm text-slate-500"><?= date("d.m.Y", strtotime($m['created_at'])) ?></td>
                         <td class="px-6 py-4 text-right">

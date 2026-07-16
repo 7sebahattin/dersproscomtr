@@ -33,37 +33,60 @@ if (($user_role == 'teacher' || $user_role == 'admin') && $_SERVER['REQUEST_METH
     if (isset($_FILES['pdf_file']) && $_FILES['pdf_file']['error'] == 0) {
         $upload_dir = 'uploads/exams/';
         if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
-        
-        $file_ext = pathinfo($_FILES['pdf_file']['name'], PATHINFO_EXTENSION);
-        $file_name = uniqid() . "_" . preg_replace('/[^a-zA-Z0-9]/', '', $title) . "." . $file_ext;
-        $target_path = $upload_dir . $file_name;
 
-        if (move_uploaded_file($_FILES['pdf_file']['tmp_name'], $target_path)) {
-            try {
-                $stmt = $pdo->prepare("INSERT INTO teacher_exams (teacher_id, title, category, file_path, is_online, visible_to, answer_key) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$user_id, $title, $category, $target_path, $is_online, $visible_to, $answer_key]);
-                $message = "<div class='bg-green-100 text-green-700 p-4 rounded-xl mb-6 shadow-sm border border-green-200'>✅ Sınav başarıyla yüklendi!</div>";
-            } catch (PDOException $e) {
-                $message = "<div class='bg-red-100 text-red-700 p-4 rounded-xl mb-6'>Veritabanı Hatası: " . $e->getMessage() . "</div>";
-            }
+        // Güvenlik: uzantı DEĞİL gerçek dosya içeriği (MIME) doğrulanır; uzantı
+        // her zaman sabit ".pdf" olarak üretilir — yüklenen dosya adı asla
+        // kullanılmaz (uzantı sahteciliğiyle çalıştırılabilir dosya engellenir).
+        $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : null;
+        $mime  = $finfo ? finfo_file($finfo, $_FILES['pdf_file']['tmp_name']) : null;
+        if ($finfo) finfo_close($finfo);
+
+        if ($mime !== 'application/pdf') {
+            $message = "<div class='bg-red-100 text-red-700 p-4 rounded-xl mb-6'>❌ Yalnızca PDF dosyası yükleyebilirsiniz.</div>";
         } else {
-            $message = "<div class='bg-red-100 text-red-700 p-4 rounded-xl mb-6'>❌ Dosya yüklenemedi.</div>";
+            $file_name = uniqid() . "_" . preg_replace('/[^a-zA-Z0-9]/', '', $title) . ".pdf";
+            $target_path = $upload_dir . $file_name;
+
+            if (move_uploaded_file($_FILES['pdf_file']['tmp_name'], $target_path)) {
+                try {
+                    $stmt = $pdo->prepare("INSERT INTO teacher_exams (teacher_id, title, category, file_path, is_online, visible_to, answer_key) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->execute([$user_id, $title, $category, $target_path, $is_online, $visible_to, $answer_key]);
+                    $message = "<div class='bg-green-100 text-green-700 p-4 rounded-xl mb-6 shadow-sm border border-green-200'>✅ Sınav başarıyla yüklendi!</div>";
+                } catch (PDOException $e) {
+                    error_log('denemeler.php upload_exam DB error: ' . $e->getMessage());
+                    $message = "<div class='bg-red-100 text-red-700 p-4 rounded-xl mb-6'>Veritabanı hatası oluştu. Lütfen tekrar deneyin.</div>";
+                }
+            } else {
+                $message = "<div class='bg-red-100 text-red-700 p-4 rounded-xl mb-6'>❌ Dosya yüklenemedi.</div>";
+            }
         }
     } else {
          $message = "<div class='bg-yellow-100 text-yellow-700 p-4 rounded-xl mb-6'>⚠️ Lütfen bir PDF dosyası seçin.</div>";
     }
 }
 
-// --- ÖĞRETMEN: SİLME ---
+// --- ÖĞRETMEN: SİLME --- (yalnızca kendi sınavını silebilir; admin herhangi birini)
 if (($user_role == 'teacher' || $user_role == 'admin') && isset($_POST['delete_exam'])) {
-    $del_id = $_POST['exam_id'];
-    $stmt = $pdo->prepare("SELECT file_path FROM teacher_exams WHERE id = ?");
-    $stmt->execute([$del_id]);
+    $del_id = (int)$_POST['exam_id'];
+    if ($user_role === 'admin') {
+        $stmt = $pdo->prepare("SELECT file_path FROM teacher_exams WHERE id = ?");
+        $stmt->execute([$del_id]);
+    } else {
+        $stmt = $pdo->prepare("SELECT file_path FROM teacher_exams WHERE id = ? AND teacher_id = ?");
+        $stmt->execute([$del_id, $user_id]);
+    }
     $file = $stmt->fetch();
-    if ($file && file_exists($file['file_path'])) { unlink($file['file_path']); }
-    
-    $pdo->prepare("DELETE FROM teacher_exams WHERE id = ?")->execute([$del_id]);
-    $message = "<div class='bg-yellow-100 text-yellow-700 p-4 rounded-xl mb-6 shadow-sm border border-yellow-200'>🗑️ Sınav silindi.</div>";
+    if ($file) {
+        if (file_exists($file['file_path'])) { unlink($file['file_path']); }
+        if ($user_role === 'admin') {
+            $pdo->prepare("DELETE FROM teacher_exams WHERE id = ?")->execute([$del_id]);
+        } else {
+            $pdo->prepare("DELETE FROM teacher_exams WHERE id = ? AND teacher_id = ?")->execute([$del_id, $user_id]);
+        }
+        $message = "<div class='bg-yellow-100 text-yellow-700 p-4 rounded-xl mb-6 shadow-sm border border-yellow-200'>🗑️ Sınav silindi.</div>";
+    } else {
+        $message = "<div class='bg-red-100 text-red-700 p-4 rounded-xl mb-6'>❌ Sınav bulunamadı veya bu işlem için yetkiniz yok.</div>";
+    }
 }
 
 // --- ÖĞRENCİ: MANUEL SONUÇ GİRİŞİ ---
@@ -95,7 +118,8 @@ if ($user_role == 'student' && isset($_POST['save_manual_result'])) {
         $stmt->execute([$user_id, $exam_id, $exam_name, $category, $total_net, $json_details]);
         $message = "<div class='bg-green-100 text-green-700 p-4 rounded-xl mb-6 shadow-sm border border-green-200'>✅ Sonucunuz kaydedildi!</div>";
     } catch (Exception $e) {
-        $message = "<div class='bg-red-100 text-red-700 p-4 rounded-xl mb-6'>Hata: " . $e->getMessage() . "</div>";
+        error_log('denemeler.php save_manual_result error: ' . $e->getMessage());
+        $message = "<div class='bg-red-100 text-red-700 p-4 rounded-xl mb-6'>Bir hata oluştu. Lütfen tekrar deneyin.</div>";
     }
 }
 
@@ -200,7 +224,7 @@ if ($user_role == 'student') {
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Veya Öğrencileri Seç:</label>
                             <select name="selected_students[]" multiple class="w-full border border-slate-200 rounded-xl p-2 text-sm h-32 bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
                                 <?php foreach($my_students as $s): ?>
-                                    <option value="<?= $s['id'] ?>"><?= $s['first_name'] . ' ' . $s['last_name'] ?></option>
+                                    <option value="<?= (int)$s['id'] ?>"><?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                             <p class="text-[10px] text-slate-400 mt-1">* Birden fazla seçim için Ctrl (Windows) veya Cmd (Mac) tuşuna basılı tutun.</p>
@@ -260,14 +284,16 @@ if ($user_role == 'student') {
                                 $names = [];
                                 if (is_array($ids)) { foreach ($ids as $id) { if (isset($student_map[$id])) { $names[] = $student_map[$id]; } } }
                                 $count = count($names);
-                                $assigned_names = implode(", ", $names); 
-                                $visible_badge = '<button onclick="alert(\'Atanan Öğrenciler:\\n'. $assigned_names .'\')" class="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 hover:bg-indigo-200 transition" title="Kişileri Gör">👥 '. $count .' Kişi (Gör)</button>';
+                                $assigned_names = implode(", ", $names);
+                                // Güvenlik: isimler inline JS string'ine gömülmez (XSS riski); HTML'e
+                                // escape edilmiş bir data-attribute'a konup JS'den okunur.
+                                $visible_badge = '<button type="button" class="js-show-assigned inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 hover:bg-indigo-200 transition" data-names="' . htmlspecialchars($assigned_names, ENT_QUOTES, 'UTF-8') . '" title="Kişileri Gör">👥 '. (int)$count .' Kişi (Gör)</button>';
                             }
                         ?>
                         <tr class="hover:bg-slate-50 transition group">
                             <td class="p-5">
                                 <div class="font-bold text-slate-800 text-base"><?= htmlspecialchars($ex['title']) ?></div>
-                                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-bold uppercase tracking-wide mt-1 inline-block"><?= $ex['category'] ?></span>
+                                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-bold uppercase tracking-wide mt-1 inline-block"><?= htmlspecialchars($ex['category']) ?></span>
                             </td>
                             <td class="p-5 text-center"><?= $visible_badge ?></td>
                             <td class="p-5 text-center">
@@ -344,11 +370,11 @@ if ($user_role == 'student') {
                             </div>
                         <?php else: ?>
                             <?php if($ex['is_online']): ?>
-                                <a href="take_exam.php?exam_id=<?= $ex['id'] ?>" class="flex items-center justify-center gap-2 w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 transform hover:scale-[1.02]">
+                                <a href="take_exam.php?exam_id=<?= (int)$ex['id'] ?>" class="flex items-center justify-center gap-2 w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 transform hover:scale-[1.02]">
                                     <span>✍️</span> Çöz
                                 </a>
                             <?php else: ?>
-                                <button onclick='openResultModal(<?= json_encode($ex) ?>)' class="flex items-center justify-center gap-2 w-full bg-amber-100 text-amber-700 border border-amber-200 py-3 rounded-xl font-bold text-sm hover:bg-amber-200 transition transform hover:scale-[1.02]">
+                                <button onclick='openResultModal(<?= htmlspecialchars(json_encode($ex), ENT_QUOTES, "UTF-8") ?>)' class="flex items-center justify-center gap-2 w-full bg-amber-100 text-amber-700 border border-amber-200 py-3 rounded-xl font-bold text-sm hover:bg-amber-200 transition transform hover:scale-[1.02]">
                                     <span>📊</span> Sonuç Gir
                                 </button>
                             <?php endif; ?>
@@ -405,6 +431,12 @@ if ($user_role == 'student') {
         'LGS': ['Türkçe', 'Matematik', 'Fen Bilimleri', 'T.C. İnkılap', 'Din Kültürü', 'İngilizce'],
         'Ara Sınıf': ['Türkçe', 'Matematik', 'Fen Bilimleri', 'Sosyal Bilgiler']
     };
+
+    // "Atanan Öğrenciler" butonu — isimler data-attribute'tan okunur (inline JS'e gömülmez)
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.js-show-assigned');
+        if (btn) alert('Atanan Öğrenciler:\n' + (btn.dataset.names || ''));
+    });
 
     function openResultModal(exam) {
         document.getElementById('modalExamId').value = exam.id;

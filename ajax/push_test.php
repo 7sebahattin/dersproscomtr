@@ -134,6 +134,12 @@ $anySucces = false;
 
 foreach ($subs as $i => $sub) {
     $label = 'Cihaz #' . ($i + 1);
+    // Güvenlik (SSRF): kayıtlı endpoint sonradan bir şekilde geçersiz hale geldiyse
+    // (eski kayıt, doğrudan DB müdahalesi vb.) gönderim anında da tekrar doğrula.
+    if (!push_endpoint_is_allowed($sub['endpoint'])) {
+        $results[] = ['device' => $label, 'ok' => false, 'http' => null, 'detail' => 'Geçersiz abonelik adresi.'];
+        continue;
+    }
     try {
         $subscription = Subscription::create([
             'endpoint' => $sub['endpoint'],

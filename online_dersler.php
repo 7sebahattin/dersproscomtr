@@ -181,8 +181,8 @@ function renderList(users) {
              class="p-4 border-b border-slate-50 cursor-pointer hover:bg-slate-50 transition ${isActive ? 'bg-blue-50 border-blue-100' : 'bg-white'}">
             <div class="flex items-center gap-3">
                 <div class="relative shrink-0">
-                    ${u.photo_path 
-                        ? `<img src="${u.photo_path}" class="w-12 h-12 rounded-full object-cover">` 
+                    ${u.photo_path
+                        ? `<img src="${escapeHtml(u.photo_path)}" class="w-12 h-12 rounded-full object-cover">`
                         : `<div class="w-12 h-12 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-lg">${u.first_name[0]}</div>`
                     }
                     ${isLocked ? '<div class="absolute -bottom-1 -right-1 bg-atla-orange text-white rounded-full p-1 text-[10px] border-2 border-white">🔒</div>' : ''}

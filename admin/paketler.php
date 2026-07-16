@@ -62,7 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header("Location: paketler.php?msg=updated");
             exit;
         } catch (PDOException $e) {
-            $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>Güncelleme Hatası: " . $e->getMessage() . "</div>";
+            error_log('paketler.php update error: ' . $e->getMessage());
+            $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>Güncelleme sırasında bir hata oluştu.</div>";
         }
     }
 
@@ -73,7 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$title, $price, $discount_price, $features, $description]);
             $message = "<div class='bg-green-100 text-green-700 p-3 rounded mb-4'>✅ Paket başarıyla oluşturuldu!</div>";
         } catch (PDOException $e) {
-            $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>Hata: " . $e->getMessage() . "</div>";
+            error_log('paketler.php add error: ' . $e->getMessage());
+            $message = "<div class='bg-red-100 text-red-700 p-3 rounded mb-4'>Bir hata oluştu. Lütfen tekrar deneyin.</div>";
         }
     }
 }

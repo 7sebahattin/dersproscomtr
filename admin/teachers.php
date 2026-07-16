@@ -76,15 +76,15 @@ $teachers = $pdo->query("SELECT * FROM users WHERE role = 'teacher' ORDER BY cre
                 <tr class="hover:bg-slate-50">
                     <td class="p-4 flex items-center gap-3">
                         <?php if($t['photo_path']): ?>
-                            <img src="<?= $t['photo_path'] ?>" class="w-10 h-10 rounded-full object-cover">
+                            <img src="<?= htmlspecialchars($t['photo_path'], ENT_QUOTES, 'UTF-8') ?>" class="w-10 h-10 rounded-full object-cover">
                         <?php else: ?>
                             <span class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold">
-                                <?= strtoupper(substr($t['first_name'],0,1)) ?>
+                                <?= htmlspecialchars(strtoupper(substr($t['first_name'],0,1))) ?>
                             </span>
                         <?php endif; ?>
-                        <span class="font-bold text-slate-700"><?= $t['first_name'].' '.$t['last_name'] ?></span>
+                        <span class="font-bold text-slate-700"><?= htmlspecialchars($t['first_name'].' '.$t['last_name']) ?></span>
                     </td>
-                    <td class="p-4 text-sm text-slate-600"><?= $t['branch'] ?></td>
+                    <td class="p-4 text-sm text-slate-600"><?= htmlspecialchars($t['branch'] ?? '') ?></td>
 
                     <td class="p-4 text-center">
                         <form method="POST" class="flex items-center justify-center gap-2">
@@ -118,7 +118,7 @@ $teachers = $pdo->query("SELECT * FROM users WHERE role = 'teacher' ORDER BY cre
             <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl">
                 <div>
                     <h3 class="text-lg font-bold text-slate-800">Eski Talep Geçmişi</h3>
-                    <p class="text-xs text-slate-500">Öğretmen: <span class="font-bold text-indigo-600"><?= $selected_teacher_name ?></span></p>
+                    <p class="text-xs text-slate-500">Öğretmen: <span class="font-bold text-indigo-600"><?= htmlspecialchars($selected_teacher_name) ?></span></p>
                 </div>
                 <a href="teachers.php" class="text-slate-400 hover:text-red-500 text-2xl font-bold">&times;</a>
             </div>
@@ -134,8 +134,8 @@ $teachers = $pdo->query("SELECT * FROM users WHERE role = 'teacher' ORDER BY cre
                             <?php foreach($modal_logs as $log): ?>
                             <tr class="hover:bg-slate-50">
                                 <td class="p-4 whitespace-nowrap"><div class="font-bold text-slate-700"><?= date('d.m.Y', strtotime($log['created_at'])) ?></div></td>
-                                <td class="p-4 font-medium text-indigo-700"><?= $log['first_name'].' '.$log['last_name'] ?></td>
-                                <td class="p-4 text-xs text-slate-500"><div><?= $log['email'] ?></div><div><?= $log['phone'] ?></div></td>
+                                <td class="p-4 font-medium text-indigo-700"><?= htmlspecialchars($log['first_name'].' '.$log['last_name']) ?></td>
+                                <td class="p-4 text-xs text-slate-500"><div><?= htmlspecialchars($log['email'] ?? '') ?></div><div><?= htmlspecialchars($log['phone'] ?? '') ?></div></td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>

@@ -2,12 +2,18 @@
 require_once 'db.php';
 include 'header.php';
 
+// Güvenlik: sınav içeriği kişisel veri sayılır, yalnızca giriş yapmış kullanıcılar görebilir
+if (!isset($_SESSION['user_id'])) {
+    echo "<script>window.location.href='login.php';</script>";
+    exit;
+}
+
 if (!isset($_GET['id'])) {
     echo "Sınav bulunamadı.";
     exit;
 }
 
-$exam_id = $_GET['id'];
+$exam_id = (int)$_GET['id'];
 $stmt = $pdo->prepare("SELECT * FROM exams WHERE id = ?");
 $stmt->execute([$exam_id]);
 $exam = $stmt->fetch();
@@ -25,10 +31,10 @@ $question_count = strlen($exam['answer_key']);
     
     <div class="w-full md:w-2/3 h-[50vh] md:h-full bg-slate-800 flex flex-col">
         <div class="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md z-10">
-            <h2 class="font-bold truncate max-w-xs"><?php echo $exam['title']; ?></h2>
+            <h2 class="font-bold truncate max-w-xs"><?php echo htmlspecialchars($exam['title']); ?></h2>
             <a href="denemeler.php" class="text-xs bg-red-600 px-3 py-1 rounded hover:bg-red-700 transition">Çıkış</a>
         </div>
-        <iframe src="<?php echo $exam['pdf_file']; ?>" class="w-full h-full border-none"></iframe>
+        <iframe src="<?php echo htmlspecialchars($exam['pdf_file']); ?>" class="w-full h-full border-none"></iframe>
     </div>
 
     <div class="w-full md:w-1/3 h-[50vh] md:h-full bg-white border-l border-slate-300 flex flex-col">

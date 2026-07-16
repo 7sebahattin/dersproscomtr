@@ -204,6 +204,11 @@ function send_push(
 
     // Öğrencinin tüm aboneliklerine gönder (birden fazla cihaz)
     foreach ($student['subscriptions'] as $sub) {
+        // Güvenlik (SSRF): gönderim anında da endpoint doğrulanır (savunma derinliği)
+        if (!push_endpoint_is_allowed($sub['endpoint'])) {
+            cron_log("  [SKIP] {$student['name']} — geçersiz push endpoint.");
+            continue;
+        }
         try {
             $subscription = Subscription::create([
                 'endpoint' => $sub['endpoint'],

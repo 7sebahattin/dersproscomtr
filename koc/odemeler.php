@@ -50,7 +50,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
                 break;
             case 'add_manual':
-                if ($selected_student) {
+                // Güvenlik: yalnızca kendi öğrencisi için borç kaydı oluşturabilir
+                $ownChk = $pdo->prepare("SELECT 1 FROM coaching_relationships WHERE teacher_id = ? AND student_id = ?");
+                $ownChk->execute([$teacher_id, $selected_student]);
+                if ($selected_student && $ownChk->fetchColumn()) {
                     $amount = (float)$_POST['amount'];
                     $desc = trim($_POST['description']);
                     $due = $_POST['due_date'];

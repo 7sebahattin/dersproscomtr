@@ -6,7 +6,7 @@ require_once '../db.php';
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_id'])) {
+if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'teacher') {
     echo json_encode([]); exit;
 }
 
