@@ -34,8 +34,12 @@ Eksikleri "zaten var olanı tekrar önermeden" tespit edebilmek için mevcut yet
 **Öğrenci tarafı** (`student/`, `student_dashboard.php`)
 - Ana sayfa: bugünün planı, haftalık hedefler, sıradaki randevular
 - Şimşek serisi (streak): kalkan (freeze), seri onarım, 7 günde 1 kalkan
+- **Kademeli rozet sistemi** (`$tierBadge`): Soru (100/1000/5000/10000), Konu-dk
+  (300/1000/3000), Seri (3/7/30), Deneme (5/15/30), Tam Hafta (%100) eşikleri
 - Program/koçluk: koçun atadığı görevleri işaretleme (`yapildi/yarim/yapilmadi`)
-- Deneme girişi: TYT/AYT, **ders bazlı** net + Chart.js grafik
+- **Görev bazlı doğru/yanlış girişi**: soru görevini işaretlerken `correct_count`/
+  `wrong_count` girilebiliyor → konuya bağlı (`edu_topic_id`) yanlış verisi oluşuyor
+- Deneme girişi: TYT/AYT, **ders bazlı** doğru/yanlış/net + Chart.js grafik
 - Rapor: günlük/haftalık/aylık tamamlama
 - Randevu: görüntüleme + erteleme/iptal talebi + randevu içi mesajlaşma
 - Kaynaklar: konuya bağlı kitap/PDF; PWA + push bildirim
@@ -56,9 +60,21 @@ Eksikleri "zaten var olanı tekrar önermeden" tespit edebilmek için mevcut yet
   **haftalık veliye gelişim özeti**
 - Ödeme otomasyonu, yedekleme cron'u, canlı sohbet (`live_chat_messages`), WhatsApp
 
-**Doğrulanan boşluklar (kodda hiç geçmiyor):** yanlış defteri, rozet/başarım sistemi
-(yalnız streak var), sıralama/net tahmini, çalışma süresi/pomodoro, öğrencinin kendi
-hedef üniversite/net'i, aralıklı tekrar, liderlik tablosu, online ödeme tahsilatı.
+**Doğrulanan boşluklar (kodda hiç geçmiyor):** yanlış defteri, sıralama/net tahmini,
+gerçek çalışma süresi ölçümü (pomodoro/kronometre), öğrencinin kendi hedef üniversite/
+net'i, aralıklı tekrar, liderlik tablosu, online ödeme tahsilatı.
+
+> **Doğrulama turu düzeltmeleri (ilk taslaktan):**
+> - **Rozet sistemi VAR** (yukarıdaki kademeli rozetler) — "yalnız streak" tespiti
+>   düzeltildi. Gerçek boşluk: sosyal/karşılaştırmalı katman (liderlik), XP/seviye ve
+>   eşik-ötesi başarımların olmayışı.
+> - **Konu bazlı yanlış verisi kısmen VAR** — günlük soru görevlerinde
+>   `correct_count`/`wrong_count` toplanıyor ve `analiz.php` bunu kullanıyor. Gerçek
+>   boşluk: **denemelerin** ders bazlı kalması ve bu verinin öğrenciye gösterilmemesi.
+> - **"GÖREV EKLE" modalı öğrenci tarafında ÖLÜ KOD** — `addModalV3` + `save_schedule`
+>   formu var ama öğrenci sayfasında `openAddModalV3` hiçbir yerden çağrılmıyor ve
+>   `save_schedule` için backend handler yok (koç planlayıcısından taşınmış). Öğrenci
+>   fiilen kendi görevini ekleyemiyor; ama bu "sıfırdan yap" değil "mevcut modalı bağla".
 
 ---
 
@@ -68,11 +84,11 @@ hedef üniversite/net'i, aralıklı tekrar, liderlik tablosu, online ödeme tahs
 
 | # | Eksik | Bugünkü durum | Etki |
 |---|-------|---------------|------|
-| Ö1 | **Deneme yalnızca "net" olarak yaşıyor** | `exam_results`/`quiz_results` ders bazlı net tutuyor; hangi konudan kaç yanlış bilinmiyor | Öğrenci "nereden battım?" sorusuna cevap alamıyor |
+| Ö1 | **Deneme ders bazlı kalıyor + yanlış öğrenciye dönmüyor** | Denemeler ders bazlı d/y/n tutuyor (konu kırılımı yok); günlük görevlerdeki konu bazlı yanlış verisi ise yalnız koçun `analiz.php`'sinde | Öğrenci "hangi konudan battım?" cevabını alamıyor |
 | Ö2 | **Yanlış defteri yok** | Yanlış soruyu kaydetme/etiketleme/tekrar etme akışı yok | Türkiye'de en çok kullanılan çalışma aracı eksik |
-| Ö3 | **Program tamamen koça bağımlı** | Öğrenci yalnız işaretliyor; kendi görevini ekleyemiyor/serbest çalışma giremiyor | Pasif deneyim, öz-düzenleme gelişmiyor |
-| Ö4 | **Çalışma süresi/odak aracı yok** | Koç "dk konu çalışması" atıyor ama gerçek süre ölçülmüyor; pomodoro/kronometre yok | Net çalışma saati bilinmiyor; odak desteklenmiyor |
-| Ö5 | **Motivasyon tek ayaklı** | Sadece şimşek serisi var; rozet/başarım/XP/seviye yok | Seri bozulunca motivasyon çöküyor; başka kanca yok |
+| Ö3 | **Öz-görev akışı bağlanmamış (ölü kod)** | "GÖREV EKLE" modalı + `save_schedule` formu var ama öğrencide tetikleyici ve backend handler yok → öğrenci fiilen kendi görevini ekleyemiyor | Pasif deneyim; ama düzeltmesi "bağla" seviyesinde ucuz |
+| Ö4 | **Gerçek çalışma süresi/odak aracı yok** | Koç "dk konu çalışması" *hedefi* atıyor, öğrenci "yaptım" diyor ama geçen süre ölçülmüyor; pomodoro/kronometre yok | Net çalışma saati bilinmiyor; odak desteklenmiyor |
+| Ö5 | **Motivasyonda sosyal/derin katman yok** | Kademeli rozet + streak var; ama liderlik, XP/seviye, eşik-ötesi başarım yok | Seri bozulunca ve rozetler dolunca yeni kanca kalmıyor |
 | Ö6 | **Kendi hedefi yok** | Haftalık hedef koç tarafından belirleniyor; hedef üniversite/bölüm/net yok | "Neden çalışıyorum" görselleşmiyor; bağlılık zayıf |
 | Ö7 | **İlerleme/tahmin görselleşmiyor** | Net trendi sınırlı; sıralama tahmini yok | Öğrenci "yolun neresindeyim" hissini alamıyor |
 | Ö8 | **Aralıklı tekrar yok** | Faz sistemi çok turlu ama zamanlanmış (spaced) tekrar değil | Konular unutulma eğrisine göre planlanmıyor |
@@ -97,12 +113,14 @@ hedef üniversite/net'i, aralıklı tekrar, liderlik tablosu, online ödeme tahs
    kaybettin" çıktısı + koça "zayıf konulara görev oluştur" butonu.
 2. **Yanlış Defteri (Ö2)** — Yeni tablo `mistake_notes` (student_id, topic_id, soru
    görseli/metin, sebep etiketi, çözüldü mü). Denemeden ve serbest çalışmadan besleniyor.
-3. **Öz-çalışma girişi + serbest görev (Ö3)** — Öğrenci kendi görevini ekleyip
-   işaretleyebilsin (koç onayı opsiyonel); `schedule_items`'a `source` alanı.
+3. **Öz-çalışma görevini bağla (Ö3)** — Mevcut "GÖREV EKLE" modalını öğrenciye aç
+   (tetikleyici + `save_schedule` handler + `schedule_items.source='self'`); sıfırdan
+   yapım değil, yarım kalmış özelliği tamamlama.
 4. **Odak/pomodoro + gerçek süre (Ö4)** — Görev başlat/bitir ile `study_minutes` ölç;
    günlük/haftalık net çalışma süresi öğrenci ve koçta görünsün.
-5. **Rozet/başarım + hedef (Ö5, Ö6)** — Streak'e ek başarımlar (ilk deneme, 100 soru,
-   konu bitirme); öğrenci hedef üniversite/bölüm/net girsin, ilerleme çubuğu.
+5. **Rozeti derinleştir + hedef (Ö5, Ö6)** — Mevcut kademeli rozetlerin üstüne liderlik/
+   XP-seviye ve eşik-ötesi başarımlar; öğrenci hedef üniversite/bölüm/net girsin, hedefe
+   uzaklık çubuğu.
 6. **Sıralama/net tahmini + trend (Ö7)** — Netten yaklaşık sıralama tahmini (yıllık
    katsayı tablosu ile), zaman içi net grafiği ve hedefe uzaklık.
 7. **Aralıklı tekrar önerisi (Ö8)** — Bitmiş konuya 3/7/21 gün sonra "tekrar" görevi
