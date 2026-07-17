@@ -656,6 +656,12 @@ try {
     require_once __DIR__ . '/suggest_lib.php';
     $exp = suggest_expire($pdo);
     if ($exp > 0) cron_log("► Öneri kuyruğu: $exp öneri süre dolumuyla düştü");
+
+    // Aralıklı tekrar üreteci (S5): ff_suggest açıkken günde bir
+    $rep = suggest_repeats_daily_tick($pdo);
+    if ($rep !== null) {
+        cron_log("► Aralıklı tekrar: {$rep['checked']} konu tarandı, {$rep['created']} öneri üretildi");
+    }
 } catch (Throwable $e) {
     cron_log("► Öneri bakım hatası: " . $e->getMessage());
 }

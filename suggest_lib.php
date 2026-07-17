@@ -197,6 +197,88 @@ function suggest_decide(PDO $pdo, int $teacherId, int $suggestionId, bool $appro
     return ['ok' => true];
 }
 
+/**
+ * Aralıklı tekrar üreteci (S5) — gece cron'unda günde bir kez.
+ * Plan §B3: kural bazlı, algoritma değil. Konu 'yapildi' olduktan
+ * 3/7/21 gün sonra tekrar önerisi; doz performansa göre ayarlanır:
+ *   yanlış oranı ≥ %40  → 2/5/10 gün (sıklaşır) + konu tekrarı
+ *   yanlış oranı ≤ %10  → 7/21 gün (seyrekleşir)
+ * Konu başına SON tamamlanma tarihi esas alınır. Sel önleme, mükerrer ve
+ * "zaten planlı" korumaları suggest_create içinde — burada tekrar edilmez.
+ */
+function suggest_generate_repeats(PDO $pdo): array
+{
+    suggest_ensure_schema($pdo);
+    $out = ['checked' => 0, 'created' => 0];
+
+    // Öğrenci → koç eşlemesi (ilk koç)
+    $coach = [];
+    foreach ($pdo->query("SELECT student_id, MIN(teacher_id) t FROM coaching_relationships GROUP BY student_id") as $r) {
+        $coach[(int)$r['student_id']] = (int)$r['t'];
+    }
+    if (!$coach) return $out;
+
+    // Konu başına son tamamlanma + performans (25 günlük pencere: 21g aralığını kapsar)
+    $rows = $pdo->query("
+        SELECT si.student_id, si.edu_topic_id,
+               MAX(si.`date`)                       last_date,
+               SUM(COALESCE(si.correct_count, 0))   c,
+               SUM(COALESCE(si.wrong_count, 0))     w,
+               et.topic_name, es.lesson_name
+        FROM schedule_items si
+        JOIN education_topics   et ON et.id = si.edu_topic_id
+        JOIN education_subjects es ON es.id = et.subject_id
+        WHERE si.status = 'yapildi' AND si.edu_topic_id IS NOT NULL
+          AND si.`date` >= DATE_SUB(CURDATE(), INTERVAL 25 DAY)
+          AND si.`date` < CURDATE()
+        GROUP BY si.student_id, si.edu_topic_id, et.topic_name, es.lesson_name
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    $today = new DateTime(date('Y-m-d'));
+    foreach ($rows as $r) {
+        $sid = (int)$r['student_id'];
+        if (!isset($coach[$sid])) continue;
+        $out['checked']++;
+
+        $answered = (int)$r['c'] + (int)$r['w'];
+        $rate = $answered > 0 ? (int)$r['w'] / $answered : null;
+
+        if ($rate !== null && $rate >= 0.40)                      $intervals = [2, 5, 10];
+        elseif ($rate !== null && $rate <= 0.10 && $answered >= 10) $intervals = [7, 21];
+        else                                                       $intervals = [3, 7, 21];
+
+        $diff = (int)$today->diff(new DateTime($r['last_date']))->days;
+        if (!in_array($diff, $intervals, true)) continue;
+
+        $hardTopic = ($rate !== null && $rate >= 0.40);
+        $reason = $r['lesson_name'] . ' › ' . $r['topic_name'] . ': ' . $diff . ' gün önce çalışıldı'
+                . ($rate !== null ? ' (yanlış %' . (int)round(100 * $rate) . ')' : '')
+                . ' — aralıklı tekrar zamanı.';
+
+        $res = suggest_create($pdo, $coach[$sid], [
+            'student_id'   => $sid,
+            'source'       => 'tekrar',
+            'edu_topic_id' => (int)$r['edu_topic_id'],
+            'action_type'  => $hardTopic ? 'konu' : 'soru',
+            'amount'       => $hardTopic ? 20 : 15,
+            'reason'       => $reason,
+        ]);
+        if (!empty($res['ok'])) $out['created']++;
+    }
+    return $out;
+}
+
+/** Günlük kapı: ff_suggest açıkken, 03:00 sonrası günde bir kez üretir. */
+function suggest_repeats_daily_tick(PDO $pdo): ?array
+{
+    if (!ff_enabled($pdo, 'suggest')) return null;
+    if ((int)date('G') < 3) return null;
+    if (app_setting_get($pdo, 'repeat_last_ymd') === date('Y-m-d')) return null;
+    $res = suggest_generate_repeats($pdo);
+    app_setting_set($pdo, 'repeat_last_ymd', date('Y-m-d'));
+    return $res;
+}
+
 /** 14 gün dokunulmayan bekleyen önerileri düşürür (gece cron tick'i). */
 function suggest_expire(PDO $pdo): int
 {
