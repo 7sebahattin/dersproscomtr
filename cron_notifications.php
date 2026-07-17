@@ -601,6 +601,19 @@ if ((int)$now->format('N') === 7) {
     }
 }
 
+// ── Günlük metrik hesabı (S0 omurga): gece 03:00 sonrası günde bir kez ────────
+// Ucuz kapı metrics_daily_tick içinde; pseudo-cron'un her 4 dk çağrısında
+// yalnızca tek SELECT maliyeti vardır.
+try {
+    require_once __DIR__ . '/metrics_lib.php';
+    $mres = metrics_daily_tick($pdo);
+    if ($mres !== null) {
+        cron_log("► Metrikler hesaplandı: {$mres['days']} gün, {$mres['rows']} satır");
+    }
+} catch (Throwable $e) {
+    cron_log("► Metrik hatası: " . $e->getMessage());
+}
+
 cron_log("\n=== Cron tamamlandı: " . (new DateTime())->format('Y-m-d H:i:s') . " ===\n");
 
 // ── Yardımcı: Log Yaz (2 MB'ı aşınca kendini sıfırlar) ───────────────────────

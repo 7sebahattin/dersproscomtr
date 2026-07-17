@@ -84,6 +84,11 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
             $pdo->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?")
                 ->execute([(int)$_SESSION['user_id']]);
         } catch (Throwable $e) { /* kolon yoksa sessiz geç */ }
+        // Günlük metrik: uzun oturumda da o günün giriş izi damgalansın
+        if (($_SESSION['role'] ?? '') === 'student') {
+            require_once __DIR__ . '/metrics_lib.php';
+            metrics_mark_login($pdo, (int)$_SESSION['user_id']);
+        }
     }
 }
 

@@ -1,6 +1,10 @@
 <?php
 // Bu dosya sitenin veritabanına bağlanmasını sağlar.
 
+// Tek gün tanımı: PHP tarafı da MySQL (+03:00) ile aynı saat diliminde çalışır.
+// Streak, metrik ve cron'lardaki tüm date() çağrıları İstanbul gününü kullanır.
+date_default_timezone_set('Europe/Istanbul');
+
 // =============================================
 // BASE URL AYARI
 // Canlı sunucu (ana dizin) için: ''
