@@ -660,6 +660,17 @@ try {
     cron_log("► Öneri bakım hatası: " . $e->getMessage());
 }
 
+// ── Zaman motoru bakımı (S1): kalp atışı kesilen oturumları kapat ────────────
+// Her tetiklemede çalışır (ucuz UPDATE) — sekmesi kapanan öğrencinin süresi
+// son kalp atışına kadar sayılır, oturum 'abandoned' olarak kapanır.
+try {
+    require_once __DIR__ . '/study_lib.php';
+    $cln = study_cleanup($pdo);
+    if ($cln > 0) cron_log("► Zaman motoru: $cln yarım oturum kapatıldı");
+} catch (Throwable $e) {
+    cron_log("► Zaman motoru bakım hatası: " . $e->getMessage());
+}
+
 cron_log("\n=== Cron tamamlandı: " . (new DateTime())->format('Y-m-d H:i:s') . " ===\n");
 
 // ── Yardımcı: Log Yaz (2 MB'ı aşınca kendini sıfırlar) ───────────────────────

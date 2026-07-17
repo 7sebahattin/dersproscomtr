@@ -558,3 +558,160 @@
         initChart(type);
     }
 </script>
+<?php
+// ── ZAMAN MOTORU (S1): sayaç widget'ı + istemci motoru ──────────────────────
+// Sunucu zamanı tek doğruluk kaynağıdır; buradaki sayaç yalnız görseldir.
+// ff_timer kapalıyken hiçbir şey render edilmez.
+$dsTimerOn = false;
+try {
+    require_once __DIR__ . '/../app_settings_lib.php';
+    if (isset($pdo)) $dsTimerOn = ff_enabled($pdo, 'timer');
+} catch (Throwable $e) {}
+if ($dsTimerOn): ?>
+<div id="dsTimerBar" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[9000] w-[calc(100%-2rem)] max-w-md">
+    <div class="bg-gradient-to-r from-[#223488] to-[#314595] text-white rounded-2xl shadow-2xl shadow-[#223488]/40 border border-white/10 px-4 py-3 flex items-center gap-3">
+        <span id="dsTimerIcon" class="text-xl">⏱</span>
+        <div class="flex-grow min-w-0">
+            <div id="dsTimerLabel" class="text-[11px] font-bold text-blue-200 truncate">Serbest çalışma</div>
+            <div id="dsTimerClock" class="text-xl font-black tabular-nums leading-none mt-0.5">00:00</div>
+        </div>
+        <button type="button" id="dsTimerPause"
+                class="bg-white/15 hover:bg-white/25 rounded-xl px-3 py-2 text-xs font-black transition">⏸ Mola</button>
+        <button type="button" id="dsTimerFinish"
+                class="bg-[#ec9731] hover:bg-[#d68625] rounded-xl px-3 py-2 text-xs font-black transition">✓ Bitir</button>
+    </div>
+</div>
+<script>
+(function () {
+    var API = '<?php echo BASE_URL; ?>/ajax/study_api.php';
+    var T = { id: null, activeSec: 0, running: false, itemId: null, mode: 'stopwatch', pomoWarned: false };
+    var tickHandle = null, hbHandle = null;
+
+    var bar    = document.getElementById('dsTimerBar');
+    var clock  = document.getElementById('dsTimerClock');
+    var label  = document.getElementById('dsTimerLabel');
+    var pauseB = document.getElementById('dsTimerPause');
+    var finB   = document.getElementById('dsTimerFinish');
+    if (!bar) return;
+
+    function fmt(s) {
+        var m = Math.floor(s / 60), ss = s % 60;
+        var h = Math.floor(m / 60);
+        if (h > 0) { m = m % 60; return h + ':' + String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0'); }
+        return String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+    }
+    function lsKey() { return 'ds_timer_' + T.id; }
+    function persist() { try { localStorage.setItem(lsKey(), String(T.activeSec)); } catch (e) {} }
+    function restoreLocal(serverSec) {
+        var v = 0;
+        try { v = parseInt(localStorage.getItem(lsKey()) || '0', 10) || 0; } catch (e) {}
+        T.activeSec = Math.max(serverSec, v);
+    }
+
+    function post(action, data) {
+        var fd = new FormData();
+        Object.keys(data || {}).forEach(function (k) { fd.append(k, data[k]); });
+        return fetch(API + '?action=' + action, { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); });
+    }
+
+    function render() {
+        clock.textContent = fmt(T.activeSec);
+        pauseB.textContent = T.running ? '⏸ Mola' : '▶ Devam';
+        document.getElementById('dsTimerIcon').textContent = T.running ? (T.mode === 'pomodoro' ? '🍅' : '⏱') : '💤';
+        // Pomodoro: 25 dk dolunca bir kez mola hatırlatması
+        if (T.mode === 'pomodoro' && !T.pomoWarned && T.activeSec >= 1500) {
+            T.pomoWarned = true;
+            label.textContent = '🍅 25 dk doldu — kısa mola iyi gelir!';
+        }
+    }
+
+    function tick() { if (T.running) { T.activeSec++; persist(); } render(); }
+    function heartbeat() {
+        if (!T.id) return;
+        post('heartbeat', { session_id: T.id, active_sec: T.activeSec }).then(function (j) {
+            if (j.gone) { hideTimer(); return; }
+            // Sunucu düzeltmesi: duvar saati sınırı aşan sayaç geri çekilir
+            if (j.ok && typeof j.duration_sec === 'number' && j.duration_sec < T.activeSec) {
+                T.activeSec = j.duration_sec; persist();
+            }
+        }).catch(function () {});
+    }
+
+    function showTimer(session, lbl) {
+        T.id = session.id; T.itemId = session.schedule_item_id; T.mode = session.mode || 'stopwatch';
+        restoreLocal(session.duration_sec || 0);
+        T.running = true; T.pomoWarned = false;
+        label.textContent = lbl || 'Serbest çalışma';
+        bar.classList.remove('hidden');
+        if (!tickHandle) tickHandle = setInterval(tick, 1000);
+        if (!hbHandle)   hbHandle   = setInterval(heartbeat, 60000);
+        render();
+    }
+    function hideTimer() {
+        T.id = null; T.running = false;
+        bar.classList.add('hidden');
+        if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
+        if (hbHandle)   { clearInterval(hbHandle);   hbHandle = null; }
+    }
+
+    window.startStudyTimer = function (itemId, lbl, eduTopicId, mode) {
+        post('start', {
+            schedule_item_id: itemId || '',
+            edu_topic_id: eduTopicId || '',
+            mode: mode || 'stopwatch'
+        }).then(function (j) {
+            if (!j.ok) { alert(j.error || 'Sayaç başlatılamadı.'); return; }
+            if (j.resumed) lbl = labelForItem(j.session.schedule_item_id) || lbl || 'Devam eden çalışma';
+            showTimer(j.session, lbl);
+        }).catch(function () { alert('Bağlantı hatası — tekrar dene.'); });
+    };
+
+    function labelForItem(itemId) {
+        if (!itemId) return null;
+        var found = null;
+        document.querySelectorAll('.task-card[data-item]').forEach(function (el) {
+            try {
+                var it = JSON.parse(el.getAttribute('data-item'));
+                if (parseInt(it.id, 10) === parseInt(itemId, 10)) found = it;
+            } catch (e) {}
+        });
+        if (!found) return null;
+        var t = found.edu_subject_name || found.subject_name || found.custom_subject || '';
+        var s = found.edu_topic_name || found.topic_name || found.custom_topic || '';
+        return (t + ' › ' + s).replace(/^ › | › $/g, '');
+    }
+
+    pauseB.addEventListener('click', function () { T.running = !T.running; render(); heartbeat(); });
+
+    finB.addEventListener('click', function () {
+        if (!T.id) return;
+        post('finish', { session_id: T.id, active_sec: T.activeSec }).then(function (j) {
+            if (!j.ok) { alert(j.error || 'Kaydedilemedi.'); return; }
+            try { localStorage.removeItem(lsKey()); } catch (e) {}
+            var itemId = j.schedule_item_id;
+            hideTimer();
+            // Bağlı görev varsa işaretleme modalını aç — süre akışı görev akışına bağlanır
+            var openIt = null;
+            if (itemId) {
+                document.querySelectorAll('.task-card[data-item]').forEach(function (el) {
+                    try {
+                        var it = JSON.parse(el.getAttribute('data-item'));
+                        if (parseInt(it.id, 10) === parseInt(itemId, 10)) openIt = it;
+                    } catch (e) {}
+                });
+            }
+            alert('🎉 ' + j.minutes + ' dk çalışma kaydedildi!');
+            if (openIt && typeof openStatusModal === 'function') openStatusModal(openIt);
+        }).catch(function () { alert('Bağlantı hatası — sayaç sunucuda açık kaldı, tekrar Bitir de.'); });
+    });
+
+    // Sayfa açılışı: sunucuda aktif oturum varsa kaldığı yerden devam
+    fetch(API + '?action=status').then(function (r) { return r.json(); }).then(function (j) {
+        if (j.ok && j.session) {
+            showTimer(j.session, labelForItem(j.session.schedule_item_id) || 'Devam eden çalışma');
+        }
+    }).catch(function () {});
+})();
+</script>
+<?php endif; ?>

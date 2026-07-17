@@ -14,6 +14,11 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'student') {
 }
 
 $user_id = (int)$_SESSION['user_id'];
+
+// Zaman Motoru (S1): görev kartlarındaki ▶ butonu + sayaç widget'ı bayrağı
+require_once __DIR__ . '/../app_settings_lib.php';
+$timerOn = false;
+try { $timerOn = ff_enabled($pdo, 'timer'); } catch (Throwable $e) {}
 $sid = $user_id;
 
 // Otomatik sütun migration
