@@ -651,6 +651,15 @@ try {
     cron_log("► Risk hatası: " . $e->getMessage());
 }
 
+// ── Öneri kuyruğu bakımı (S2): 14 günü geçen bekleyenleri düşür ──────────────
+try {
+    require_once __DIR__ . '/suggest_lib.php';
+    $exp = suggest_expire($pdo);
+    if ($exp > 0) cron_log("► Öneri kuyruğu: $exp öneri süre dolumuyla düştü");
+} catch (Throwable $e) {
+    cron_log("► Öneri bakım hatası: " . $e->getMessage());
+}
+
 cron_log("\n=== Cron tamamlandı: " . (new DateTime())->format('Y-m-d H:i:s') . " ===\n");
 
 // ── Yardımcı: Log Yaz (2 MB'ı aşınca kendini sıfırlar) ───────────────────────

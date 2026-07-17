@@ -11,6 +11,11 @@ $lvl = $selected_student['school_level'] ?? 'Lise';
 $studentName = isset($selected_student) ? ($selected_student['first_name'] . ' ' . $selected_student['last_name']) : 'Öğrenci';
 $jsVeriDeposu = [];
 
+// Öneri modülü (S2): içgörü kartlarındaki "Görev öner" butonları
+require_once __DIR__ . '/../app_settings_lib.php';
+$suggestOn = false;
+try { $suggestOn = ff_enabled($pdo, 'suggest'); } catch (Throwable $e) {}
+
 // --- 2. ANALİZ SORGULARI ---
 $today = date('Y-m-d');
 $start_week = date('Y-m-d', strtotime('monday this week'));
@@ -294,17 +299,23 @@ foreach (($progress_data ?? []) as $subX) {
     if (!$subjectRelevant($subX['category'] ?? '', $nameX)) continue;
     foreach (($subX['topics'] ?? []) as $tX) {
         $qX = (int)($tX['q_count'] ?? 0); $tcX = (int)($tX['t_count'] ?? 0); $vX = (int)($tX['v_count'] ?? 0);
-        if ($qX >= 100 && $tcX === 0 && $vX === 0) $needTheory[]   = ['s'=>$nameX, 't'=>$tX['name'] ?? '', 'q'=>$qX];
-        if ($tcX >= 3  && $qX === 0)               $needPractice[] = ['s'=>$nameX, 't'=>$tX['name'] ?? '', 'k'=>$tcX];
+        if ($qX >= 100 && $tcX === 0 && $vX === 0) $needTheory[]   = ['s'=>$nameX, 't'=>$tX['name'] ?? '', 'q'=>$qX, 'tid'=>(int)($tX['id'] ?? 0)];
+        if ($tcX >= 3  && $qX === 0)               $needPractice[] = ['s'=>$nameX, 't'=>$tX['name'] ?? '', 'k'=>$tcX, 'tid'=>(int)($tX['id'] ?? 0)];
     }
 }
 usort($needTheory, fn($a, $b) => $b['q'] <=> $a['q']);
 foreach (array_slice($needTheory, 0, 2) as $nt) {
-    $insights[] = ['sev'=>'orange', 'icon'=>'📖', 'text'=>$nt['s'].' › '.$nt['t'].': '.number_format($nt['q']).' soru çözüldü ama hiç konu çalışması yapılmadı — konu tekrarı planla.'];
+    $txtNT = $nt['s'].' › '.$nt['t'].': '.number_format($nt['q']).' soru çözüldü ama hiç konu çalışması yapılmadı — konu tekrarı planla.';
+    $insights[] = ['sev'=>'orange', 'icon'=>'📖', 'text'=>$txtNT,
+        'sugg'=>[['edu_topic_id'=>$nt['tid'] ?: null, 'custom_subject'=>$nt['s'], 'custom_topic'=>$nt['t'],
+                  'action_type'=>'konu', 'amount'=>30, 'reason'=>$txtNT]]];
 }
 usort($needPractice, fn($a, $b) => $b['k'] <=> $a['k']);
 foreach (array_slice($needPractice, 0, 1) as $np) {
-    $insights[] = ['sev'=>'orange', 'icon'=>'✍️', 'text'=>$np['s'].' › '.$np['t'].': '.$np['k'].' kez konu çalışıldı ama hiç soru çözülmedi — soru pratiği ekle.'];
+    $txtNP = $np['s'].' › '.$np['t'].': '.$np['k'].' kez konu çalışıldı ama hiç soru çözülmedi — soru pratiği ekle.';
+    $insights[] = ['sev'=>'orange', 'icon'=>'✍️', 'text'=>$txtNP,
+        'sugg'=>[['edu_topic_id'=>$np['tid'] ?: null, 'custom_subject'=>$np['s'], 'custom_topic'=>$np['t'],
+                  'action_type'=>'soru', 'amount'=>20, 'reason'=>$txtNP]]];
 }
 
 // 5) Yanlış oranı en yüksek ders (en az 20 cevaplanmış soru şartı)
@@ -316,7 +327,30 @@ foreach ($dy_data as $rowDY) {
     if ($worstDY === null || $wpDY > $worstDY['wp']) $worstDY = ['name'=>$rowDY['subject_name'], 'wp'=>$wpDY];
 }
 if ($worstDY && $worstDY['wp'] >= 30) {
-    $insights[] = ['sev'=>'red', 'icon'=>'❗', 'text'=>$worstDY['name'].' dersinde yanlış oranı %'.$worstDY['wp'].' — konu tekrarı önerilir.'];
+    $txtDY = $worstDY['name'].' dersinde yanlış oranı %'.$worstDY['wp'].' — konu tekrarı önerilir.';
+    // Öneri taslağı: bu derste en çok yanlış yapılan 2 konu (yeni müfredat bağlı görevlerden)
+    $suggDY = [];
+    try {
+        $qW = $pdo->prepare("
+            SELECT si.edu_topic_id tid, et.topic_name, SUM(COALESCE(si.wrong_count,0)) w
+            FROM schedule_items si
+            JOIN education_topics et ON et.id = si.edu_topic_id
+            JOIN education_subjects es ON es.id = et.subject_id
+            WHERE si.student_id = ? AND es.lesson_name = ? AND COALESCE(si.wrong_count,0) > 0
+            GROUP BY si.edu_topic_id, et.topic_name
+            ORDER BY w DESC LIMIT 2");
+        $qW->execute([$sid, $worstDY['name']]);
+        foreach ($qW as $rW) {
+            $suggDY[] = ['edu_topic_id'=>(int)$rW['tid'], 'custom_subject'=>$worstDY['name'],
+                         'custom_topic'=>$rW['topic_name'], 'action_type'=>'konu', 'amount'=>30,
+                         'reason'=>$worstDY['name'].' › '.$rW['topic_name'].': en çok yanlış yapılan konu (%'.$worstDY['wp'].' ders geneli).'];
+        }
+    } catch (Throwable $e) {}
+    if (!$suggDY) {
+        $suggDY[] = ['edu_topic_id'=>null, 'custom_subject'=>$worstDY['name'], 'custom_topic'=>'Genel tekrar',
+                     'action_type'=>'konu', 'amount'=>30, 'reason'=>$txtDY];
+    }
+    $insights[] = ['sev'=>'red', 'icon'=>'❗', 'text'=>$txtDY, 'sugg'=>$suggDY];
 }
 
 // 6) Hedefin en çok gerisinde kalınan ders
@@ -493,10 +527,58 @@ $insights = array_slice($insights, 0, 7);
                         ?>
                             <li class="flex items-start gap-2.5 text-xs font-semibold rounded-lg border px-3 py-2.5 <?php echo $sevCls; ?>">
                                 <span class="text-sm leading-none mt-0.5"><?php echo $ins['icon']; ?></span>
-                                <span class="leading-snug"><?php echo htmlspecialchars($ins['text']); ?></span>
+                                <span class="leading-snug flex-grow"><?php echo htmlspecialchars($ins['text']); ?></span>
+                                <?php if ($suggestOn && !empty($ins['sugg'])): ?>
+                                <button type="button"
+                                        class="sugg-btn shrink-0 bg-white/80 hover:bg-[#223488] hover:text-white text-[#223488] text-[10px] font-black px-2 py-1 rounded-md border border-[#223488]/20 transition whitespace-nowrap"
+                                        data-sugg="<?php echo htmlspecialchars(json_encode($ins['sugg'], JSON_UNESCAPED_UNICODE), ENT_QUOTES); ?>">
+                                    + Görev öner
+                                </button>
+                                <?php endif; ?>
                             </li>
                         <?php endforeach; ?>
                         </ul>
+                        <?php if ($suggestOn): ?>
+                        <script>
+                        (function(){
+                            var SID = <?php echo (int)$sid; ?>;
+                            var API = '<?php echo BASE_URL; ?>/ajax/suggest_api.php?action=create';
+                            document.querySelectorAll('.sugg-btn').forEach(function(btn){
+                                if (btn.dataset.bound) return;
+                                btn.dataset.bound = '1';
+                                btn.addEventListener('click', function(){
+                                    var drafts;
+                                    try { drafts = JSON.parse(btn.dataset.sugg); } catch(e) { return; }
+                                    btn.disabled = true; btn.textContent = '...';
+                                    var okCount = 0, lastSkip = '';
+                                    var chain = Promise.resolve();
+                                    drafts.forEach(function(d){
+                                        chain = chain.then(function(){
+                                            d.student_id = SID;
+                                            return fetch(API, {method:'POST',
+                                                headers:{'Content-Type':'application/json'},
+                                                body: JSON.stringify(d)})
+                                              .then(function(r){ return r.json(); })
+                                              .then(function(j){
+                                                  if (j.ok) okCount++;
+                                                  else lastSkip = j.skip || j.error || '';
+                                              }).catch(function(){});
+                                        });
+                                    });
+                                    chain.then(function(){
+                                        if (okCount > 0) {
+                                            btn.textContent = '✓ Önerildi (' + okCount + ')';
+                                            btn.classList.add('bg-green-600','text-white','border-green-600');
+                                        } else {
+                                            btn.textContent = lastSkip ? '• ' + lastSkip : 'Eklenemedi';
+                                            btn.classList.add('text-slate-400');
+                                        }
+                                    });
+                                });
+                            });
+                        })();
+                        </script>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>
