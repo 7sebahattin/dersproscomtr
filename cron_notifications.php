@@ -115,6 +115,7 @@ $notif_defaults = [
     // Öğretmene giden özet bildirimler (student_id her zaman NULL kaydedilir)
     'T_LOGIN'  => ['hour'=>17, 'title'=>'👀 Giriş Yapmayan Öğrenciler',  'body'=>'{toplam} öğrenciden {sayi} tanesi bugün sisteme hiç girmedi: {isimler}'],
     'T_TASKS'  => ['hour'=>22, 'title'=>'📉 Görev Yapmayan Öğrenciler', 'body'=>'Bugün görevi olan {toplam} öğrenciden {sayi} tanesi henüz hiç görev işaretlemedi: {isimler}'],
+    'T_RISK'   => ['hour'=>8,  'title'=>'🚨 Risk Bölgesindeki Öğrenciler', 'body'=>'{sayi} öğrencin risk bölgesinde: {isimler}. Detaylar koç panelindeki risk kartında.'],
     // Veliye giden haftalık özet (yalnızca Pazar; student_id=NULL kaydedilir)
     'P_WEEKLY' => ['hour'=>20, 'title'=>'📊 Haftalık Gelişim Özeti — {ogrenci}', 'body'=>'{ogrenci} bu hafta {gorev_yapilan}/{gorev_toplam} görevi tamamladı (tamamlama: %{yuzde}). Çözülen soru: {soru} · Konu çalışması: {konu_dk} dk.'],
 ];
@@ -520,6 +521,30 @@ foreach ($teachers as $teacher) {
 
     $sendTeacher('T_LOGIN', $notLogged);
     $sendTeacher('T_TASKS', $noTasks);
+
+    // T_RISK (S3): kırmızı seviyedeki öğrenciler — ff_risk açıkken, günde bir.
+    // Bugünkü görev listesinden bağımsızdır; koçun TÜM öğrencilerini tarar.
+    try {
+        require_once __DIR__ . '/app_settings_lib.php';
+        require_once __DIR__ . '/risk_lib.php';
+        if (ff_enabled($pdo, 'risk') && notif_active($pdo, $tid, 0, 'T_RISK')) {
+            $hR = (int)resolve_notif($pdo, $tid, 0, 'T_RISK', 'hour', $notif_defaults);
+            if ($currentHour >= $hR && $currentHour <= $hR + NOTIF_CATCHUP_HOURS) {
+                $redOnes = array_values(array_filter(risk_get_for_teacher($pdo, $tid),
+                    fn($r) => $r['level'] === 'red'));
+                if ($redOnes) {
+                    $titleR = resolve_notif($pdo, $tid, 0, 'T_RISK', 'title', $notif_defaults);
+                    $bodyR  = str_replace(['{sayi}', '{isimler}'],
+                        [count($redOnes), $nameList($redOnes)],
+                        resolve_notif($pdo, $tid, 0, 'T_RISK', 'body', $notif_defaults));
+                    send_push($webPush, $pdo, $teacher, 'T_RISK', $today, $titleR, $bodyR,
+                              BASE_URL . '/teacher_dashboard.php');
+                } else {
+                    cron_log("  [T_RISK] Kırmızı öğrenci yok.");
+                }
+            }
+        }
+    } catch (Throwable $e) { cron_log("  [T_RISK] Hata: " . $e->getMessage()); }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -612,6 +637,18 @@ try {
     }
 } catch (Throwable $e) {
     cron_log("► Metrik hatası: " . $e->getMessage());
+}
+
+// ── Risk skoru (S3): metriklerden sonra günde bir kez. Hesap bayraktan
+// bağımsız çalışır (geçmiş birikir); görünürlük + push ff_risk ile açılır.
+try {
+    require_once __DIR__ . '/risk_lib.php';
+    $rres = risk_daily_tick($pdo);
+    if ($rres !== null) {
+        cron_log("► Risk skorları: {$rres['students']} öğrenci (kırmızı {$rres['red']}, sarı {$rres['yellow']})");
+    }
+} catch (Throwable $e) {
+    cron_log("► Risk hatası: " . $e->getMessage());
 }
 
 cron_log("\n=== Cron tamamlandı: " . (new DateTime())->format('Y-m-d H:i:s') . " ===\n");

@@ -32,7 +32,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['run_metrics'])) {
         try {
             $res = metrics_run($pdo);
-            $message = "✅ Metrikler hesaplandı: {$res['days']} gün, {$res['rows']} satır.";
+            require_once '../risk_lib.php';
+            $rr = risk_run($pdo);
+            $message = "✅ Metrikler hesaplandı: {$res['days']} gün, {$res['rows']} satır. "
+                     . "Risk: {$rr['students']} öğrenci (kırmızı {$rr['red']}, sarı {$rr['yellow']}).";
         } catch (Throwable $e) {
             $message = '❌ Metrik hatası: ' . htmlspecialchars($e->getMessage());
         }
