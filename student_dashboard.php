@@ -82,6 +82,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['repair_streak'])) {
 }
 
 // ==========================================
+// 1b. HEDEF KAYDET (S4) — hedef üniversite/bölüm/net
+// ==========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['goal_save'])) {
+    try {
+        require_once __DIR__ . '/app_settings_lib.php';
+        require_once __DIR__ . '/goals_lib.php';
+        if (ff_enabled($pdo, 'goals')) {
+            $gCat = in_array(($_POST['exam_category'] ?? ''), ['TYT', 'AYT', 'LGS'], true)
+                ? $_POST['exam_category'] : 'TYT';
+            goals_save($pdo, $sid, $gCat, $_POST, 'student');
+        }
+    } catch (Throwable $e) {}
+    header("Location: student_dashboard.php?goal_saved=1");
+    exit;
+}
+
+// ==========================================
 // 2. STREAK (ŞİMŞEK) HESAPLAMA MOTORU
 // ==========================================
 function calculateStreak($pdo, $student_id) {
@@ -228,6 +245,26 @@ try {
     $badges[] = ['icon' => '🏆', 'on' => $fullWeek, 'label' => 'Tam Hafta',
                  'sub' => $fullWeek ? 'geçen hafta %100!' : 'haftayı %100 bitir'];
 } catch (Throwable $e) { $badges = []; }
+
+// ==========================================
+// 2c. HEDEF KARTI VERİSİ (S4) — ff_goals açıkken
+// ==========================================
+$goalsOn = false; $goalData = null; $goalCat = 'TYT'; $goalDaysLeft = null; $goalExamName = 'YKS';
+try {
+    require_once __DIR__ . '/app_settings_lib.php';
+    require_once __DIR__ . '/goals_lib.php';
+    $goalsOn = ff_enabled($pdo, 'goals');
+    if ($goalsOn) {
+        $lvq = $pdo->prepare("SELECT school_level FROM users WHERE id = ?");
+        $lvq->execute([$sid]);
+        $isOrta = ($lvq->fetchColumn() === 'Ortaokul');
+        $goalCat      = $isOrta ? 'LGS' : 'TYT';
+        $goalExamName = $isOrta ? 'LGS' : 'YKS';
+        $goalData     = goals_card_data($pdo, $sid, $goalCat);
+        $gDates       = exam_dates($pdo);
+        $goalDaysLeft = exam_days_left($gDates[$goalExamName]);
+    }
+} catch (Throwable $e) { $goalsOn = false; }
 
 // ==========================================
 // 3. KARŞILAMA MESAJI MANTIĞI
@@ -534,6 +571,95 @@ include __DIR__ . '/header.php';
                     </div>
                 </div>
             </div>
+            <?php if ($goalsOn): ?>
+            <!-- HEDEFİM (S4): hedef üniversite/net + sınav geri sayımı + tahmin bandı -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-[#7c2d12] to-[#223488] px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-flag-checkered text-[#ec9731]"></i>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Hedefim</h3>
+                        </div>
+                        <?php if ($goalDaysLeft !== null && $goalDaysLeft >= 0): ?>
+                        <span class="text-[10px] font-black text-white bg-white/15 px-2.5 py-1 rounded-full"><?php echo $goalExamName; ?>'ye <?php echo $goalDaysLeft; ?> gün</span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="p-5">
+                    <?php
+                        $gGoal = $goalData['goal'] ?? null;
+                        $gProj = $goalData['proj'] ?? null;
+                        $gRank = $goalData['rank'] ?? null;
+                        $hasGoal = $gGoal && ($gGoal['target_university'] || $gGoal['target_net'] !== null);
+                    ?>
+                        <div id="goalView" class="<?php echo $hasGoal ? '' : 'hidden'; ?>">
+                            <?php if ($hasGoal): ?>
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="font-black text-slate-800 text-sm truncate"><?php echo htmlspecialchars($gGoal['target_university'] ?: 'Hedef net'); ?></div>
+                                    <?php if ($gGoal['target_department']): ?>
+                                    <div class="text-xs font-bold text-slate-500 truncate"><?php echo htmlspecialchars($gGoal['target_department']); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <button type="button" onclick="document.getElementById('goalView').classList.add('hidden');document.getElementById('goalForm').classList.remove('hidden')"
+                                        class="text-[10px] font-bold text-slate-400 hover:text-[#223488] shrink-0 transition">Düzenle</button>
+                            </div>
+                            <?php if ($gGoal['target_net'] !== null): ?>
+                            <div class="mt-3 flex items-end justify-between">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase">Hedef Net (<?php echo $goalCat; ?>)</span>
+                                <span class="text-xl font-black text-[#223488]"><?php echo number_format((float)$gGoal['target_net'], 1, ',', '.'); ?></span>
+                            </div>
+                            <?php if ($gProj):
+                                $fark = round((float)$gGoal['target_net'] - $gProj['avg'], 1);
+                                $farkCls = $fark <= 0 ? 'text-green-600' : ($fark <= 10 ? 'text-[#d68625]' : 'text-red-500');
+                                $pctG = max(4, min(100, (int)round(100 * $gProj['avg'] / max(1, (float)$gGoal['target_net']))));
+                            ?>
+                            <div class="mt-1.5">
+                                <div class="w-full bg-blue-50 rounded-full h-2.5 overflow-hidden border border-blue-100/50">
+                                    <div class="bg-gradient-to-r from-[#223488] to-[#ec9731] h-2.5 rounded-full" style="width: <?php echo $pctG; ?>%"></div>
+                                </div>
+                                <div class="flex justify-between mt-1.5 text-[10px] font-bold">
+                                    <span class="text-slate-400">Son ort. <?php echo number_format($gProj['avg'], 1, ',', '.'); ?> net</span>
+                                    <span class="<?php echo $farkCls; ?>"><?php echo $fark <= 0 ? '🎉 Hedefi geçtin!' : 'Fark: ' . number_format($fark, 1, ',', '.') . ' net'; ?></span>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+                            <?php endif; ?>
+                            <?php if ($gProj && $gRank): ?>
+                            <div class="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                                <div class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Tahmini Sıralama<?php echo $gRank['stale'] ? ' · ⚠️ eski veri' : ''; ?></div>
+                                <div class="text-sm font-black text-slate-700">~<?php echo number_format($gRank['rank_best'], 0, ',', '.'); ?> – <?php echo number_format($gRank['rank_worst'], 0, ',', '.'); ?></div>
+                                <div class="text-[9px] text-slate-400 font-medium"><?php echo (int)$gRank['ref_year']; ?> verisine göre tahmindir; son <?php echo (int)$gProj['exam_count']; ?> denemenden hesaplandı.</div>
+                            </div>
+                            <?php elseif ($gProj === null): ?>
+                            <div class="mt-3 text-[11px] text-slate-400 font-medium">📊 Tahmin için en az 3 <?php echo $goalCat; ?> denemesi gir — şu an eksik.</div>
+                            <?php endif; ?>
+                            <?php endif; ?>
+                        </div>
+
+                        <form id="goalForm" method="POST" class="<?php echo $hasGoal ? 'hidden' : ''; ?> space-y-2.5">
+                            <input type="hidden" name="goal_save" value="1">
+                            <input type="hidden" name="exam_category" value="<?php echo $goalCat; ?>">
+                            <?php if (!$hasGoal): ?>
+                            <p class="text-[11px] text-slate-500 font-medium">🎯 Nereye koşuyorsun? Hedefini yaz, ilerlemeni buradan izle.</p>
+                            <?php endif; ?>
+                            <input name="target_university" maxlength="150" placeholder="<?php echo $goalCat === 'LGS' ? 'Hedef lise' : 'Hedef üniversite'; ?>"
+                                   value="<?php echo htmlspecialchars($gGoal['target_university'] ?? ''); ?>"
+                                   class="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs p-2.5 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none transition">
+                            <input name="target_department" maxlength="150" placeholder="<?php echo $goalCat === 'LGS' ? 'Bölüm/tercih (isteğe bağlı)' : 'Hedef bölüm (isteğe bağlı)'; ?>"
+                                   value="<?php echo htmlspecialchars($gGoal['target_department'] ?? ''); ?>"
+                                   class="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs p-2.5 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none transition">
+                            <div class="flex gap-2">
+                                <input name="target_net" type="number" step="0.5" min="0" max="120" placeholder="Hedef net"
+                                       value="<?php echo $gGoal && $gGoal['target_net'] !== null ? (float)$gGoal['target_net'] : ''; ?>"
+                                       class="flex-grow bg-slate-50 border border-slate-200 rounded-xl text-xs p-2.5 font-bold text-slate-700 focus:bg-white focus:border-[#223488] outline-none transition">
+                                <button class="bg-[#223488] hover:bg-[#314595] text-white text-xs font-black px-4 rounded-xl transition">Kaydet</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <div>
                 <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
                     <div class="bg-gradient-to-r from-[#1a1a2e] to-[#223488] px-6 py-4 flex items-center gap-2">

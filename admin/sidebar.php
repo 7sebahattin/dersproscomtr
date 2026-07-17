@@ -84,6 +84,11 @@
             <span class="font-bold text-sm tracking-wide">Özellik Bayrakları</span>
         </a>
 
+        <a href="rank_reference.php" class="flex items-center px-4 py-3 rounded-xl transition-all duration-200 group <?php echo $cur == 'rank_reference.php' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'hover:bg-white/5 hover:text-white'; ?>">
+            <span class="mr-3 text-xl">📈</span>
+            <span class="font-bold text-sm tracking-wide">Sıralama Referansı</span>
+        </a>
+
         <a href="feedback.php" class="flex items-center px-4 py-3 rounded-xl transition-all duration-200 group <?php echo $cur == 'feedback.php' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'hover:bg-white/5 hover:text-white'; ?>">
             <span class="mr-3 text-xl">🐛</span>
             <span class="font-bold text-sm tracking-wide">Geri Bildirimler</span>
