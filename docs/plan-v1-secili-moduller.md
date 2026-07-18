@@ -394,7 +394,40 @@ S1 → S4 → S5 → S7 → S6 → S8 → S9. Oyunlaştırma bilinçli olarak so
 
 ---
 
-## F. Bu Konuşmanın Hafıza Yapısı
+## F. Karar Günlüğü (uygulama sırasında plandan sapmalar)
+
+Tüm sprintler (S0–S9) uygulandı. Kod incelemesi + `php -l` ile doğrulandı;
+uçtan uca test staging'de yapılacak. Tüm modüller **bayrak kapalı** doğar —
+`admin/features.php`'den açılır.
+
+| # | Karar | Neden |
+|---|-------|-------|
+| 1 | S2 onay ekranı planlayıcı sekmesi yerine ayrı sayfa (`koc/oneriler.php`) | 65KB'lık planlayıcı JS'ine müdahale riski alınmadı; sayfa + menü linki aynı işi görüyor |
+| 2 | `task_suggestions`'a `custom_subject/custom_topic` kolonları eklendi | Eski müfredat/manuel görevlerden türeyen öneriler de taşınabilsin |
+| 3 | S6 "önizleme ekranı" yerine mevcut modal onayı + `bulk_id` geri alma | `plan_apply_multi` zaten ekleme-yalnız/ezme-yok çalışıyor; geri alınabilirlik asıl güvenceyi veriyor |
+| 4 | S8 başarım kataloğu DB tablosu yerine PHP dizisi | criteria JSON motoru v2; kazanımlar yine DB'de (`student_achievements`) |
+| 5 | Mevcut `$tierBadge` rozetleri tabloya taşınmadı | Çalışan kod korundu; XP kartı ayrı yaşıyor, çakışma yok |
+| 6 | S9 `league_weeks/league_members` tabloları yok — canlı hesap | Koç başına tek SUM sorgusu yeterli; sezon arşivi v2 |
+| 7 | Risk hesabı bayraktan bağımsız çalışır (görünürlük/push bayraklı) | Bayrak açıldığında geçmiş skor birikmiş olur — soğuk başlangıç kısalır |
+| 8 | S4 "koça tahmini gizle" kolonu (`show_prediction`) hazır, koç UI'ı yok | Polish turu; varsayılan görünür |
+| 9 | Zaman motoru manuel giriş API'si var, öğrenci UI'ı yok | Kapsam kontrolü; `study_api.php?action=manual` hazır |
+
+## G. Staging Test Kontrol Listesi
+
+1. `admin/features.php` → önce **Metrikleri şimdi hesapla** (90 gün backfill).
+2. Bayrakları sırayla aç: risk → suggest → timer → goals → xp → league.
+3. Risk: koç panosunda kart; `cron_notifications` logunda "Risk skorları".
+4. Öneri: analiz sekmesinde "Görev öner" → `koc/oneriler.php`'de onayla →
+   öğrenci programında görev.
+5. Sayaç: öğrenci görev kartında ▶ → widget → Bitir → görev modalı açılır;
+   sekme kapat/aç → kaldığı yerden devam.
+6. Hedef: `admin/rank_reference.php`'ye 2+ nokta gir → öğrenci kartında bant.
+7. XP: gece cron sonrası (veya ertesi gün) kart dolar; 500 XP'de kalkan al.
+8. Lig: 2+ öğrenciyle rumuzlu katıl; sıralama ve "kendine karşı" satırı.
+9. Toplu plan: planlayıcı → Başka Öğrencilere Uygula → etiket çipi →
+   `koc/etiketler.php`'de Geri Al.
+
+## H. Bu Konuşmanın Hafıza Yapısı
 
 1. **Bu belge** (`docs/plan-v1-secili-moduller.md`) — mimarinin tek kaynağı;
    her sprint öncesi güncellenir (karar değişirse "Karar Günlüğü" bölümü açılır).
