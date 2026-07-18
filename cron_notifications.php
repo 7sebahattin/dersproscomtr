@@ -666,6 +666,13 @@ try {
     cron_log("► Öneri bakım hatası: " . $e->getMessage());
 }
 
+// ── Etiket/bulk_id şeması (S6): kolonun cron'da garanti edilmesi —
+// toplu uygulama damgası sayfa yüklerinde ALTER denemeden hazır olur.
+try {
+    require_once __DIR__ . '/tags_lib.php';
+    tags_ensure_schema($pdo);
+} catch (Throwable $e) { /* şema hazırsa/erişilemezse sessiz geç */ }
+
 // ── Zaman motoru bakımı (S1): kalp atışı kesilen oturumları kapat ────────────
 // Her tetiklemede çalışır (ucuz UPDATE) — sekmesi kapanan öğrencinin süresi
 // son kalp atışına kadar sayılır, oturum 'abandoned' olarak kapanır.

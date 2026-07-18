@@ -272,6 +272,7 @@ try {
                                     <a href="<?php echo $B; ?>/koc/faz_matrisi.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🗺️ Faz Matrisi</a>
                                     <a href="<?php echo $B; ?>/koc/oneriler.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">💡 Görev Önerileri</a>
                                     <a href="<?php echo $B; ?>/koc/notlar.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🗒 Seans Notları</a>
+                                    <a href="<?php echo $B; ?>/koc/etiketler.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🏷 Etiketler</a>
                                     <a href="<?php echo $B; ?>/koc/bildirim_ayarlari.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🔔 Bildirim Ayarları</a>
                                     <a href="<?php echo $B; ?>/koc/odemeler.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">💰 Ödeme Yönetimi</a>
                                     <a href="<?php echo $B; ?>/koc/mufredat_v2.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">📝 Müfredat Yükle</a>
@@ -417,6 +418,9 @@ try {
                 </a>
                 <a href="<?php echo $B; ?>/koc/notlar.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
                     <span class="text-lg">🗒</span> Seans Notları
+                </a>
+                <a href="<?php echo $B; ?>/koc/etiketler.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
+                    <span class="text-lg">🏷</span> Etiketler
                 </a>
                 <a href="<?php echo $B; ?>/koc/bildirim_ayarlari.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
                     <span class="text-lg">🔔</span> Bildirim Ayarları
