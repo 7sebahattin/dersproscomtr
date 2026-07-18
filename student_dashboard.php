@@ -99,6 +99,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy_freeze'])) {
 }
 
 // ==========================================
+// 1a3. LİG KATIL/AYRIL (S9)
+// ==========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['league_join']) || isset($_POST['league_leave']))) {
+    try {
+        require_once __DIR__ . '/app_settings_lib.php';
+        require_once __DIR__ . '/league_lib.php';
+        if (ff_enabled($pdo, 'league')) {
+            if (isset($_POST['league_join'])) {
+                $ljRes = league_set_optin($pdo, $sid, true, (string)($_POST['nickname'] ?? ''));
+                header("Location: student_dashboard.php?" . (!empty($ljRes['ok']) ? 'league=joined' : 'league_err=' . urlencode($ljRes['error'] ?? 'Hata')));
+            } else {
+                league_set_optin($pdo, $sid, false);
+                header("Location: student_dashboard.php?league=left");
+            }
+            exit;
+        }
+    } catch (Throwable $e) {}
+    header("Location: student_dashboard.php");
+    exit;
+}
+
+// ==========================================
 // 1b. HEDEF KAYDET (S4) — hedef üniversite/bölüm/net
 // ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['goal_save'])) {
@@ -293,6 +315,17 @@ try {
     $xpOn = ff_enabled($pdo, 'xp');
     if ($xpOn) $xpData = gamify_student_summary($pdo, $sid);
 } catch (Throwable $e) { $xpOn = false; }
+
+// ==========================================
+// 2c3. LİG KARTI VERİSİ (S9) — ff_league açıkken
+// ==========================================
+$leagueOn = false; $leagueData = null;
+try {
+    require_once __DIR__ . '/app_settings_lib.php';
+    require_once __DIR__ . '/league_lib.php';
+    $leagueOn = ff_enabled($pdo, 'league');
+    if ($leagueOn) $leagueData = league_card_data($pdo, $sid);
+} catch (Throwable $e) { $leagueOn = false; }
 
 // ==========================================
 // 2d. "KOÇUNDAN" KARTI (S7) — öğrenciye açık son seans notu
@@ -650,6 +683,81 @@ include __DIR__ . '/header.php';
                                 <?php echo (int)$xpData['freeze_cost']; ?> XP → 1 Kalkan
                             </button>
                         </form>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($leagueOn && $leagueData): ?>
+            <!-- HAFTALIK LİG (S9): koç-içi, rumuzlu, opt-in -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-[#1a1a2e] to-[#223488] px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-trophy text-[#ec9731]"></i>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Haftalık Lig</h3>
+                        </div>
+                        <span class="text-[10px] text-blue-200 font-bold">Pzt'den beri</span>
+                    </div>
+                    <div class="p-5">
+                        <?php if (isset($_GET['league']) && $_GET['league'] === 'joined'): ?>
+                        <div class="mb-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100 text-xs font-bold text-green-700">🏆 Lige katıldın — bu hafta bol XP!</div>
+                        <?php elseif (isset($_GET['league_err'])): ?>
+                        <div class="mb-3 px-3 py-2 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-red-600"><?php echo htmlspecialchars($_GET['league_err']); ?></div>
+                        <?php endif; ?>
+
+                        <!-- Kendine karşı: herkes görür (opt-out edenin motivasyon döngüsü) -->
+                        <?php $lc = $leagueData['self']; $diff = $lc['this_week'] - $lc['last_week']; ?>
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 mb-3">
+                            <span class="text-[11px] font-bold text-slate-500">⚡ Bu hafta: <b class="text-[#223488]"><?php echo number_format($lc['this_week']); ?> XP</b></span>
+                            <span class="text-[11px] font-bold <?php echo $diff >= 0 ? 'text-green-600' : 'text-red-500'; ?>">
+                                Geçen haftaya göre <?php echo $diff >= 0 ? '+' : ''; ?><?php echo number_format($diff); ?>
+                            </span>
+                        </div>
+
+                        <?php if (!$leagueData['optin']): ?>
+                        <form method="POST" class="space-y-2">
+                            <p class="text-[11px] text-slate-500 font-medium leading-snug">
+                                Koçunun diğer öğrencileriyle haftalık XP yarışına katıl. Listede yalnızca
+                                <b>rumuzun</b> görünür; istediğin an ayrılabilirsin.
+                            </p>
+                            <div class="flex gap-2">
+                                <input name="nickname" maxlength="30" minlength="2" required placeholder="Rumuzun (örn. GölgeFizikçi)"
+                                       class="flex-grow bg-slate-50 border border-slate-200 rounded-xl text-xs p-2.5 font-bold text-slate-700 focus:bg-white focus:border-[#223488] outline-none transition">
+                                <button name="league_join" value="1"
+                                        class="bg-[#ec9731] hover:bg-[#d68625] text-white text-xs font-black px-4 rounded-xl transition shrink-0">Katıl</button>
+                            </div>
+                        </form>
+                        <?php elseif (empty($leagueData['rows'])): ?>
+                        <p class="text-[11px] text-slate-400 font-medium">Ligde henüz başka katılımcı yok — arkadaşlarını bekle! 🏁</p>
+                        <?php else: ?>
+                        <div class="space-y-1.5 mb-3">
+                            <?php
+                            $medals = [1 => '🥇', 2 => '🥈', 3 => '🥉'];
+                            $shown = 0;
+                            foreach ($leagueData['rows'] as $lr):
+                                $isMe = $leagueData['me'] && (int)$lr['id'] === (int)$leagueData['me']['id'];
+                                if ($shown >= 5 && !$isMe) continue;
+                                $shown++;
+                            ?>
+                            <div class="flex items-center justify-between px-3 py-2 rounded-xl <?php echo $isMe ? 'bg-blue-50 border border-blue-100' : 'bg-slate-50'; ?>">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="text-sm w-6 text-center"><?php echo $medals[$lr['rank']] ?? '<span class="text-[10px] font-black text-slate-400">' . (int)$lr['rank'] . '</span>'; ?></span>
+                                    <span class="text-xs font-bold <?php echo $isMe ? 'text-[#223488]' : 'text-slate-600'; ?> truncate">
+                                        <?php echo htmlspecialchars($lr['nickname']); ?><?php echo $isMe ? ' (sen)' : ''; ?>
+                                    </span>
+                                </div>
+                                <span class="text-xs font-black text-slate-700 tabular-nums shrink-0"><?php echo number_format($lr['xp']); ?> XP</span>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php if ($leagueData['me'] && $leagueData['me']['rank'] > 3 && $leagueData['percentile'] !== null): ?>
+                        <p class="text-[11px] font-bold text-[#d68625] mb-2">📍 Bu hafta ilk %<?php echo (int)$leagueData['percentile']; ?>'desin — devam!</p>
+                        <?php endif; ?>
+                        <form method="POST" onsubmit="return confirm('Ligden ayrılmak istediğine emin misin? İstediğinde geri dönebilirsin.')">
+                            <button name="league_leave" value="1" class="text-[10px] font-bold text-slate-300 hover:text-red-400 transition">Ligden ayrıl</button>
+                        </form>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
