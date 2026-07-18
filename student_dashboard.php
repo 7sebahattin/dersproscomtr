@@ -267,6 +267,15 @@ try {
 } catch (Throwable $e) { $goalsOn = false; }
 
 // ==========================================
+// 2d. "KOÇUNDAN" KARTI (S7) — öğrenciye açık son seans notu
+// ==========================================
+$coachNote = null;
+try {
+    require_once __DIR__ . '/notes_lib.php';
+    $coachNote = notes_latest_for_student_card($pdo, $sid);
+} catch (Throwable $e) { $coachNote = null; }
+
+// ==========================================
 // 3. KARŞILAMA MESAJI MANTIĞI
 // ==========================================
 $welcome_title = "";
@@ -655,6 +664,38 @@ include __DIR__ . '/header.php';
                                 <button class="bg-[#223488] hover:bg-[#314595] text-white text-xs font-black px-4 rounded-xl transition">Kaydet</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($coachNote): ?>
+            <!-- KOÇUNDAN (S7): koçun öğrenciye açtığı son seans notu -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-[#1a1a2e] to-[#223488] px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-comment-dots text-[#ec9731]"></i>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Koçundan</h3>
+                        </div>
+                        <span class="text-[10px] text-blue-200 font-bold"><?php echo date('d.m.Y', strtotime($coachNote['note_date'])); ?></span>
+                    </div>
+                    <div class="p-5 space-y-2.5">
+                        <?php foreach ([['decisions', '✅ Kararlaştırdıklarımız'], ['homework', '📚 Ödevin'],
+                                        ['next_step', '📌 Sıradaki adım']] as [$cnF, $cnL]):
+                            if (empty($coachNote[$cnF])) continue; ?>
+                        <div class="bg-slate-50 rounded-xl p-3">
+                            <div class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1"><?php echo $cnL; ?></div>
+                            <div class="text-xs font-medium text-slate-700 whitespace-pre-line"><?php echo htmlspecialchars($coachNote[$cnF]); ?></div>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php if (empty($coachNote['decisions']) && empty($coachNote['homework']) && empty($coachNote['next_step']) && !empty($coachNote['discussed'])): ?>
+                        <div class="bg-slate-50 rounded-xl p-3">
+                            <div class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">💬 Görüşme özeti</div>
+                            <div class="text-xs font-medium text-slate-700 whitespace-pre-line"><?php echo htmlspecialchars($coachNote['discussed']); ?></div>
+                        </div>
+                        <?php endif; ?>
+                        <p class="text-[10px] text-slate-400 font-medium">— <?php echo htmlspecialchars($coachNote['coach_name']); ?> koçun</p>
                     </div>
                 </div>
             </div>
