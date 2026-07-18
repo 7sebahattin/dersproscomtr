@@ -41,6 +41,14 @@ function suggest_ensure_schema(PDO $pdo): void
         KEY idx_ts_teacher (teacher_id, status),
         KEY idx_ts_student (student_id, status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci");
+
+    // Onayda oluşturulan görevin izi (idempotent yükseltme) — tekrar görevini
+    // tamamlama XP'si (S8) bu bağla verilir.
+    try {
+        if ($pdo->query("SHOW COLUMNS FROM task_suggestions LIKE 'applied_item_id'")->rowCount() === 0) {
+            $pdo->exec("ALTER TABLE task_suggestions ADD COLUMN applied_item_id INT NULL DEFAULT NULL");
+        }
+    } catch (Throwable $e) {}
     $done = true;
 }
 
@@ -187,8 +195,9 @@ function suggest_decide(PDO $pdo, int $teacherId, int $suggestionId, bool $appro
     try {
         $qm = implode(', ', array_fill(0, count($cols), '?'));
         $pdo->prepare("INSERT INTO schedule_items (" . implode(', ', $cols) . ") VALUES ($qm)")->execute($vals);
-        $pdo->prepare("UPDATE task_suggestions SET status='approved', decided_at=NOW(), suggested_date=? WHERE id = ?")
-            ->execute([$date, $suggestionId]);
+        $newItemId = (int)$pdo->lastInsertId();
+        $pdo->prepare("UPDATE task_suggestions SET status='approved', decided_at=NOW(), suggested_date=?, applied_item_id=? WHERE id = ?")
+            ->execute([$date, $newItemId, $suggestionId]);
         $pdo->commit();
     } catch (Throwable $e) {
         $pdo->rollBack();

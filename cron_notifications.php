@@ -666,6 +666,17 @@ try {
     cron_log("► Öneri bakım hatası: " . $e->getMessage());
 }
 
+// ── XP/başarım üretimi (S8): ff_xp açıkken gece bir kez, metriklerden sonra ──
+try {
+    require_once __DIR__ . '/gamify_lib.php';
+    $xpres = gamify_daily_tick($pdo);
+    if ($xpres !== null) {
+        cron_log("► XP motoru: {$xpres['events']} yeni olay/başarım yazıldı");
+    }
+} catch (Throwable $e) {
+    cron_log("► XP motoru hatası: " . $e->getMessage());
+}
+
 // ── Etiket/bulk_id şeması (S6): kolonun cron'da garanti edilmesi —
 // toplu uygulama damgası sayfa yüklerinde ALTER denemeden hazır olur.
 try {

@@ -82,6 +82,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['repair_streak'])) {
 }
 
 // ==========================================
+// 1a2. KALKAN SATIN AL (S8) — 500 XP = 1 kalkan
+// ==========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy_freeze'])) {
+    try {
+        require_once __DIR__ . '/app_settings_lib.php';
+        require_once __DIR__ . '/gamify_lib.php';
+        if (ff_enabled($pdo, 'xp')) {
+            $bfRes = gamify_buy_freeze($pdo, $sid);
+            header("Location: student_dashboard.php?" . (!empty($bfRes['ok']) ? 'freeze_bought=1' : 'freeze_err=' . urlencode($bfRes['error'] ?? 'Hata')));
+            exit;
+        }
+    } catch (Throwable $e) {}
+    header("Location: student_dashboard.php");
+    exit;
+}
+
+// ==========================================
 // 1b. HEDEF KAYDET (S4) — hedef üniversite/bölüm/net
 // ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['goal_save'])) {
@@ -265,6 +282,17 @@ try {
         $goalDaysLeft = exam_days_left($gDates[$goalExamName]);
     }
 } catch (Throwable $e) { $goalsOn = false; }
+
+// ==========================================
+// 2c2. XP KARTI VERİSİ (S8) — ff_xp açıkken
+// ==========================================
+$xpOn = false; $xpData = null;
+try {
+    require_once __DIR__ . '/app_settings_lib.php';
+    require_once __DIR__ . '/gamify_lib.php';
+    $xpOn = ff_enabled($pdo, 'xp');
+    if ($xpOn) $xpData = gamify_student_summary($pdo, $sid);
+} catch (Throwable $e) { $xpOn = false; }
 
 // ==========================================
 // 2d. "KOÇUNDAN" KARTI (S7) — öğrenciye açık son seans notu
@@ -580,6 +608,53 @@ include __DIR__ . '/header.php';
                     </div>
                 </div>
             </div>
+            <?php if ($xpOn && $xpData): ?>
+            <!-- XP & SEVİYE (S8) -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-[#1a1a2e] to-[#223488] px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-bolt text-[#ec9731]"></i>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Seviye <?php echo (int)$xpData['level']; ?></h3>
+                        </div>
+                        <span class="text-[10px] font-black text-white bg-white/15 px-2.5 py-1 rounded-full tabular-nums"><?php echo number_format($xpData['xp']); ?> XP</span>
+                    </div>
+                    <div class="p-5">
+                        <?php if (isset($_GET['freeze_bought'])): ?>
+                        <div class="mb-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100 text-xs font-bold text-green-700">🛡️ Kalkan satın alındı!</div>
+                        <?php elseif (isset($_GET['freeze_err'])): ?>
+                        <div class="mb-3 px-3 py-2 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-red-600"><?php echo htmlspecialchars($_GET['freeze_err']); ?></div>
+                        <?php endif; ?>
+                        <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1.5">
+                            <span>Seviye <?php echo (int)$xpData['level']; ?></span>
+                            <span>Sonraki: <?php echo number_format($xpData['next_level_xp']); ?> XP</span>
+                        </div>
+                        <div class="w-full bg-blue-50 rounded-full h-2.5 overflow-hidden border border-blue-100/50 mb-4">
+                            <div class="bg-gradient-to-r from-[#223488] to-[#ec9731] h-2.5 rounded-full transition-all duration-1000" style="width: <?php echo max(3, (int)$xpData['progress_pct']); ?>%"></div>
+                        </div>
+                        <?php if (!empty($xpData['achievements'])): ?>
+                        <div class="flex flex-wrap gap-1.5 mb-4">
+                            <?php foreach (array_slice($xpData['achievements'], 0, 5) as $ach): ?>
+                            <span class="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-2 py-1 rounded-lg" title="<?php echo htmlspecialchars($ach['desc']); ?>">
+                                <?php echo $ach['icon'] . ' ' . htmlspecialchars($ach['name']); ?>
+                            </span>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
+                        <form method="POST" class="flex items-center justify-between gap-2">
+                            <span class="text-[11px] font-bold text-slate-500">🛡️ Kalkanın: <?php echo (int)$xpData['freeze_count']; ?></span>
+                            <button name="buy_freeze" value="1"
+                                    <?php echo $xpData['xp'] < $xpData['freeze_cost'] ? 'disabled' : ''; ?>
+                                    class="text-[11px] font-black px-3 py-1.5 rounded-xl transition <?php echo $xpData['xp'] >= $xpData['freeze_cost'] ? 'bg-[#223488] hover:bg-[#314595] text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'; ?>"
+                                    onclick="return confirm('<?php echo (int)$xpData['freeze_cost']; ?> XP karşılığı 1 kalkan alınsın mı?')">
+                                <?php echo (int)$xpData['freeze_cost']; ?> XP → 1 Kalkan
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <?php if ($goalsOn): ?>
             <!-- HEDEFİM (S4): hedef üniversite/net + sınav geri sayımı + tahmin bandı -->
             <div>
