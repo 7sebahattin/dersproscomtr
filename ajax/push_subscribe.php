@@ -13,6 +13,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../push_config.php';
 
 // Giriş yapmış öğrenci, öğretmen (T_LOGIN/T_TASKS) veya VELİ (P_WEEKLY haftalık özet).
 // Not: push_subscriptions.student_id sütunu aslında "user_id" anlamında kullanılır;
@@ -41,6 +42,13 @@ $auth_key = $sub['keys']['auth']   ?? '';
 if (!$endpoint || !$p256dh || !$auth_key) {
     http_response_code(400);
     echo json_encode(['ok' => false, 'msg' => 'Eksik abonelik verisi.']);
+    exit;
+}
+
+// Güvenlik (SSRF): yalnızca bilinen push servis adreslerine abone olunabilir
+if (!push_endpoint_is_allowed($endpoint)) {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'msg' => 'Geçersiz abonelik adresi.']);
     exit;
 }
 

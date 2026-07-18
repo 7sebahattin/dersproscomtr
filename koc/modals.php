@@ -228,12 +228,12 @@
         <form method="POST" class="p-5 space-y-4">
             <input type="hidden" name="update_student_info" value="1">
             <div class="grid grid-cols-2 gap-4">
-                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Ad</label><input type="text" name="first_name" value="<?php echo $selected_student['first_name']; ?>" class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
-                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Soyad</label><input type="text" name="last_name" value="<?php echo $selected_student['last_name']; ?>" class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Ad</label><input type="text" name="first_name" value="<?php echo htmlspecialchars($selected_student['first_name'] ?? ''); ?>" class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Soyad</label><input type="text" name="last_name" value="<?php echo htmlspecialchars($selected_student['last_name'] ?? ''); ?>" class="js-upper w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
             </div>
             <div class="grid grid-cols-2 gap-4">
-                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Öğrenci Telefon</label><input type="text" name="student_phone" value="<?php echo $selected_student['phone']; ?>" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
-                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Veli Telefon</label><input type="text" name="parent_phone" value="<?php echo $selected_student['parent_phone']; ?>" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Öğrenci Telefon</label><input type="text" name="student_phone" value="<?php echo htmlspecialchars($selected_student['phone'] ?? ''); ?>" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 uppercase">Veli Telefon</label><input type="text" name="parent_phone" value="<?php echo htmlspecialchars($selected_student['parent_phone'] ?? ''); ?>" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm outline-none"></div>
             </div>
             <div class="pt-4 flex gap-3">
                  <button type="button" onclick="document.getElementById('updateStudentModal').classList.add('hidden')" class="flex-1 bg-white border border-slate-200 text-slate-500 py-3 rounded-xl font-bold text-sm">İptal</button>

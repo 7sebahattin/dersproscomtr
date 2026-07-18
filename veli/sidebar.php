@@ -35,12 +35,12 @@ $children = (isset($my_children) && is_array($my_children)) ? $my_children : [];
                         <?php echo (!empty($selected_student) && ($selected_student['id'] ?? null) == ($child['id'] ?? null))
                             ? 'bg-orange-500 text-white'
                             : 'bg-white border border-slate-200 text-slate-400 group-hover:border-orange-200 group-hover:text-orange-500'; ?>">
-                        <?php echo strtoupper(substr($child['first_name'] ?? '', 0, 1)); ?>
+                        <?php echo htmlspecialchars(strtoupper(substr($child['first_name'] ?? '', 0, 1))); ?>
                     </div>
 
                     <div>
                         <p class="font-bold text-sm text-slate-700 group-hover:text-orange-600 transition-colors">
-                            <?php echo ($child['first_name'] ?? '') . ' ' . ($child['last_name'] ?? ''); ?>
+                            <?php echo htmlspecialchars(($child['first_name'] ?? '') . ' ' . ($child['last_name'] ?? '')); ?>
                         </p>
                         <p class="text-[10px] text-slate-400 font-medium">
                             <?php echo $child['school_level'] ?? 'Öğrenci'; ?>

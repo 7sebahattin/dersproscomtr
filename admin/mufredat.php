@@ -371,7 +371,7 @@ $creators = $pdo->query("SELECT DISTINCT u.id, u.first_name, u.last_name FROM co
                         <select name="filter_subject" class="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white" onchange="this.form.submit()">
                             <option value="">Tümü</option>
                             <?php foreach($subjects as $sub): ?>
-                                <option value="<?= $sub['id'] ?>" <?= $filter_sub == $sub['id'] ? 'selected' : '' ?>><?= $sub['name'] ?></option>
+                                <option value="<?= (int)$sub['id'] ?>" <?= $filter_sub == $sub['id'] ? 'selected' : '' ?>><?= htmlspecialchars($sub['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -450,7 +450,7 @@ $creators = $pdo->query("SELECT DISTINCT u.id, u.first_name, u.last_name FROM co
 
                             <td class="p-3 text-right">
                                 <div class="flex justify-end gap-1">
-                                    <button onclick="editTopic(<?= $t['id'] ?>, '<?= addslashes($t['name']) ?>', <?= $t['subject_id'] ?>)"
+                                    <button onclick="editTopic(<?= (int)$t['id'] ?>, <?= htmlspecialchars(json_encode($t['name']), ENT_QUOTES, 'UTF-8') ?>, <?= (int)$t['subject_id'] ?>)"
                                             class="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition" title="Düzenle">
                                         ✏️
                                     </button>

@@ -105,14 +105,14 @@ $parent_rels = $pdo->query("
                     <select name="teacher_id" class="w-full border border-slate-200 p-3 rounded-xl bg-slate-50 text-sm focus:bg-white outline-none" required>
                         <option value="">Öğretmen Seç</option>
                         <?php foreach($teachers as $t): ?>
-                            <option value="<?php echo $t['id']; ?>"><?php echo $t['first_name'].' '.$t['last_name']; ?></option>
+                            <option value="<?php echo (int)$t['id']; ?>"><?php echo htmlspecialchars($t['first_name'].' '.$t['last_name']); ?></option>
                         <?php endforeach; ?>
                     </select>
 
                     <select name="student_id" class="w-full border border-slate-200 p-3 rounded-xl bg-slate-50 text-sm focus:bg-white outline-none" required>
                         <option value="">Öğrenci Seç</option>
                         <?php foreach($students as $s): ?>
-                            <option value="<?php echo $s['id']; ?>"><?php echo $s['first_name'].' '.$s['last_name']; ?></option>
+                            <option value="<?php echo (int)$s['id']; ?>"><?php echo htmlspecialchars($s['first_name'].' '.$s['last_name']); ?></option>
                         <?php endforeach; ?>
                     </select>
 
@@ -158,14 +158,14 @@ $parent_rels = $pdo->query("
                     <select name="parent_id" class="w-full border border-slate-200 p-3 rounded-xl bg-slate-50 text-sm focus:bg-white outline-none" required>
                         <option value="">Veli Seç</option>
                         <?php foreach($parents as $p): ?>
-                            <option value="<?php echo $p['id']; ?>"><?php echo $p['first_name'].' '.$p['last_name']; ?></option>
+                            <option value="<?php echo (int)$p['id']; ?>"><?php echo htmlspecialchars($p['first_name'].' '.$p['last_name']); ?></option>
                         <?php endforeach; ?>
                     </select>
 
                     <select name="student_id" class="w-full border border-slate-200 p-3 rounded-xl bg-slate-50 text-sm focus:bg-white outline-none" required>
                         <option value="">Öğrenci Seç</option>
                         <?php foreach($students as $s): ?>
-                            <option value="<?php echo $s['id']; ?>"><?php echo $s['first_name'].' '.$s['last_name']; ?></option>
+                            <option value="<?php echo (int)$s['id']; ?>"><?php echo htmlspecialchars($s['first_name'].' '.$s['last_name']); ?></option>
                         <?php endforeach; ?>
                     </select>
 

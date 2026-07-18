@@ -155,9 +155,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['update_status'])) {
         $sched_id    = (int)($_POST['schedule_id'] ?? 0);
         $status      = $_POST['status'] ?? 'bekliyor';
-        $amount      = (int)($_POST['amount'] ?? 0);
-        $correct_count = (isset($_POST['correct_count']) && $_POST['correct_count'] !== '') ? (int)$_POST['correct_count'] : null;
-        $wrong_count   = (isset($_POST['wrong_count'])   && $_POST['wrong_count']   !== '') ? (int)$_POST['wrong_count']   : null;
+        if (!in_array($status, ['bekliyor', 'yapildi', 'yarim', 'yapilmadi'], true)) $status = 'bekliyor';
+        $amount      = max(0, (int)($_POST['amount'] ?? 0));
+        $correct_count = (isset($_POST['correct_count']) && $_POST['correct_count'] !== '') ? max(0, (int)$_POST['correct_count']) : null;
+        $wrong_count   = (isset($_POST['wrong_count'])   && $_POST['wrong_count']   !== '') ? max(0, (int)$_POST['wrong_count'])   : null;
 
         // 1. Önce mevcut kaydı çekelim (Hedef daha önce kilitlenmiş mi bakalım)
         $checkStmt = $pdo->prepare("SELECT amount, target_amount FROM schedule_items WHERE id = ? AND student_id = ?");
@@ -172,6 +173,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $finalTarget = $currentItem['amount'];
             } else {
                 $finalTarget = $originalTarget;
+            }
+
+            // Güvenlik: sahte performans girişini sınırla — gerçekleşen miktar
+            // hedefin makul bir katından fazla olamaz; doğru+yanlış toplamı
+            // gerçekleşen miktarı aşamaz (rozet/rapor farm'lamayı zorlaştırır).
+            $targetForCap = (int)$finalTarget > 0 ? (int)$finalTarget : 20;
+            $maxAllowed   = max($targetForCap * 5, 200);
+            $amount       = min($amount, $maxAllowed);
+            if ($correct_count !== null && $wrong_count !== null && ($correct_count + $wrong_count) > $amount) {
+                $wrong_count = max(0, $amount - $correct_count);
+            } elseif ($correct_count !== null && $correct_count > $amount) {
+                $correct_count = $amount;
+            } elseif ($wrong_count !== null && $wrong_count > $amount) {
+                $wrong_count = $amount;
             }
 
             // 2. Güncelleme: amount, target_amount, correct_count, wrong_count
@@ -230,6 +245,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $final_net = (isset($_POST['total_net']) && $_POST['total_net'] !== '')
             ? (float)$_POST['total_net']
             : (float)$total_net;
+        // Güvenlik: gerçekçi olmayan net değerlerini sınırla (sahte deneme/rozet farm'lamayı önler)
+        $final_net = max(-50, min(200, $final_net));
 
         $ins = $pdo->prepare("INSERT INTO quiz_results (student_id, exam_name, date_taken, category, total_net, details)
                               VALUES (?, ?, ?, ?, ?, ?)");

@@ -39,6 +39,16 @@ RewriteEngine On
 RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
 RewriteRule ^ https://%1%{REQUEST_URI} [R=301,L]
 
+# assets/uploads/ (legacy upload_exam.php sınav PDF'leri) doğrudan indirmeye açık
+# kalmalı ama çalıştırılabilir uzantılara kapalı — aynı savunma katmanı.
+RewriteRule ^assets/uploads/.*\.(php[0-9]?|phtml|phar|pl|py|cgi|sh|asp|aspx|jsp)$ - [F,L,NC]
+
+# uploads/ kökü (admin/materyal.php materyalleri) doğrudan indirmeye açık kalmalı
+# ama ÇALIŞTIRILABİLİR dosya uzantıları asla sunulmamalı — sunucu tarafı MIME
+# doğrulaması zaten uzantıyı kendisi üretiyor, bu ek bir savunma katmanıdır
+# (uzantı doğrulaması bir şekilde atlatılsa bile RCE'yi engeller).
+RewriteRule ^uploads/.*\.(php[0-9]?|phtml|phar|pl|py|cgi|sh|asp|aspx|jsp)$ - [F,L,NC]
+
 RewriteRule ^uploads/exams/ - [F,L]
 
 # Ödeme dekontlarına DOĞRUDAN erişimi engelle (mali/kişisel veri).

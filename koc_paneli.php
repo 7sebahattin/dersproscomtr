@@ -438,6 +438,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
     $should_redirect = false;
 
+    // Güvenlik: $sid (öğrenci) gerçekten bu öğretmenin öğrencisi mi? Değilse
+    // null'a düşürülür — aşağıdaki tüm "&& $sid" ile korunan işlemler (bilgi
+    // güncelleme, durum güncelleme, görev kaydetme) otomatik olarak atlanır.
+    if ($sid) {
+        $ownCheck = $pdo->prepare("SELECT 1 FROM coaching_relationships WHERE teacher_id = ? AND student_id = ?");
+        $ownCheck->execute([$teacher_id, $sid]);
+        if (!$ownCheck->fetchColumn()) { $sid = null; }
+    }
+
     // Öğrenci Ekleme
     if (isset($_POST['create_student'])) {
         $u_user = trim($_POST['username']); 
@@ -537,7 +546,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
             $vals = [$amt, $act, $st, $csub, $ctop, $tn];
             foreach ($optCols as $c => $has) { if ($has) { $set[] = "$c=?"; $vals[] = $optVals[$c]; } }
             $vals[] = $id;
-            $pdo->prepare("UPDATE schedule_items SET ".implode(', ', $set)." WHERE id=?")->execute($vals);
+            $vals[] = $sid;
+            // Güvenlik: yalnızca $sid'e (bu öğretmenin öğrencisi) ait kayıt güncellenir
+            $pdo->prepare("UPDATE schedule_items SET ".implode(', ', $set)." WHERE id=? AND student_id=?")->execute($vals);
         } else {
             $cols = ['student_id','date','amount','action_type','status','topic_id','custom_subject','custom_topic','time_note'];
             $vals = [$sid, $date, $amt, $act, $st, $tid, $csub, $ctop, $tn];
@@ -549,8 +560,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['ajax'])) {
         // Doğrulama hatası varsa yönlendirme yapılmaz, aksi halde $error kaybolur (redirect yeni GET başlatır)
         if (empty($error)) { $should_redirect = true; }
     }
-    if (isset($_POST['delete_schedule'])) { 
-        $pdo->prepare("DELETE FROM schedule_items WHERE id=?")->execute([$_POST['schedule_id']]); 
+    if (isset($_POST['delete_schedule'])) {
+        $delId = (int)($_POST['schedule_id'] ?? 0);
+        // Güvenlik: yalnızca kendi öğrencisine ait bir görev satırı silinebilir
+        $pdo->prepare("DELETE si FROM schedule_items si
+                       JOIN coaching_relationships cr ON cr.student_id = si.student_id
+                       WHERE si.id = ? AND cr.teacher_id = ?")->execute([$delId, $teacher_id]);
         $should_redirect = true;
     }
 

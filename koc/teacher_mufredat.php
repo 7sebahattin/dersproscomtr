@@ -406,7 +406,7 @@ function cancelEdit() {
                                     <td class="p-4 text-right">
                                         <div class="flex items-center justify-end gap-1">
                                         <?php if ($is_mine): ?>
-                                            <button onclick="editTopic(<?= $t['id'] ?>, '<?= addslashes($t['name']) ?>', <?= $t['subject_id'] ?>)" 
+                                            <button onclick="editTopic(<?= (int)$t['id'] ?>, <?= htmlspecialchars(json_encode($t['name']), ENT_QUOTES, 'UTF-8') ?>, <?= (int)$t['subject_id'] ?>)"
                                                     class="bg-blue-50 text-blue-500 hover:text-white hover:bg-blue-500 transition w-8 h-8 rounded-lg flex items-center justify-center" 
                                                     title="Düzenle">
                                                 ✏️

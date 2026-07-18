@@ -2,7 +2,7 @@
 session_start();
 require_once '../db.php';
 
-if (!isset($_SESSION['user_id'])) { die("Giriş yapmalısınız."); }
+if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'teacher') { die("Giriş yapmalısınız."); }
 
 // Öğrencileri çek
 $students = $pdo->query("SELECT id, first_name, last_name FROM users WHERE role = 'student' ORDER BY first_name ASC")->fetchAll(PDO::FETCH_ASSOC);
@@ -63,7 +63,7 @@ $students = $pdo->query("SELECT id, first_name, last_name FROM users WHERE role 
         </button>
         <?php foreach($students as $s): ?>
         <button onclick="filterStudent(<?php echo $s['id']; ?>, this)" class="student-filter inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500 mr-2 border border-slate-200 transition-all">
-            <?php echo $s['first_name']; ?>
+            <?php echo htmlspecialchars($s['first_name']); ?>
         </button>
         <?php endforeach; ?>
     </div>
@@ -98,7 +98,7 @@ $students = $pdo->query("SELECT id, first_name, last_name FROM users WHERE role 
                     <div class="relative">
                         <select id="modalStudent" class="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block p-3.5 appearance-none font-medium">
                             <?php foreach($students as $s): ?>
-                            <option value="<?php echo $s['id']; ?>"><?php echo $s['first_name'] . ' ' . $s['last_name']; ?></option>
+                            <option value="<?php echo (int)$s['id']; ?>"><?php echo htmlspecialchars($s['first_name'] . ' ' . $s['last_name']); ?></option>
                             <?php endforeach; ?>
                         </select>
                         <i class="fa-solid fa-chevron-down absolute right-4 top-4 text-slate-400 pointer-events-none"></i>

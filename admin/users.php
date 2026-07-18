@@ -161,27 +161,27 @@ $users = $stmt_list->fetchAll(PDO::FETCH_ASSOC);
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-xs font-bold text-slate-500">Ad</label>
-                        <input type="text" name="first_name" value="<?php echo $fname_val; ?>" required class="js-upper w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
+                        <input type="text" name="first_name" value="<?php echo htmlspecialchars($fname_val, ENT_QUOTES, 'UTF-8'); ?>" required class="js-upper w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
                     </div>
                     <div>
                         <label class="text-xs font-bold text-slate-500">Soyad</label>
-                        <input type="text" name="last_name" value="<?php echo $lname_val; ?>" required class="js-upper w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
+                        <input type="text" name="last_name" value="<?php echo htmlspecialchars($lname_val, ENT_QUOTES, 'UTF-8'); ?>" required class="js-upper w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
                     </div>
                 </div>
 
                 <div>
                     <label class="text-xs font-bold text-slate-500">Kullanıcı Adı</label>
-                    <input type="text" name="username" value="<?php echo $username_val; ?>" required class="w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
+                    <input type="text" name="username" value="<?php echo htmlspecialchars($username_val, ENT_QUOTES, 'UTF-8'); ?>" required class="w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-xs font-bold text-slate-500">E-Posta</label>
-                        <input type="email" name="email" value="<?php echo $email_val; ?>" required class="w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
+                        <input type="email" name="email" value="<?php echo htmlspecialchars($email_val, ENT_QUOTES, 'UTF-8'); ?>" required class="w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
                     </div>
                     <div>
                         <label class="text-xs font-bold text-slate-500">Telefon</label>
-                        <input type="text" name="phone" value="<?php echo $phone_val; ?>" class="w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
+                        <input type="text" name="phone" value="<?php echo htmlspecialchars($phone_val, ENT_QUOTES, 'UTF-8'); ?>" class="w-full border p-2 rounded-lg text-sm focus:border-indigo-500 outline-none">
                     </div>
                 </div>
 
@@ -245,7 +245,7 @@ $users = $stmt_list->fetchAll(PDO::FETCH_ASSOC);
                         <?php foreach($users as $u): ?>
                             <tr class="<?php echo ($edit_mode && $id_val == $u['id']) ? 'bg-indigo-50' : 'hover:bg-slate-50'; ?> transition">
                                 <td class="p-3">
-                                    <div class="font-bold text-slate-800"><?php echo $u['first_name'].' '.$u['last_name']; ?></div>
+                                    <div class="font-bold text-slate-800"><?php echo htmlspecialchars($u['first_name'].' '.$u['last_name']); ?></div>
                                     <div class="text-xs text-slate-400">@<?php echo $u['username']; ?> | <span class="uppercase"><?php echo $u['role']; ?></span></div>
                                 </td>
                                 <td class="p-3">

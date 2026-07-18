@@ -20,12 +20,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Dosya Yükleme
     if (isset($_FILES['pdf_file']) && $_FILES['pdf_file']['error'] == 0) {
         $upload_dir = 'assets/uploads/';
-        // Dosya ismini benzersiz yap
-        $file_name = time() . '_' . basename($_FILES['pdf_file']['name']);
-        $target_file = $upload_dir . $file_name;
-        $file_type = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
+        if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
 
-        if ($file_type == 'pdf') {
+        // Güvenlik: uzantı DEĞİL gerçek dosya içeriği (MIME) doğrulanır; uzantı
+        // her zaman sabit ".pdf" olarak üretilir (çift uzantı / uzantı
+        // sahteciliği bypass'ını engeller — yüklenen dosya adı hiç kullanılmaz).
+        $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : null;
+        $mime  = $finfo ? finfo_file($finfo, $_FILES['pdf_file']['tmp_name']) : null;
+        if ($finfo) finfo_close($finfo);
+
+        if ($mime !== 'application/pdf') {
+            $error = "Sadece PDF dosyası yükleyebilirsiniz.";
+        } else {
+            $file_name = 'exam_' . bin2hex(random_bytes(10)) . '.pdf';
+            $target_file = $upload_dir . $file_name;
+
             if (move_uploaded_file($_FILES['pdf_file']['tmp_name'], $target_file)) {
                 // Veritabanına kaydet
                 $stmt = $pdo->prepare("INSERT INTO exams (teacher_id, title, category, pdf_file, answer_key, is_online) VALUES (?, ?, ?, ?, ?, ?)");
@@ -37,8 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             } else {
                 $error = "Dosya yüklenirken hata oluştu.";
             }
-        } else {
-            $error = "Sadece PDF dosyası yükleyebilirsiniz.";
         }
     } else {
         $error = "Lütfen bir dosya seçin.";
