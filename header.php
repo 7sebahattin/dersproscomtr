@@ -84,6 +84,11 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
             $pdo->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?")
                 ->execute([(int)$_SESSION['user_id']]);
         } catch (Throwable $e) { /* kolon yoksa sessiz geç */ }
+        // Günlük metrik: uzun oturumda da o günün giriş izi damgalansın
+        if (($_SESSION['role'] ?? '') === 'student') {
+            require_once __DIR__ . '/metrics_lib.php';
+            metrics_mark_login($pdo, (int)$_SESSION['user_id']);
+        }
     }
 }
 
@@ -265,6 +270,9 @@ try {
                                 <?php if ($myRole === 'teacher'): ?>
                                     <a href="<?php echo $B; ?>/koc/ogrencilerim.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">👥 Öğrencilerim</a>
                                     <a href="<?php echo $B; ?>/koc/faz_matrisi.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🗺️ Faz Matrisi</a>
+                                    <a href="<?php echo $B; ?>/koc/oneriler.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">💡 Görev Önerileri</a>
+                                    <a href="<?php echo $B; ?>/koc/notlar.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🗒 Seans Notları</a>
+                                    <a href="<?php echo $B; ?>/koc/etiketler.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🏷 Etiketler</a>
                                     <a href="<?php echo $B; ?>/koc/bildirim_ayarlari.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">🔔 Bildirim Ayarları</a>
                                     <a href="<?php echo $B; ?>/koc/odemeler.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">💰 Ödeme Yönetimi</a>
                                     <a href="<?php echo $B; ?>/koc/mufredat_v2.php" class="block px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-600 font-medium text-xs transition-colors">📝 Müfredat Yükle</a>
@@ -404,6 +412,15 @@ try {
                 </a>
                 <a href="<?php echo $B; ?>/koc/faz_matrisi.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
                     <span class="text-lg">🗺️</span> Faz Matrisi
+                </a>
+                <a href="<?php echo $B; ?>/koc/oneriler.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
+                    <span class="text-lg">💡</span> Görev Önerileri
+                </a>
+                <a href="<?php echo $B; ?>/koc/notlar.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
+                    <span class="text-lg">🗒</span> Seans Notları
+                </a>
+                <a href="<?php echo $B; ?>/koc/etiketler.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
+                    <span class="text-lg">🏷</span> Etiketler
                 </a>
                 <a href="<?php echo $B; ?>/koc/bildirim_ayarlari.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm transition-colors">
                     <span class="text-lg">🔔</span> Bildirim Ayarları

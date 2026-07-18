@@ -159,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
     //     tek TRANSACTION içinde uygulanır: hata olursa hiçbiri yazılmaz.
     if ($action === 'plan_apply' || $action === 'plan_apply_multi') {
         $optCols = [];
-        foreach (['edu_topic_id','resource_title','resource_id','task_note'] as $c) {
+        foreach (['edu_topic_id','resource_title','resource_id','task_note','bulk_id'] as $c) {
             try { $optCols[$c] = $pdo->query("SHOW COLUMNS FROM schedule_items LIKE '$c'")->rowCount() > 0; }
             catch (Throwable $e) { $optCols[$c] = false; }
         }
@@ -184,6 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
                     'resource_title' => (trim((string)($it['resource_title'] ?? '')) ?: null),
                     'resource_id'    => (!empty($it['resource_id']) ? (int)$it['resource_id'] : null),
                     'task_note'      => (mb_substr(trim((string)($it['task_note'] ?? '')), 0, 255) ?: null),
+                    'bulk_id'        => null, // yalnız çoklu uygulamada doldurulur (geri alma damgası)
                 ],
             ];
         };
@@ -216,12 +217,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
                 echo json_encode(['ok' => false, 'error' => 'Listenizde olmayan öğrenci seçildi.']); exit;
             }
             $nCre = 0; $skipped = 0;
+            // Toplu işlem damgası (S6): parti tek bulk_id alır → tek tıkla geri
+            // alınabilir (yalnız hâlâ 'bekliyor' olanlar; bkz. tags_lib.php)
+            $bulkId = 'blk_' . uniqid('', true);
             try {
                 $pdo->beginTransaction();
                 foreach ($owned as $stuId) {
                     foreach ($items as $it) {
                         $n = is_array($it) ? $normalize($it) : null;
                         if (!$n) { $skipped++; continue; }
+                        $n['opt']['bulk_id'] = $bulkId;
                         $vals = [$stuId, $n['date'], $n['amount'], $n['action_type'], 'bekliyor', null, $n['custom_subject'], $n['custom_topic'], $n['time_note']];
                         foreach ($optCols as $c => $has) if ($has) $vals[] = $n['opt'][$c];
                         $vals[] = 0;
@@ -230,7 +235,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
                     }
                 }
                 $pdo->commit();
-                echo json_encode(['ok' => true, 'created' => $nCre, 'students' => count($owned), 'skipped' => $skipped]); exit;
+                echo json_encode(['ok' => true, 'created' => $nCre, 'students' => count($owned), 'skipped' => $skipped, 'bulk_id' => $bulkId]); exit;
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 echo json_encode(['ok' => false, 'error' => 'Uygulama hatası: hiçbir öğrenciye yazılmadı.']); exit;

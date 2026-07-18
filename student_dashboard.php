@@ -82,6 +82,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['repair_streak'])) {
 }
 
 // ==========================================
+// 1a2. KALKAN SATIN AL (S8) — 500 XP = 1 kalkan
+// ==========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy_freeze'])) {
+    try {
+        require_once __DIR__ . '/app_settings_lib.php';
+        require_once __DIR__ . '/gamify_lib.php';
+        if (ff_enabled($pdo, 'xp')) {
+            $bfRes = gamify_buy_freeze($pdo, $sid);
+            header("Location: student_dashboard.php?" . (!empty($bfRes['ok']) ? 'freeze_bought=1' : 'freeze_err=' . urlencode($bfRes['error'] ?? 'Hata')));
+            exit;
+        }
+    } catch (Throwable $e) {}
+    header("Location: student_dashboard.php");
+    exit;
+}
+
+// ==========================================
+// 1a3. LİG KATIL/AYRIL (S9)
+// ==========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['league_join']) || isset($_POST['league_leave']))) {
+    try {
+        require_once __DIR__ . '/app_settings_lib.php';
+        require_once __DIR__ . '/league_lib.php';
+        if (ff_enabled($pdo, 'league')) {
+            if (isset($_POST['league_join'])) {
+                $ljRes = league_set_optin($pdo, $sid, true, (string)($_POST['nickname'] ?? ''));
+                header("Location: student_dashboard.php?" . (!empty($ljRes['ok']) ? 'league=joined' : 'league_err=' . urlencode($ljRes['error'] ?? 'Hata')));
+            } else {
+                league_set_optin($pdo, $sid, false);
+                header("Location: student_dashboard.php?league=left");
+            }
+            exit;
+        }
+    } catch (Throwable $e) {}
+    header("Location: student_dashboard.php");
+    exit;
+}
+
+// ==========================================
+// 1b. HEDEF KAYDET (S4) — hedef üniversite/bölüm/net
+// ==========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['goal_save'])) {
+    try {
+        require_once __DIR__ . '/app_settings_lib.php';
+        require_once __DIR__ . '/goals_lib.php';
+        if (ff_enabled($pdo, 'goals')) {
+            $gCat = in_array(($_POST['exam_category'] ?? ''), ['TYT', 'AYT', 'LGS'], true)
+                ? $_POST['exam_category'] : 'TYT';
+            goals_save($pdo, $sid, $gCat, $_POST, 'student');
+        }
+    } catch (Throwable $e) {}
+    header("Location: student_dashboard.php?goal_saved=1");
+    exit;
+}
+
+// ==========================================
 // 2. STREAK (ŞİMŞEK) HESAPLAMA MOTORU
 // ==========================================
 function calculateStreak($pdo, $student_id) {
@@ -228,6 +284,57 @@ try {
     $badges[] = ['icon' => '🏆', 'on' => $fullWeek, 'label' => 'Tam Hafta',
                  'sub' => $fullWeek ? 'geçen hafta %100!' : 'haftayı %100 bitir'];
 } catch (Throwable $e) { $badges = []; }
+
+// ==========================================
+// 2c. HEDEF KARTI VERİSİ (S4) — ff_goals açıkken
+// ==========================================
+$goalsOn = false; $goalData = null; $goalCat = 'TYT'; $goalDaysLeft = null; $goalExamName = 'YKS';
+try {
+    require_once __DIR__ . '/app_settings_lib.php';
+    require_once __DIR__ . '/goals_lib.php';
+    $goalsOn = ff_enabled($pdo, 'goals');
+    if ($goalsOn) {
+        $lvq = $pdo->prepare("SELECT school_level FROM users WHERE id = ?");
+        $lvq->execute([$sid]);
+        $isOrta = ($lvq->fetchColumn() === 'Ortaokul');
+        $goalCat      = $isOrta ? 'LGS' : 'TYT';
+        $goalExamName = $isOrta ? 'LGS' : 'YKS';
+        $goalData     = goals_card_data($pdo, $sid, $goalCat);
+        $gDates       = exam_dates($pdo);
+        $goalDaysLeft = exam_days_left($gDates[$goalExamName]);
+    }
+} catch (Throwable $e) { $goalsOn = false; }
+
+// ==========================================
+// 2c2. XP KARTI VERİSİ (S8) — ff_xp açıkken
+// ==========================================
+$xpOn = false; $xpData = null;
+try {
+    require_once __DIR__ . '/app_settings_lib.php';
+    require_once __DIR__ . '/gamify_lib.php';
+    $xpOn = ff_enabled($pdo, 'xp');
+    if ($xpOn) $xpData = gamify_student_summary($pdo, $sid);
+} catch (Throwable $e) { $xpOn = false; }
+
+// ==========================================
+// 2c3. LİG KARTI VERİSİ (S9) — ff_league açıkken
+// ==========================================
+$leagueOn = false; $leagueData = null;
+try {
+    require_once __DIR__ . '/app_settings_lib.php';
+    require_once __DIR__ . '/league_lib.php';
+    $leagueOn = ff_enabled($pdo, 'league');
+    if ($leagueOn) $leagueData = league_card_data($pdo, $sid);
+} catch (Throwable $e) { $leagueOn = false; }
+
+// ==========================================
+// 2d. "KOÇUNDAN" KARTI (S7) — öğrenciye açık son seans notu
+// ==========================================
+$coachNote = null;
+try {
+    require_once __DIR__ . '/notes_lib.php';
+    $coachNote = notes_latest_for_student_card($pdo, $sid);
+} catch (Throwable $e) { $coachNote = null; }
 
 // ==========================================
 // 3. KARŞILAMA MESAJI MANTIĞI
@@ -534,6 +641,249 @@ include __DIR__ . '/header.php';
                     </div>
                 </div>
             </div>
+            <?php if ($xpOn && $xpData): ?>
+            <!-- XP & SEVİYE (S8) -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-[#1a1a2e] to-[#223488] px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-bolt text-[#ec9731]"></i>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Seviye <?php echo (int)$xpData['level']; ?></h3>
+                        </div>
+                        <span class="text-[10px] font-black text-white bg-white/15 px-2.5 py-1 rounded-full tabular-nums"><?php echo number_format($xpData['xp']); ?> XP</span>
+                    </div>
+                    <div class="p-5">
+                        <?php if (isset($_GET['freeze_bought'])): ?>
+                        <div class="mb-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100 text-xs font-bold text-green-700">🛡️ Kalkan satın alındı!</div>
+                        <?php elseif (isset($_GET['freeze_err'])): ?>
+                        <div class="mb-3 px-3 py-2 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-red-600"><?php echo htmlspecialchars($_GET['freeze_err']); ?></div>
+                        <?php endif; ?>
+                        <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1.5">
+                            <span>Seviye <?php echo (int)$xpData['level']; ?></span>
+                            <span>Sonraki: <?php echo number_format($xpData['next_level_xp']); ?> XP</span>
+                        </div>
+                        <div class="w-full bg-blue-50 rounded-full h-2.5 overflow-hidden border border-blue-100/50 mb-4">
+                            <div class="bg-gradient-to-r from-[#223488] to-[#ec9731] h-2.5 rounded-full transition-all duration-1000" style="width: <?php echo max(3, (int)$xpData['progress_pct']); ?>%"></div>
+                        </div>
+                        <?php if (!empty($xpData['achievements'])): ?>
+                        <div class="flex flex-wrap gap-1.5 mb-4">
+                            <?php foreach (array_slice($xpData['achievements'], 0, 5) as $ach): ?>
+                            <span class="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-2 py-1 rounded-lg" title="<?php echo htmlspecialchars($ach['desc']); ?>">
+                                <?php echo $ach['icon'] . ' ' . htmlspecialchars($ach['name']); ?>
+                            </span>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
+                        <form method="POST" class="flex items-center justify-between gap-2">
+                            <span class="text-[11px] font-bold text-slate-500">🛡️ Kalkanın: <?php echo (int)$xpData['freeze_count']; ?></span>
+                            <button name="buy_freeze" value="1"
+                                    <?php echo $xpData['xp'] < $xpData['freeze_cost'] ? 'disabled' : ''; ?>
+                                    class="text-[11px] font-black px-3 py-1.5 rounded-xl transition <?php echo $xpData['xp'] >= $xpData['freeze_cost'] ? 'bg-[#223488] hover:bg-[#314595] text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'; ?>"
+                                    onclick="return confirm('<?php echo (int)$xpData['freeze_cost']; ?> XP karşılığı 1 kalkan alınsın mı?')">
+                                <?php echo (int)$xpData['freeze_cost']; ?> XP → 1 Kalkan
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($leagueOn && $leagueData): ?>
+            <!-- HAFTALIK LİG (S9): koç-içi, rumuzlu, opt-in -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-[#1a1a2e] to-[#223488] px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-trophy text-[#ec9731]"></i>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Haftalık Lig</h3>
+                        </div>
+                        <span class="text-[10px] text-blue-200 font-bold">Pzt'den beri</span>
+                    </div>
+                    <div class="p-5">
+                        <?php if (isset($_GET['league']) && $_GET['league'] === 'joined'): ?>
+                        <div class="mb-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100 text-xs font-bold text-green-700">🏆 Lige katıldın — bu hafta bol XP!</div>
+                        <?php elseif (isset($_GET['league_err'])): ?>
+                        <div class="mb-3 px-3 py-2 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-red-600"><?php echo htmlspecialchars($_GET['league_err']); ?></div>
+                        <?php endif; ?>
+
+                        <!-- Kendine karşı: herkes görür (opt-out edenin motivasyon döngüsü) -->
+                        <?php $lc = $leagueData['self']; $diff = $lc['this_week'] - $lc['last_week']; ?>
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 mb-3">
+                            <span class="text-[11px] font-bold text-slate-500">⚡ Bu hafta: <b class="text-[#223488]"><?php echo number_format($lc['this_week']); ?> XP</b></span>
+                            <span class="text-[11px] font-bold <?php echo $diff >= 0 ? 'text-green-600' : 'text-red-500'; ?>">
+                                Geçen haftaya göre <?php echo $diff >= 0 ? '+' : ''; ?><?php echo number_format($diff); ?>
+                            </span>
+                        </div>
+
+                        <?php if (!$leagueData['optin']): ?>
+                        <form method="POST" class="space-y-2">
+                            <p class="text-[11px] text-slate-500 font-medium leading-snug">
+                                Koçunun diğer öğrencileriyle haftalık XP yarışına katıl. Listede yalnızca
+                                <b>rumuzun</b> görünür; istediğin an ayrılabilirsin.
+                            </p>
+                            <div class="flex gap-2">
+                                <input name="nickname" maxlength="30" minlength="2" required placeholder="Rumuzun (örn. GölgeFizikçi)"
+                                       class="flex-grow bg-slate-50 border border-slate-200 rounded-xl text-xs p-2.5 font-bold text-slate-700 focus:bg-white focus:border-[#223488] outline-none transition">
+                                <button name="league_join" value="1"
+                                        class="bg-[#ec9731] hover:bg-[#d68625] text-white text-xs font-black px-4 rounded-xl transition shrink-0">Katıl</button>
+                            </div>
+                        </form>
+                        <?php elseif (empty($leagueData['rows'])): ?>
+                        <p class="text-[11px] text-slate-400 font-medium">Ligde henüz başka katılımcı yok — arkadaşlarını bekle! 🏁</p>
+                        <?php else: ?>
+                        <div class="space-y-1.5 mb-3">
+                            <?php
+                            $medals = [1 => '🥇', 2 => '🥈', 3 => '🥉'];
+                            $shown = 0;
+                            foreach ($leagueData['rows'] as $lr):
+                                $isMe = $leagueData['me'] && (int)$lr['id'] === (int)$leagueData['me']['id'];
+                                if ($shown >= 5 && !$isMe) continue;
+                                $shown++;
+                            ?>
+                            <div class="flex items-center justify-between px-3 py-2 rounded-xl <?php echo $isMe ? 'bg-blue-50 border border-blue-100' : 'bg-slate-50'; ?>">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="text-sm w-6 text-center"><?php echo $medals[$lr['rank']] ?? '<span class="text-[10px] font-black text-slate-400">' . (int)$lr['rank'] . '</span>'; ?></span>
+                                    <span class="text-xs font-bold <?php echo $isMe ? 'text-[#223488]' : 'text-slate-600'; ?> truncate">
+                                        <?php echo htmlspecialchars($lr['nickname']); ?><?php echo $isMe ? ' (sen)' : ''; ?>
+                                    </span>
+                                </div>
+                                <span class="text-xs font-black text-slate-700 tabular-nums shrink-0"><?php echo number_format($lr['xp']); ?> XP</span>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php if ($leagueData['me'] && $leagueData['me']['rank'] > 3 && $leagueData['percentile'] !== null): ?>
+                        <p class="text-[11px] font-bold text-[#d68625] mb-2">📍 Bu hafta ilk %<?php echo (int)$leagueData['percentile']; ?>'desin — devam!</p>
+                        <?php endif; ?>
+                        <form method="POST" onsubmit="return confirm('Ligden ayrılmak istediğine emin misin? İstediğinde geri dönebilirsin.')">
+                            <button name="league_leave" value="1" class="text-[10px] font-bold text-slate-300 hover:text-red-400 transition">Ligden ayrıl</button>
+                        </form>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($goalsOn): ?>
+            <!-- HEDEFİM (S4): hedef üniversite/net + sınav geri sayımı + tahmin bandı -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-[#7c2d12] to-[#223488] px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-flag-checkered text-[#ec9731]"></i>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Hedefim</h3>
+                        </div>
+                        <?php if ($goalDaysLeft !== null && $goalDaysLeft >= 0): ?>
+                        <span class="text-[10px] font-black text-white bg-white/15 px-2.5 py-1 rounded-full"><?php echo $goalExamName; ?>'ye <?php echo $goalDaysLeft; ?> gün</span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="p-5">
+                    <?php
+                        $gGoal = $goalData['goal'] ?? null;
+                        $gProj = $goalData['proj'] ?? null;
+                        $gRank = $goalData['rank'] ?? null;
+                        $hasGoal = $gGoal && ($gGoal['target_university'] || $gGoal['target_net'] !== null);
+                    ?>
+                        <div id="goalView" class="<?php echo $hasGoal ? '' : 'hidden'; ?>">
+                            <?php if ($hasGoal): ?>
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="font-black text-slate-800 text-sm truncate"><?php echo htmlspecialchars($gGoal['target_university'] ?: 'Hedef net'); ?></div>
+                                    <?php if ($gGoal['target_department']): ?>
+                                    <div class="text-xs font-bold text-slate-500 truncate"><?php echo htmlspecialchars($gGoal['target_department']); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <button type="button" onclick="document.getElementById('goalView').classList.add('hidden');document.getElementById('goalForm').classList.remove('hidden')"
+                                        class="text-[10px] font-bold text-slate-400 hover:text-[#223488] shrink-0 transition">Düzenle</button>
+                            </div>
+                            <?php if ($gGoal['target_net'] !== null): ?>
+                            <div class="mt-3 flex items-end justify-between">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase">Hedef Net (<?php echo $goalCat; ?>)</span>
+                                <span class="text-xl font-black text-[#223488]"><?php echo number_format((float)$gGoal['target_net'], 1, ',', '.'); ?></span>
+                            </div>
+                            <?php if ($gProj):
+                                $fark = round((float)$gGoal['target_net'] - $gProj['avg'], 1);
+                                $farkCls = $fark <= 0 ? 'text-green-600' : ($fark <= 10 ? 'text-[#d68625]' : 'text-red-500');
+                                $pctG = max(4, min(100, (int)round(100 * $gProj['avg'] / max(1, (float)$gGoal['target_net']))));
+                            ?>
+                            <div class="mt-1.5">
+                                <div class="w-full bg-blue-50 rounded-full h-2.5 overflow-hidden border border-blue-100/50">
+                                    <div class="bg-gradient-to-r from-[#223488] to-[#ec9731] h-2.5 rounded-full" style="width: <?php echo $pctG; ?>%"></div>
+                                </div>
+                                <div class="flex justify-between mt-1.5 text-[10px] font-bold">
+                                    <span class="text-slate-400">Son ort. <?php echo number_format($gProj['avg'], 1, ',', '.'); ?> net</span>
+                                    <span class="<?php echo $farkCls; ?>"><?php echo $fark <= 0 ? '🎉 Hedefi geçtin!' : 'Fark: ' . number_format($fark, 1, ',', '.') . ' net'; ?></span>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+                            <?php endif; ?>
+                            <?php if ($gProj && $gRank): ?>
+                            <div class="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                                <div class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Tahmini Sıralama<?php echo $gRank['stale'] ? ' · ⚠️ eski veri' : ''; ?></div>
+                                <div class="text-sm font-black text-slate-700">~<?php echo number_format($gRank['rank_best'], 0, ',', '.'); ?> – <?php echo number_format($gRank['rank_worst'], 0, ',', '.'); ?></div>
+                                <div class="text-[9px] text-slate-400 font-medium"><?php echo (int)$gRank['ref_year']; ?> verisine göre tahmindir; son <?php echo (int)$gProj['exam_count']; ?> denemenden hesaplandı.</div>
+                            </div>
+                            <?php elseif ($gProj === null): ?>
+                            <div class="mt-3 text-[11px] text-slate-400 font-medium">📊 Tahmin için en az 3 <?php echo $goalCat; ?> denemesi gir — şu an eksik.</div>
+                            <?php endif; ?>
+                            <?php endif; ?>
+                        </div>
+
+                        <form id="goalForm" method="POST" class="<?php echo $hasGoal ? 'hidden' : ''; ?> space-y-2.5">
+                            <input type="hidden" name="goal_save" value="1">
+                            <input type="hidden" name="exam_category" value="<?php echo $goalCat; ?>">
+                            <?php if (!$hasGoal): ?>
+                            <p class="text-[11px] text-slate-500 font-medium">🎯 Nereye koşuyorsun? Hedefini yaz, ilerlemeni buradan izle.</p>
+                            <?php endif; ?>
+                            <input name="target_university" maxlength="150" placeholder="<?php echo $goalCat === 'LGS' ? 'Hedef lise' : 'Hedef üniversite'; ?>"
+                                   value="<?php echo htmlspecialchars($gGoal['target_university'] ?? ''); ?>"
+                                   class="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs p-2.5 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none transition">
+                            <input name="target_department" maxlength="150" placeholder="<?php echo $goalCat === 'LGS' ? 'Bölüm/tercih (isteğe bağlı)' : 'Hedef bölüm (isteğe bağlı)'; ?>"
+                                   value="<?php echo htmlspecialchars($gGoal['target_department'] ?? ''); ?>"
+                                   class="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs p-2.5 font-medium text-slate-700 focus:bg-white focus:border-[#223488] outline-none transition">
+                            <div class="flex gap-2">
+                                <input name="target_net" type="number" step="0.5" min="0" max="120" placeholder="Hedef net"
+                                       value="<?php echo $gGoal && $gGoal['target_net'] !== null ? (float)$gGoal['target_net'] : ''; ?>"
+                                       class="flex-grow bg-slate-50 border border-slate-200 rounded-xl text-xs p-2.5 font-bold text-slate-700 focus:bg-white focus:border-[#223488] outline-none transition">
+                                <button class="bg-[#223488] hover:bg-[#314595] text-white text-xs font-black px-4 rounded-xl transition">Kaydet</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($coachNote): ?>
+            <!-- KOÇUNDAN (S7): koçun öğrenciye açtığı son seans notu -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-[#1a1a2e] to-[#223488] px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-comment-dots text-[#ec9731]"></i>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Koçundan</h3>
+                        </div>
+                        <span class="text-[10px] text-blue-200 font-bold"><?php echo date('d.m.Y', strtotime($coachNote['note_date'])); ?></span>
+                    </div>
+                    <div class="p-5 space-y-2.5">
+                        <?php foreach ([['decisions', '✅ Kararlaştırdıklarımız'], ['homework', '📚 Ödevin'],
+                                        ['next_step', '📌 Sıradaki adım']] as [$cnF, $cnL]):
+                            if (empty($coachNote[$cnF])) continue; ?>
+                        <div class="bg-slate-50 rounded-xl p-3">
+                            <div class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1"><?php echo $cnL; ?></div>
+                            <div class="text-xs font-medium text-slate-700 whitespace-pre-line"><?php echo htmlspecialchars($coachNote[$cnF]); ?></div>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php if (empty($coachNote['decisions']) && empty($coachNote['homework']) && empty($coachNote['next_step']) && !empty($coachNote['discussed'])): ?>
+                        <div class="bg-slate-50 rounded-xl p-3">
+                            <div class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">💬 Görüşme özeti</div>
+                            <div class="text-xs font-medium text-slate-700 whitespace-pre-line"><?php echo htmlspecialchars($coachNote['discussed']); ?></div>
+                        </div>
+                        <?php endif; ?>
+                        <p class="text-[10px] text-slate-400 font-medium">— <?php echo htmlspecialchars($coachNote['coach_name']); ?> koçun</p>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <div>
                 <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
                     <div class="bg-gradient-to-r from-[#1a1a2e] to-[#223488] px-6 py-4 flex items-center gap-2">

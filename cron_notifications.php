@@ -115,6 +115,7 @@ $notif_defaults = [
     // Öğretmene giden özet bildirimler (student_id her zaman NULL kaydedilir)
     'T_LOGIN'  => ['hour'=>17, 'title'=>'👀 Giriş Yapmayan Öğrenciler',  'body'=>'{toplam} öğrenciden {sayi} tanesi bugün sisteme hiç girmedi: {isimler}'],
     'T_TASKS'  => ['hour'=>22, 'title'=>'📉 Görev Yapmayan Öğrenciler', 'body'=>'Bugün görevi olan {toplam} öğrenciden {sayi} tanesi henüz hiç görev işaretlemedi: {isimler}'],
+    'T_RISK'   => ['hour'=>8,  'title'=>'🚨 Risk Bölgesindeki Öğrenciler', 'body'=>'{sayi} öğrencin risk bölgesinde: {isimler}. Detaylar koç panelindeki risk kartında.'],
     // Veliye giden haftalık özet (yalnızca Pazar; student_id=NULL kaydedilir)
     'P_WEEKLY' => ['hour'=>20, 'title'=>'📊 Haftalık Gelişim Özeti — {ogrenci}', 'body'=>'{ogrenci} bu hafta {gorev_yapilan}/{gorev_toplam} görevi tamamladı (tamamlama: %{yuzde}). Çözülen soru: {soru} · Konu çalışması: {konu_dk} dk.'],
 ];
@@ -520,6 +521,30 @@ foreach ($teachers as $teacher) {
 
     $sendTeacher('T_LOGIN', $notLogged);
     $sendTeacher('T_TASKS', $noTasks);
+
+    // T_RISK (S3): kırmızı seviyedeki öğrenciler — ff_risk açıkken, günde bir.
+    // Bugünkü görev listesinden bağımsızdır; koçun TÜM öğrencilerini tarar.
+    try {
+        require_once __DIR__ . '/app_settings_lib.php';
+        require_once __DIR__ . '/risk_lib.php';
+        if (ff_enabled($pdo, 'risk') && notif_active($pdo, $tid, 0, 'T_RISK')) {
+            $hR = (int)resolve_notif($pdo, $tid, 0, 'T_RISK', 'hour', $notif_defaults);
+            if ($currentHour >= $hR && $currentHour <= $hR + NOTIF_CATCHUP_HOURS) {
+                $redOnes = array_values(array_filter(risk_get_for_teacher($pdo, $tid),
+                    fn($r) => $r['level'] === 'red'));
+                if ($redOnes) {
+                    $titleR = resolve_notif($pdo, $tid, 0, 'T_RISK', 'title', $notif_defaults);
+                    $bodyR  = str_replace(['{sayi}', '{isimler}'],
+                        [count($redOnes), $nameList($redOnes)],
+                        resolve_notif($pdo, $tid, 0, 'T_RISK', 'body', $notif_defaults));
+                    send_push($webPush, $pdo, $teacher, 'T_RISK', $today, $titleR, $bodyR,
+                              BASE_URL . '/teacher_dashboard.php');
+                } else {
+                    cron_log("  [T_RISK] Kırmızı öğrenci yok.");
+                }
+            }
+        }
+    } catch (Throwable $e) { cron_log("  [T_RISK] Hata: " . $e->getMessage()); }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -599,6 +624,75 @@ if ((int)$now->format('N') === 7) {
         cron_log("► Veli: {$pr['parent_name']} ← {$pr['student_name']} ($done/$total, %$pct)");
         send_push($webPush, $pdo, $parent, 'P_WEEKLY_' . $stuId, $weekMon, $title, $body, BASE_URL . '/veli/veli_paneli.php');
     }
+}
+
+// ── Günlük metrik hesabı (S0 omurga): gece 03:00 sonrası günde bir kez ────────
+// Ucuz kapı metrics_daily_tick içinde; pseudo-cron'un her 4 dk çağrısında
+// yalnızca tek SELECT maliyeti vardır.
+try {
+    require_once __DIR__ . '/metrics_lib.php';
+    $mres = metrics_daily_tick($pdo);
+    if ($mres !== null) {
+        cron_log("► Metrikler hesaplandı: {$mres['days']} gün, {$mres['rows']} satır");
+    }
+} catch (Throwable $e) {
+    cron_log("► Metrik hatası: " . $e->getMessage());
+}
+
+// ── Risk skoru (S3): metriklerden sonra günde bir kez. Hesap bayraktan
+// bağımsız çalışır (geçmiş birikir); görünürlük + push ff_risk ile açılır.
+try {
+    require_once __DIR__ . '/risk_lib.php';
+    $rres = risk_daily_tick($pdo);
+    if ($rres !== null) {
+        cron_log("► Risk skorları: {$rres['students']} öğrenci (kırmızı {$rres['red']}, sarı {$rres['yellow']})");
+    }
+} catch (Throwable $e) {
+    cron_log("► Risk hatası: " . $e->getMessage());
+}
+
+// ── Öneri kuyruğu bakımı (S2): 14 günü geçen bekleyenleri düşür ──────────────
+try {
+    require_once __DIR__ . '/suggest_lib.php';
+    $exp = suggest_expire($pdo);
+    if ($exp > 0) cron_log("► Öneri kuyruğu: $exp öneri süre dolumuyla düştü");
+
+    // Aralıklı tekrar üreteci (S5): ff_suggest açıkken günde bir
+    $rep = suggest_repeats_daily_tick($pdo);
+    if ($rep !== null) {
+        cron_log("► Aralıklı tekrar: {$rep['checked']} konu tarandı, {$rep['created']} öneri üretildi");
+    }
+} catch (Throwable $e) {
+    cron_log("► Öneri bakım hatası: " . $e->getMessage());
+}
+
+// ── XP/başarım üretimi (S8): ff_xp açıkken gece bir kez, metriklerden sonra ──
+try {
+    require_once __DIR__ . '/gamify_lib.php';
+    $xpres = gamify_daily_tick($pdo);
+    if ($xpres !== null) {
+        cron_log("► XP motoru: {$xpres['events']} yeni olay/başarım yazıldı");
+    }
+} catch (Throwable $e) {
+    cron_log("► XP motoru hatası: " . $e->getMessage());
+}
+
+// ── Etiket/bulk_id şeması (S6): kolonun cron'da garanti edilmesi —
+// toplu uygulama damgası sayfa yüklerinde ALTER denemeden hazır olur.
+try {
+    require_once __DIR__ . '/tags_lib.php';
+    tags_ensure_schema($pdo);
+} catch (Throwable $e) { /* şema hazırsa/erişilemezse sessiz geç */ }
+
+// ── Zaman motoru bakımı (S1): kalp atışı kesilen oturumları kapat ────────────
+// Her tetiklemede çalışır (ucuz UPDATE) — sekmesi kapanan öğrencinin süresi
+// son kalp atışına kadar sayılır, oturum 'abandoned' olarak kapanır.
+try {
+    require_once __DIR__ . '/study_lib.php';
+    $cln = study_cleanup($pdo);
+    if ($cln > 0) cron_log("► Zaman motoru: $cln yarım oturum kapatıldı");
+} catch (Throwable $e) {
+    cron_log("► Zaman motoru bakım hatası: " . $e->getMessage());
 }
 
 cron_log("\n=== Cron tamamlandı: " . (new DateTime())->format('Y-m-d H:i:s') . " ===\n");

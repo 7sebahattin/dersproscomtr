@@ -40,6 +40,19 @@ function app_setting_set(PDO $pdo, string $key, string $value): void {
 }
 
 /**
+ * Özellik bayrakları (feature flag) — yeni modüller kapalı doğar, staging'de
+ * denenip prod'da admin/features.php üzerinden açılır. Anahtar: ff_<ad>
+ * Bilinen bayraklar: timer, suggest, risk, goals, xp, league
+ */
+function ff_enabled(PDO $pdo, string $name, bool $default = false): bool {
+    return app_setting_get($pdo, 'ff_' . $name, $default ? '1' : '0') === '1';
+}
+
+function ff_set(PDO $pdo, string $name, bool $on): void {
+    app_setting_set($pdo, 'ff_' . $name, $on ? '1' : '0');
+}
+
+/**
  * Sınav tarihleri: kayıtlı değer varsa o; yoksa yaklaşan öğretim yılına göre
  * tahmini varsayılan (YKS ~20 Haziran, LGS ~15 Haziran).
  * Dönüş: ['YKS' => 'Y-m-d', 'LGS' => 'Y-m-d']

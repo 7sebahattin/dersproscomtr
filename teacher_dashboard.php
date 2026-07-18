@@ -163,6 +163,17 @@ try {
         usort($today_progress, fn($a, $b) => $a['pct'] <=> $b['pct']);
     } catch (Exception $e) { $today_progress = []; }
 
+    // --- 10. RİSK SKORU (S3) — ff_risk açıkken riskli öğrenciler kartı ---
+    $risk_students = []; $risk_enabled = false;
+    try {
+        require_once __DIR__ . '/app_settings_lib.php';
+        require_once __DIR__ . '/risk_lib.php';
+        $risk_enabled = ff_enabled($pdo, 'risk');
+        if ($risk_enabled) {
+            $risk_students = risk_get_for_teacher($pdo, $teacher_id);
+        }
+    } catch (Throwable $e) { $risk_students = []; }
+
 } catch (PDOException $e) {}
 
 include 'header.php';
@@ -299,6 +310,67 @@ include 'header.php';
                         </button>
                     </div>
                 </div>
+
+                <?php if ($risk_enabled): ?>
+                <!-- RİSK DURUMU (S3) — kırmızı/sarı öğrenciler önde -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-[#7f1d1d] to-[#223488] px-5 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation text-[#ec9731]"></i>
+                            <h2 class="text-xs font-bold text-white uppercase tracking-wider">Risk Durumu</h2>
+                        </div>
+                        <span class="text-[10px] text-blue-200 font-bold" title="Son 14 gün: tamamlama + giriş + seri + net eğimi">14 günlük skor</span>
+                    </div>
+                    <div class="p-5">
+                    <?php
+                        $riskAlert = array_values(array_filter($risk_students, fn($r) => in_array($r['level'], ['red','yellow'], true)));
+                        $riskGray  = count(array_filter($risk_students, fn($r) => $r['level'] === 'gray'));
+                    ?>
+                    <?php if (empty($risk_students)): ?>
+                        <div class="text-center py-6 text-slate-400 text-sm">Henüz risk verisi yok — skorlar her gece hesaplanır.</div>
+                    <?php elseif (empty($riskAlert)): ?>
+                        <div class="flex items-center gap-3 p-3 rounded-xl bg-green-50 border border-green-100">
+                            <span class="text-xl">✅</span>
+                            <div class="text-sm font-bold text-green-700">Tüm öğrenciler güvenli bölgede.
+                            <?php if ($riskGray > 0): ?><span class="text-slate-400 font-medium">(<?php echo $riskGray; ?> öğrenci için veri toplanıyor)</span><?php endif; ?>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="space-y-2.5">
+                        <?php foreach ($riskAlert as $rs):
+                            $comp = json_decode((string)$rs['components'], true) ?: [];
+                            $isRed = $rs['level'] === 'red';
+                            $chips = [];
+                            if (isset($comp['completion'])) $chips[] = 'Tamamlama %' . (int)$comp['completion'];
+                            if (isset($comp['login']))      $chips[] = 'Giriş %' . (int)$comp['login'];
+                            if (isset($comp['net']) && $comp['net'] !== null) $chips[] = 'Net eğimi ' . ((int)$comp['net'] >= 50 ? '↑' : '↓');
+                        ?>
+                            <a href="<?php echo BASE_URL; ?>/koc_paneli.php?student_id=<?php echo (int)$rs['id']; ?>"
+                               class="block p-3 rounded-xl <?php echo $isRed ? 'bg-red-50 hover:bg-red-100 border border-red-100' : 'bg-amber-50 hover:bg-amber-100 border border-amber-100'; ?> transition-colors">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="w-2.5 h-2.5 rounded-full shrink-0 <?php echo $isRed ? 'bg-red-500' : 'bg-amber-400'; ?>"></span>
+                                        <span class="font-bold text-slate-700 text-sm truncate"><?php echo htmlspecialchars($rs['first_name'] . ' ' . $rs['last_name']); ?></span>
+                                    </div>
+                                    <span class="text-sm font-black <?php echo $isRed ? 'text-red-600' : 'text-amber-600'; ?> shrink-0"><?php echo (int)$rs['score']; ?>/100</span>
+                                </div>
+                                <?php if ($chips): ?>
+                                <div class="flex flex-wrap gap-1.5 mt-1.5 pl-4">
+                                    <?php foreach ($chips as $ch): ?>
+                                    <span class="text-[10px] font-bold text-slate-500 bg-white/70 px-1.5 py-0.5 rounded-md"><?php echo $ch; ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                                <?php endif; ?>
+                            </a>
+                        <?php endforeach; ?>
+                        <?php if ($riskGray > 0): ?>
+                            <div class="text-[11px] text-slate-400 font-medium pl-1"><?php echo $riskGray; ?> öğrenci için henüz yeterli veri yok (7 gün gerekir).</div>
+                        <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <!-- BUGÜNKÜ GÖREV DURUMU (öğrenci başına yüzde) -->
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">

@@ -170,6 +170,7 @@ foreach (($raw_items ?? []) as $it) {
         </div>
         <div class="p-5">
             <p class="text-xs text-slate-500 mb-3">Bu haftadaki <b id="psMultiCount" class="text-[#223488]">0</b> görev, seçtiğin öğrencilere <b>aynı tarihlerle YENİ görev</b> olarak eklenir. Mevcut programlarına dokunulmaz, silme olmaz.</p>
+            <div id="psMultiTags" class="hidden flex flex-wrap gap-1.5 mb-2"></div>
             <div id="psMultiList" class="max-h-56 overflow-y-auto custom-scrollbar space-y-1 border border-slate-100 rounded-xl p-2 mb-4"></div>
             <div class="flex gap-2">
                 <button type="button" onclick="psMultiClose()" class="flex-1 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition text-sm">Vazgeç</button>
@@ -193,6 +194,18 @@ foreach (($raw_items ?? []) as $it) {
             if ((int)$ms['id'] !== (int)$sid) $psOthers[] = ['id' => (int)$ms['id'], 'name' => trim(($ms['first_name'] ?? '') . ' ' . ($ms['last_name'] ?? ''))];
         }
         echo json_encode($psOthers, JSON_UNESCAPED_UNICODE);
+    ?>;
+    // Etiketler (S6): çoklu uygulama modalında hızlı grup seçimi
+    var PS_TAGS = <?php
+        $psTags = [];
+        try {
+            require_once __DIR__ . '/../tags_lib.php';
+            foreach (tags_for_teacher($pdo, (int)$_SESSION['user_id']) as $tg) {
+                if ($tg['members']) $psTags[] = ['id' => (int)$tg['id'], 'name' => $tg['name'],
+                                                'color' => $tg['color'], 'members' => $tg['members']];
+            }
+        } catch (Throwable $e) {}
+        echo json_encode($psTags, JSON_UNESCAPED_UNICODE);
     ?>;
     var DRAFT_KEY  = 'psDraft:' + SID + ':' + WEEK[0];
     var PRESET_KEY = 'psPreset';
@@ -978,6 +991,31 @@ foreach (($raw_items ?? []) as $it) {
                 '<input type="checkbox" class="ps-multi-stu w-4 h-4 accent-[#223488]" value="' + s.id + '">' +
                 '<span class="text-xs font-bold text-slate-700">' + esc(s.name) + '</span></label>';
         }).join('');
+        // Etiket çipleri (S6): tıkla → üyeleri işaretle/kaldır
+        var tagBox = document.getElementById('psMultiTags');
+        if (PS_TAGS.length) {
+            tagBox.classList.remove('hidden');
+            tagBox.innerHTML = PS_TAGS.map(function(t, i){
+                return '<button type="button" class="ps-tag-chip text-[10px] font-black px-2.5 py-1 rounded-full border transition" ' +
+                    'data-i="' + i + '" data-on="0" ' +
+                    'style="border-color:' + esc(t.color) + ';color:' + esc(t.color) + '">' +
+                    esc(t.name) + ' (' + t.members.length + ')</button>';
+            }).join('');
+            tagBox.querySelectorAll('.ps-tag-chip').forEach(function(chip){
+                chip.addEventListener('click', function(){
+                    var t = PS_TAGS[parseInt(chip.dataset.i, 10)];
+                    var on = chip.dataset.on !== '1';
+                    chip.dataset.on = on ? '1' : '0';
+                    chip.style.background = on ? t.color : '';
+                    chip.style.color = on ? '#fff' : t.color;
+                    document.querySelectorAll('.ps-multi-stu').forEach(function(cb){
+                        if (t.members.indexOf(parseInt(cb.value, 10)) !== -1) cb.checked = on;
+                    });
+                });
+            });
+        } else {
+            tagBox.classList.add('hidden');
+        }
         var m = document.getElementById('psMultiModal');
         m.classList.remove('hidden'); m.classList.add('flex');
     };

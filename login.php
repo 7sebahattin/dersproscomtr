@@ -61,6 +61,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         ->execute([$user['id']]);
                 } catch (Throwable $_e) {}
 
+                // Günlük metrik: giriş izi kalıcı damgalanır (gece yarısı
+                // last_login_at ezilse bile o günün logged_in kaydı kalır)
+                if ($user['role'] === 'student') {
+                    require_once __DIR__ . '/metrics_lib.php';
+                    metrics_mark_login($pdo, (int)$user['id']);
+                }
+
                 // Yönlendirme
                 if ($user['role'] == 'admin') {
                     header("Location: " . BASE_URL . "/admin/");

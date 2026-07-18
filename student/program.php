@@ -181,7 +181,15 @@
                                 </div>
 
                                 <div class="mt-3 pt-2 border-t border-black/10 flex items-center justify-between">
-                                    <span class="text-[9px] font-bold uppercase text-slate-500 tracking-wider">Hedef / Yapılan</span>
+                                    <span class="flex items-center gap-1.5">
+                                        <?php if (!empty($timerOn) && !$isVideoTask && in_array($status, ['bekliyor', 'yarim'], true)): ?>
+                                        <button type="button"
+                                                onclick='event.stopPropagation(); startStudyTimer(<?php echo (int)$item['id']; ?>, <?php echo htmlspecialchars(json_encode(trim($title . " › " . $subtitle, " ›"), JSON_UNESCAPED_UNICODE), ENT_QUOTES); ?>, <?php echo (int)($item['edu_topic_id'] ?? 0); ?>)'
+                                                class="w-6 h-6 rounded-full bg-[#223488] hover:bg-[#ec9731] text-white text-[10px] font-black flex items-center justify-center transition shrink-0"
+                                                title="Sayaçla çalışmaya başla">▶</button>
+                                        <?php endif; ?>
+                                        <span class="text-[9px] font-bold uppercase text-slate-500 tracking-wider">Hedef / Yapılan</span>
+                                    </span>
                                     <div class="flex items-center gap-1">
                                         <?php 
                                             // --- GÜNCELLENEN KISIM: HEDEF / YAPILAN GÖSTERİMİ ---
